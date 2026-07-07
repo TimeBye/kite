@@ -64,4 +64,16 @@ describe('getPrinterColumnValue', () => {
       '10.0.0.1, 10.0.0.2'
     )
   })
+
+  it('treats Kubernetes-style empty brackets as a wildcard', () => {
+    expect(getPrinterColumnValue(resource, '.status.addresses[].value')).toBe(
+      '10.0.0.1, 10.0.0.2'
+    )
+  })
+
+  it('returns undefined instead of throwing for unparsable JSONPath', () => {
+    expect(
+      getPrinterColumnValue(resource, '.status.conditions[')
+    ).toBeUndefined()
+  })
 })

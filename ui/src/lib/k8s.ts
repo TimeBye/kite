@@ -297,14 +297,21 @@ export function getPrinterColumnValue(
   resource: CustomResource,
   jsonPath: string
 ) {
-  const queryPath = jsonPath.startsWith('$')
-    ? jsonPath
-    : jsonPath.startsWith('.')
-      ? `$${jsonPath}`
-      : `$.${jsonPath}`
-  const values = jsonpath
-    .query(resource, queryPath)
-    .filter((value) => value !== undefined && value !== null)
+  const normalizedPath = jsonPath.replace(/\[\]/g, '[*]')
+  const queryPath = normalizedPath.startsWith('$')
+    ? normalizedPath
+    : normalizedPath.startsWith('.')
+      ? `$${normalizedPath}`
+      : `$.${normalizedPath}`
+
+  let values: unknown[]
+  try {
+    values = jsonpath
+      .query(resource, queryPath)
+      .filter((value) => value !== undefined && value !== null)
+  } catch {
+    return undefined
+  }
 
   if (values.length === 0) {
     return undefined
