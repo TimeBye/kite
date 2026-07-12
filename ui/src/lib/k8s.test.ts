@@ -11,11 +11,19 @@ const resource = {
     name: 'example-widget',
     namespace: 'default',
   },
+  spec: {
+    http: [
+      { match: { hosts: ['a.example', 'b.example'] } },
+      { match: { hosts: ['c.example'] } },
+    ],
+  },
   status: {
     phase: 'Running',
     conditions: [
       { type: 'Synced', status: 'True' },
       { type: 'Ready', status: 'False' },
+      { type: '[]', status: 'Empty Brackets' },
+      { type: '[*]', status: 'Wildcard' },
     ],
     addresses: [
       { value: '10.0.0.1' },
@@ -50,6 +58,15 @@ describe('getPrinterColumnValue', () => {
     ).toBe('False')
   })
 
+  it('does not normalize empty brackets inside filter strings', () => {
+    expect(
+      getPrinterColumnValue(
+        resource,
+        ".status.conditions[?(@.type=='[]')].status"
+      )
+    ).toBe('Empty Brackets')
+  })
+
   it('returns undefined when the JSONPath does not match any value', () => {
     expect(
       getPrinterColumnValue(
@@ -65,9 +82,15 @@ describe('getPrinterColumnValue', () => {
     )
   })
 
-  it('treats Kubernetes-style empty brackets as a wildcard', () => {
+  it('treats Kubernetes-style empty brackets as the first array item', () => {
     expect(getPrinterColumnValue(resource, '.status.addresses[].value')).toBe(
-      '10.0.0.1, 10.0.0.2'
+      '10.0.0.1'
+    )
+  })
+
+  it('formats nested array values as JSON', () => {
+    expect(getPrinterColumnValue(resource, '.spec.http[].match.hosts')).toBe(
+      '["a.example","b.example"]'
     )
   })
 
