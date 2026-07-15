@@ -89,11 +89,7 @@ export function useResourceTableState({
   })
   const [useSSE, setUseSSE] = useState(false)
 
-  const effectiveNamespace = clusterScope
-    ? undefined
-    : selectedNamespace?.includes(',')
-      ? '_all'
-      : selectedNamespace
+  const effectiveNamespace = clusterScope ? undefined : selectedNamespace
 
   useEffect(() => {
     if (clusterScope || selectedNamespace !== undefined) {

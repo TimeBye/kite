@@ -656,14 +656,34 @@ export const useResources = <T extends ResourceType>(
       options?.labelSelector,
       options?.fieldSelector,
     ],
-    queryFn: () => {
-      return fetchResources<ResourcesTypeMap[T]>(resource, namespace, {
+    queryFn: async () => {
+      const namespaces = namespace?.split(',').filter(Boolean)
+      const fetchOptions = {
         limit: options?.limit,
         continueToken: undefined,
         labelSelector: options?.labelSelector,
         fieldSelector: options?.fieldSelector,
         reduce: options?.reduce,
-      })
+      }
+
+      if (!namespaces || namespaces.length <= 1) {
+        return fetchResources<ResourcesTypeMap[T]>(
+          resource,
+          namespace,
+          fetchOptions
+        )
+      }
+
+      const lists = await Promise.all(
+        namespaces.map((namespace) =>
+          fetchResources<ResourcesTypeMap[T]>(resource, namespace, fetchOptions)
+        )
+      )
+
+      return {
+        ...lists[0],
+        items: lists.flatMap((list) => list.items as unknown[]),
+      } as ResourcesTypeMap[T]
     },
     enabled: !options?.disable,
     select: (data: ResourcesTypeMap[T]): ResourcesItems<T> => data.items,
@@ -688,10 +708,12 @@ export function useResourcesWatch<T extends ResourceType>(
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [isConnected, setIsConnected] = useState(false)
-  const eventSourceRef = useRef<EventSource | null>(null)
+  const eventSourceRefs = useRef<EventSource[]>([])
+  const connectedSourcesRef = useRef(new Set<EventSource>())
 
-  const buildUrl = useCallback(() => {
-    const ns = namespace || '_all'
+  const buildUrls = useCallback(() => {
+    const namespaces = namespace?.split(',').filter(Boolean)
+    const targetNamespaces = namespaces?.length ? namespaces : ['_all']
     const params = new URLSearchParams()
     if (options?.reduce !== false) params.append('reduce', 'true')
     if (options?.labelSelector)
@@ -699,8 +721,10 @@ export function useResourcesWatch<T extends ResourceType>(
     if (options?.fieldSelector)
       params.append('fieldSelector', options.fieldSelector)
     appendCurrentClusterParam(params)
-    return withSubPath(
-      `${API_BASE_URL}/${resource}/${ns}/watch?${params.toString()}`
+    return targetNamespaces.map((namespace) =>
+      withSubPath(
+        `${API_BASE_URL}/${resource}/${namespace}/watch?${params.toString()}`
+      )
     )
   }, [
     resource,
@@ -711,93 +735,99 @@ export function useResourcesWatch<T extends ResourceType>(
   ])
 
   const disconnect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
-    }
+    eventSourceRefs.current.forEach((eventSource) => eventSource.close())
+    eventSourceRefs.current = []
+    connectedSourcesRef.current.clear()
   }, [])
 
   const connect = useCallback(() => {
     disconnect()
     setData(undefined)
     if (options?.enabled === false) return
-    const url = buildUrl()
+    const urls = buildUrls()
     setError(null)
     setIsConnected(false)
 
     try {
-      const es = new EventSource(url, { withCredentials: true })
-      eventSourceRef.current = es
+      urls.forEach((url) => {
+        const es = new EventSource(url, { withCredentials: true })
+        eventSourceRefs.current.push(es)
 
-      es.onopen = () => {
-        setIsConnected(true)
-      }
-
-      const getKey = (obj: ResourceTypeMap[T]) => {
-        return (
-          (obj.metadata?.namespace || '') + '/' + (obj.metadata?.name || '')
-        )
-      }
-
-      const upsert = (obj: string) => {
-        const object = JSON.parse(obj) as ResourceTypeMap[T]
-        setData((prev) => {
-          const arr = prev ? [...prev] : []
-          const key = getKey(object)
-          const idx = arr.findIndex(
-            (it) => getKey(it as ResourceTypeMap[T]) === key
-          )
-          if (idx >= 0) arr[idx] = object
-          else arr.unshift(object)
-          return arr as ResourcesItems<T>
-        })
-      }
-
-      const remove = (obj: string) => {
-        const object = JSON.parse(obj) as ResourceTypeMap[T]
-        setData((prev) => {
-          const arr = prev ? [...prev] : []
-          const key = getKey(object)
-          const filtered = arr.filter(
-            (it) => getKey(it as ResourceTypeMap[T]) !== key
-          )
-          return filtered as ResourcesItems<T>
-        })
-      }
-
-      es.addEventListener('added', (e: MessageEvent<string>) => {
-        upsert(e.data)
-      })
-      es.addEventListener('modified', (e: MessageEvent<string>) => {
-        upsert(e.data)
-      })
-      es.addEventListener('deleted', (e: MessageEvent<string>) => {
-        remove(e.data)
-      })
-
-      es.addEventListener('error', (e: MessageEvent) => {
-        try {
-          const payload = JSON.parse(e.data)
-          setError(new Error(payload?.error || 'SSE error'))
-        } catch {
-          setError(new Error('SSE error'))
+        es.onopen = () => {
+          connectedSourcesRef.current.add(es)
+          setIsConnected(connectedSourcesRef.current.size === urls.length)
         }
-        setIsLoading(false)
-        setIsConnected(false)
-      })
-      es.addEventListener('close', () => {
-        setIsConnected(false)
-      })
 
-      es.onerror = () => {
-        setIsConnected(false)
-      }
+        const getKey = (obj: ResourceTypeMap[T]) => {
+          return (
+            (obj.metadata?.namespace || '') + '/' + (obj.metadata?.name || '')
+          )
+        }
+
+        const upsert = (obj: string) => {
+          const object = JSON.parse(obj) as ResourceTypeMap[T]
+          setData((prev) => {
+            const arr = prev ? [...prev] : []
+            const key = getKey(object)
+            const idx = arr.findIndex(
+              (it) => getKey(it as ResourceTypeMap[T]) === key
+            )
+            if (idx >= 0) arr[idx] = object
+            else arr.unshift(object)
+            return arr as ResourcesItems<T>
+          })
+        }
+
+        const remove = (obj: string) => {
+          const object = JSON.parse(obj) as ResourceTypeMap[T]
+          setData((prev) => {
+            const arr = prev ? [...prev] : []
+            const key = getKey(object)
+            const filtered = arr.filter(
+              (it) => getKey(it as ResourceTypeMap[T]) !== key
+            )
+            return filtered as ResourcesItems<T>
+          })
+        }
+
+        es.addEventListener('added', (e: MessageEvent<string>) => {
+          upsert(e.data)
+        })
+        es.addEventListener('modified', (e: MessageEvent<string>) => {
+          upsert(e.data)
+        })
+        es.addEventListener('deleted', (e: MessageEvent<string>) => {
+          remove(e.data)
+        })
+
+        es.addEventListener('error', (e: MessageEvent) => {
+          try {
+            const payload = JSON.parse(e.data)
+            setError(new Error(payload?.error || 'SSE error'))
+          } catch {
+            setError(new Error('SSE error'))
+          }
+          connectedSourcesRef.current.delete(es)
+          setIsLoading(false)
+          setIsConnected(false)
+        })
+        es.addEventListener('close', () => {
+          connectedSourcesRef.current.delete(es)
+          setIsConnected(false)
+        })
+
+        es.onerror = () => {
+          connectedSourcesRef.current.delete(es)
+          setIsConnected(false)
+        }
+      })
     } catch (err) {
+      disconnect()
       if (err instanceof Error) setError(err)
       setIsLoading(false)
       setIsConnected(false)
     }
-  }, [buildUrl, disconnect, options?.enabled])
+  }, [buildUrls, disconnect, options?.enabled])
 
   const refetch = useCallback(() => {
     disconnect()
