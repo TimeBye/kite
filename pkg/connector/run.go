@@ -93,6 +93,11 @@ func Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("parse Kubernetes API URL: %w", err)
 	}
+	// Force HTTP/1.1 so that SPDY/WebSocket upgrade requests (used by kubectl
+	// exec, attach, port-forward) are not rejected by HTTP/2.  HTTP/2 does not
+	// allow Upgrade headers and the reverse proxy would fail with
+	// "http2: invalid Upgrade request header".
+	config.TLSClientConfig.NextProtos = []string{"http/1.1"}
 	transport, err := rest.TransportFor(config)
 	if err != nil {
 		return fmt.Errorf("create Kubernetes API transport: %w", err)
