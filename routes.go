@@ -36,6 +36,17 @@ func setupAPIRouter(r *gin.RouterGroup, cm *cluster.ClusterManager) {
 	r.GET("/api/v1/bootstrap", authHandler.Bootstrap)
 	r.GET("/api/v1/connector/connect", cm.ConnectConnector)
 	r.GET("/api/v1/connector/manifest", cm.GetConnectorManifest)
+
+	// K8s API reverse proxy — auth via API key or JWT, identified by cluster UUID
+	r.GET("/api/v1/clusters/:clusterUUID/k8s-proxy/*path", authHandler.RequireAuth(), cm.HandleK8sProxy)
+	r.POST("/api/v1/clusters/:clusterUUID/k8s-proxy/*path", authHandler.RequireAuth(), cm.HandleK8sProxy)
+	r.PUT("/api/v1/clusters/:clusterUUID/k8s-proxy/*path", authHandler.RequireAuth(), cm.HandleK8sProxy)
+	r.PATCH("/api/v1/clusters/:clusterUUID/k8s-proxy/*path", authHandler.RequireAuth(), cm.HandleK8sProxy)
+	r.DELETE("/api/v1/clusters/:clusterUUID/k8s-proxy/*path", authHandler.RequireAuth(), cm.HandleK8sProxy)
+
+	// Kubeconfig download — any authenticated user
+	r.GET("/api/v1/kubeconfig", authHandler.RequireAuth(), cm.DownloadKubeconfig)
+
 	registerAuthRoutes(r, authHandler)
 	registerUserRoutes(r, authHandler)
 	registerAdminRoutes(r, authHandler, cm, helmChartsHandler)

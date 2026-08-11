@@ -1,5 +1,7 @@
 package model
 
+import "github.com/google/uuid"
+
 type Cluster struct {
 	Model
 	Name               string       `json:"name" gorm:"type:varchar(100);uniqueIndex;not null"`
@@ -11,9 +13,13 @@ type Cluster struct {
 	ConnectorTokenHash string       `json:"-" gorm:"type:varchar(64);index"`
 	IsDefault          bool         `json:"is_default" gorm:"type:boolean;default:false"`
 	Enable             bool         `json:"enable" gorm:"type:boolean;default:true"`
+	UUID               string       `json:"uuid" gorm:"type:varchar(36);uniqueIndex"`
 }
 
 func AddCluster(cluster *Cluster) error {
+	if cluster.UUID == "" {
+		cluster.UUID = uuid.NewString()
+	}
 	return DB.Create(cluster).Error
 }
 
@@ -36,6 +42,14 @@ func GetClusterByID(id uint) (*Cluster, error) {
 func GetClusterByConnectorTokenHash(hash string) (*Cluster, error) {
 	var cluster Cluster
 	if err := DB.Where("connector_token_hash = ?", hash).First(&cluster).Error; err != nil {
+		return nil, err
+	}
+	return &cluster, nil
+}
+
+func GetClusterByUUID(uuidStr string) (*Cluster, error) {
+	var cluster Cluster
+	if err := DB.Where("uuid = ?", uuidStr).First(&cluster).Error; err != nil {
 		return nil, err
 	}
 	return &cluster, nil

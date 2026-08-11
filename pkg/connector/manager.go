@@ -4,23 +4,16 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
-	"math/big"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -32,11 +25,12 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"golang.org/x/crypto/hkdf"
 	"gorm.io/gorm"
+	"k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/klog/v2"
 )
 
 const (
-	kubernetesAPITarget  = "kubernetes-api"
+	KubernetesAPITarget  = "kubernetes-api"
 	connectorTokenSize   = 32
 	manifestGrantTimeout = 10 * time.Minute
 	manifestGrantAAD     = "kite:connector-manifest-grant:v1"
@@ -56,26 +50,23 @@ type manifestGrant struct {
 }
 
 type localProxy struct {
-	listener  net.Listener
-	server    *http.Server
-	transport *http.Transport
-	token     string
-	caData    []byte
+	address string
+	server  *http.Server
 }
 
 type Manager struct {
 	server    *remotedialer.Server
 	onChange  func()
 	jwtSecret string
+	proxies   map[uint]*localProxy
 	mu        sync.Mutex
-	proxies   map[string]*localProxy
 }
 
 func NewManager(onChange func()) *Manager {
 	m := &Manager{
 		onChange:  onChange,
 		jwtSecret: common.JwtSecret,
-		proxies:   make(map[string]*localProxy),
+		proxies:   make(map[uint]*localProxy),
 	}
 	m.server = remotedialer.New(m.authorize, remotedialer.DefaultErrorWriter)
 	return m
@@ -239,114 +230,73 @@ func (m *Manager) Dialer(clusterID uint) func(context.Context, string, string) (
 	clientKey := strconv.FormatUint(uint64(clusterID), 10)
 	dialer := m.server.Dialer(clientKey)
 	return func(ctx context.Context, network, _ string) (net.Conn, error) {
-		return dialer(ctx, network, kubernetesAPITarget)
+		return dialer(ctx, network, KubernetesAPITarget)
 	}
 }
 
-func (m *Manager) Listen(clusterID uint) (string, string, []byte, error) {
-	clientKey := strconv.FormatUint(uint64(clusterID), 10)
+// Listen creates (or returns an existing) local HTTP proxy on 127.0.0.1 that
+// forwards all requests through the connector tunnel to the agent. The SPDY
+// and WebSocket executors used by terminal/exec/files ignore config.Transport
+// and create their own transports with net.Dialer, which would fail to resolve
+// the "kubernetes-api" hostname. By providing a local listener on a real IP,
+// those executors connect to 127.0.0.1:<port> (no DNS) and the local
+// UpgradeAwareHandler handles SPDY/WebSocket upgrades and forwards through
+// the tunnel to the agent's own UpgradeAwareHandler → kube-apiserver.
+func (m *Manager) Listen(clusterID uint) (string, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	cluster, err := model.GetClusterByID(clusterID)
-	if err != nil {
-		return "", "", nil, err
+	if lp, ok := m.proxies[clusterID]; ok {
+		m.mu.Unlock()
+		return lp.address, nil
 	}
-	if !cluster.Connector || !cluster.Enable {
-		return "", "", nil, errors.New("connector cluster is unavailable")
-	}
-	if proxy, ok := m.proxies[clientKey]; ok {
-		return proxy.listener.Addr().String(), proxy.token, proxy.caData, nil
-	}
+	m.mu.Unlock()
 
-	tokenBytes := make([]byte, connectorTokenSize)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		return "", "", nil, err
-	}
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return "", "", nil, err
-	}
-	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialLimit)
-	if err != nil {
-		return "", "", nil, err
-	}
-	serialNumber.SetBit(serialNumber, 0, 1)
-	now := time.Now()
-	certificateTemplate := &x509.Certificate{
-		SerialNumber:          serialNumber,
-		Subject:               pkix.Name{CommonName: "kite connector loopback"},
-		NotBefore:             now.Add(-time.Minute),
-		NotAfter:              now.AddDate(10, 0, 0),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
-	}
-	certificateDER, err := x509.CreateCertificate(rand.Reader, certificateTemplate, certificateTemplate, publicKey, privateKey)
-	if err != nil {
-		return "", "", nil, err
-	}
-	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
-	caData := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificateDER})
-	expectedAuthorization := []byte("Bearer " + token)
-	target := &url.URL{Scheme: "http", Host: kubernetesAPITarget}
-	transport := &http.Transport{DialContext: m.Dialer(clusterID)}
-	reverseProxy := &httputil.ReverseProxy{
-		Rewrite: func(req *httputil.ProxyRequest) {
-			req.SetURL(target)
-			req.Out.Host = target.Host
-			req.Out.Header.Del("Authorization")
-		},
-		Transport:     transport,
-		FlushInterval: -1,
-	}
-	server := &http.Server{
-		Handler: http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			if subtle.ConstantTimeCompare([]byte(req.Header.Get("Authorization")), expectedAuthorization) != 1 {
-				rw.Header().Set("WWW-Authenticate", "Bearer")
-				http.Error(rw, "unauthorized", http.StatusUnauthorized)
-				return
-			}
-			reverseProxy.ServeHTTP(rw, req)
-		}),
-		ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{{
-				Certificate: [][]byte{certificateDER},
-				PrivateKey:  privateKey,
-			}},
-			MinVersion: tls.VersionTLS13,
-		},
-	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return "", "", nil, err
+		return "", err
 	}
-	m.proxies[clientKey] = &localProxy{
-		listener:  listener,
-		server:    server,
-		transport: transport,
-		token:     token,
-		caData:    caData,
+	address := listener.Addr().String()
+
+	dialer := m.Dialer(clusterID)
+	transport := &http.Transport{
+		DialContext: dialer,
+		Proxy:       func(*http.Request) (*url.URL, error) { return nil, nil },
 	}
-	go func() {
-		if err := server.ServeTLS(listener, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			klog.Errorf("Connector proxy for cluster %s stopped: %v", clientKey, err)
-		}
-	}()
-	return listener.Addr().String(), token, caData, nil
+
+	targetURL := &url.URL{Scheme: "http", Host: KubernetesAPITarget}
+	handler := proxy.NewUpgradeAwareHandler(targetURL, transport, false, false, &connectorResponder{})
+	handler.UpgradeTransport = proxy.NewUpgradeRequestRoundTripper(transport, proxy.MirrorRequest)
+	handler.UseRequestLocation = true
+	handler.FlushInterval = 200 * time.Millisecond
+
+	server := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+	go func() { _ = server.Serve(listener) }()
+
+	m.mu.Lock()
+	m.proxies[clusterID] = &localProxy{address: address, server: server}
+	m.mu.Unlock()
+
+	return address, nil
 }
 
+// Remove closes the local proxy for the given cluster and cleans up.
+// Called when a connector cluster is disabled or deleted.
 func (m *Manager) Remove(clusterID uint) {
-	clientKey := strconv.FormatUint(uint64(clusterID), 10)
 	m.mu.Lock()
-	proxy := m.proxies[clientKey]
-	delete(m.proxies, clientKey)
-	m.mu.Unlock()
-	if proxy != nil {
-		_ = proxy.server.Close()
-		proxy.transport.CloseIdleConnections()
+	defer m.mu.Unlock()
+	if lp, ok := m.proxies[clusterID]; ok {
+		_ = lp.server.Close()
+		delete(m.proxies, clusterID)
 	}
+}
+
+// connectorResponder implements proxy.ErrorResponder for the server-side
+// local proxy UpgradeAwareHandler.
+type connectorResponder struct{}
+
+func (r *connectorResponder) Error(w http.ResponseWriter, req *http.Request, err error) {
+	klog.Errorf("connector proxy error: method=%s, path=%s, err=%v", req.Method, req.URL.Path, err)
+	http.Error(w, fmt.Sprintf("proxy error: %s", err), http.StatusBadGateway)
 }

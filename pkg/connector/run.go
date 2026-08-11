@@ -7,54 +7,17 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rancher/remotedialer"
+	"k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
-
-type singleConnListener struct {
-	conn net.Conn
-	addr net.Addr
-}
-
-// upgradeAwareTransport routes upgrade requests (SPDY/WebSocket) through an
-// HTTP/1.1-only transport, while letting regular requests use the standard
-// transport which may negotiate HTTP/2.  HTTP/2 rejects Upgrade headers, so
-// kubectl exec/attach/port-forward requests must go over HTTP/1.1.
-type upgradeAwareTransport struct {
-	normal    http.RoundTripper
-	http1Only http.RoundTripper
-}
-
-func (t *upgradeAwareTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.Header.Get("Upgrade") != "" {
-		return t.http1Only.RoundTrip(req)
-	}
-	return t.normal.RoundTrip(req)
-}
-
-func (l *singleConnListener) Accept() (net.Conn, error) {
-	if l.conn == nil {
-		return nil, net.ErrClosed
-	}
-	conn := l.conn
-	l.conn = nil
-	return conn, nil
-}
-
-func (l *singleConnListener) Close() error {
-	return nil
-}
-
-func (l *singleConnListener) Addr() net.Addr {
-	return l.addr
-}
 
 func Run(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("kite connector", flag.ContinueOnError)
@@ -109,58 +72,72 @@ func Run(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("parse Kubernetes API URL: %w", err)
 	}
+	target.Path = "/"
 
-	// Create two transports so we can conditionally force HTTP/1.1 only for
-	// upgrade requests (SPDY/WebSocket used by kubectl exec, attach,
-	// port-forward).  HTTP/2 does not allow Upgrade headers and would reject
-	// those requests, but regular requests benefit from HTTP/2 multiplexing.
-	normalTransport, err := rest.TransportFor(config)
+	// Regular transport for non-upgrade requests. Allows HTTP/2 for better
+	// multiplexing on regular API calls (List, Get, Watch, etc.).
+	regularTransport, err := rest.TransportFor(config)
 	if err != nil {
-		return fmt.Errorf("create Kubernetes API transport: %w", err)
-	}
-	h1Config := rest.CopyConfig(config)
-	h1Config.NextProtos = []string{"http/1.1"}
-	h1Transport, err := rest.TransportFor(h1Config)
-	if err != nil {
-		return fmt.Errorf("create HTTP/1.1 transport: %w", err)
-	}
-	transport := &upgradeAwareTransport{
-		normal:    normalTransport,
-		http1Only: h1Transport,
+		return fmt.Errorf("create transport: %w", err)
 	}
 
-	proxy := &httputil.ReverseProxy{
-		Rewrite: func(req *httputil.ProxyRequest) {
-			req.SetURL(target)
-			req.Out.Host = target.Host
-			req.Out.Header.Del("Authorization")
-			for name := range req.Out.Header {
-				if strings.HasPrefix(strings.ToLower(name), "impersonate-") {
-					req.Out.Header.Del(name)
-				}
-			}
-		},
-		Transport:     transport,
-		FlushInterval: -1,
+	// HTTP/1.1-only transport for upgrade requests. HTTP/2 does not allow
+	// Upgrade headers, so SPDY/WebSocket upgrade requests (kubectl exec,
+	// attach, port-forward) must use HTTP/1.1.
+	upgradeConfig := rest.CopyConfig(config)
+	upgradeConfig.NextProtos = []string{"http/1.1"}
+	upgradeTransport, err := rest.TransportFor(upgradeConfig)
+	if err != nil {
+		return fmt.Errorf("create upgrade transport: %w", err)
 	}
-	headers := http.Header{"Authorization": []string{"Bearer " + *token}}
-	localDialer := func(_ context.Context, network, address string) (net.Conn, error) {
-		if network != "tcp" || address != kubernetesAPITarget {
+
+	// authTransport captures auth headers (bearer token, exec provider, etc.)
+	// from the kubeconfig via MirrorRequest without actually sending a
+	// request. The captured headers are injected into upgrade requests by
+	// UpgradeAwareHandler.WrapRequest.
+	authConfig := rest.CopyConfig(config)
+	authConfig.WrapTransport = func(http.RoundTripper) http.RoundTripper {
+		return proxy.MirrorRequest
+	}
+	authTransport, err := rest.TransportFor(authConfig)
+	if err != nil {
+		return fmt.Errorf("create auth transport: %w", err)
+	}
+
+	// Create a single UpgradeAwareHandler that all tunnel connections share.
+	// The regular transport handles non-upgrade requests (HTTP/2 allowed),
+	// while the upgrade transport handles SPDY/WebSocket upgrades (HTTP/1.1).
+	handler := proxy.NewUpgradeAwareHandler(target, regularTransport, false, false, &agentResponder{})
+	handler.UpgradeTransport = proxy.NewUpgradeRequestRoundTripper(upgradeTransport, authTransport)
+	handler.UseRequestLocation = true
+	handler.FlushInterval = 200 * time.Millisecond
+
+	// localDialer is called by remotedialer when the server requests a new
+	// tunnel connection to the K8s API. It creates a net.Pipe and serves
+	// HTTP on one end through the UpgradeAwareHandler. This properly handles
+	// SPDY/WebSocket upgrades (including Content-Length: 0 on POST) by using
+	// Go's standard HTTP server and UpgradeAwareHandler, instead of raw byte
+	// forwarding which could break SPDY upgrade requests.
+	localDialer := func(ctx context.Context, network, address string) (net.Conn, error) {
+		if network != "tcp" || address != KubernetesAPITarget {
 			return nil, fmt.Errorf("unsupported tunnel target %s/%s", network, address)
 		}
-		proxyConn, tunnelConn := net.Pipe()
-		proxyServer := &http.Server{
-			Handler:           proxy,
-			ReadHeaderTimeout: 10 * time.Second,
-		}
+		serverConn, clientConn := net.Pipe()
 		go func() {
-			_ = proxyServer.Serve(&singleConnListener{conn: proxyConn, addr: proxyConn.LocalAddr()})
+			listener := &singleConnListener{conn: serverConn}
+			server := &http.Server{
+				Handler:           handler,
+				ReadHeaderTimeout: 30 * time.Second,
+			}
+			_ = server.Serve(listener)
 		}()
-		return tunnelConn, nil
+		return clientConn, nil
 	}
+
 	authorizer := func(network, address string) bool {
-		return network == "tcp" && address == kubernetesAPITarget
+		return network == "tcp" && address == KubernetesAPITarget
 	}
+	headers := http.Header{"Authorization": []string{"Bearer " + *token}}
 
 	klog.Info("Kite connector started")
 	retryCount := 0
@@ -180,4 +157,36 @@ func Run(ctx context.Context, args []string) error {
 		case <-time.After(5 * time.Second):
 		}
 	}
+}
+
+// singleConnListener is a net.Listener that returns one connection on the
+// first Accept call and an error on subsequent calls. This allows serving
+// a single HTTP connection via http.Server.Serve for each tunnel connection.
+type singleConnListener struct {
+	conn net.Conn
+	once sync.Once
+}
+
+func (l *singleConnListener) Accept() (net.Conn, error) {
+	accepted := false
+	l.once.Do(func() {
+		accepted = true
+	})
+	if !accepted {
+		return nil, errors.New("single-connection listener exhausted")
+	}
+	return l.conn, nil
+}
+
+func (l *singleConnListener) Close() error { return nil }
+
+func (l *singleConnListener) Addr() net.Addr { return l.conn.LocalAddr() }
+
+// agentResponder implements proxy.ErrorResponder for the agent-side
+// UpgradeAwareHandler.
+type agentResponder struct{}
+
+func (r *agentResponder) Error(w http.ResponseWriter, req *http.Request, err error) {
+	klog.Errorf("agent proxy error: method=%s, path=%s, err=%v", req.Method, req.URL.Path, err)
+	http.Error(w, fmt.Sprintf("proxy error: %s", err), http.StatusBadGateway)
 }

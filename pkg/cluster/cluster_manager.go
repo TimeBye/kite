@@ -429,19 +429,13 @@ func (cm *ClusterManager) buildClientSet(cluster *model.Cluster) (*ClientSet, er
 	if !cluster.Connector {
 		return buildClientSet(cluster)
 	}
-	address, token, caData, err := cm.connectorManager.Listen(cluster.ID)
+	address, err := cm.connectorManager.Listen(cluster.ID)
 	if err != nil {
 		return nil, err
 	}
 	return newClientSet(cluster.Name, &rest.Config{
-		Host:        "https://" + address,
-		BearerToken: token,
-		TLSClientConfig: rest.TLSClientConfig{
-			CAData: caData,
-		},
-		Proxy: func(*http.Request) (*url.URL, error) {
-			return nil, nil
-		},
+		Host:  "http://" + address,
+		Proxy: func(*http.Request) (*url.URL, error) { return nil, nil },
 	}, cluster.PrometheusURL)
 }
 

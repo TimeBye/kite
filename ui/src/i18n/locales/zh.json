@@ -19,6 +19,8 @@
       "describe": "描述",
       "disable": "禁用",
       "done": "完成",
+      "download": "下载",
+      "downloading": "下载中...",
       "drain": "驱逐",
       "edit": "编辑",
       "enable": "启用",
@@ -904,7 +906,8 @@
     "actions": {
       "add": "添加集群",
       "import": "导入集群",
-      "importing": "导入中..."
+      "importing": "导入中...",
+      "downloadKubeconfig": "下载 Kubeconfig"
     },
     "table": {
       "prometheus": "Prometheus"
@@ -968,6 +971,15 @@
       "connectorDescription": "先创建集群，然后在目标集群内运行生成的命令。",
       "enabled": "启用",
       "isDefault": "设为默认"
+    },
+    "kubeconfig": {
+      "title": "下载 Kubeconfig",
+      "description": "生成以 Kite 为代理访问集群的 kubeconfig。",
+      "clusters": "集群",
+      "showAll": "显示全部 ({{count}})",
+      "noCluster": "请先选择一个集群",
+      "downloaded": "Kubeconfig 已下载",
+      "downloadError": "下载失败"
     }
   },
   "oauthManagement": {

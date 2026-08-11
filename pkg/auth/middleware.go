@@ -65,6 +65,12 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 		}
 		authHeader := c.GetHeader("Authorization")
 		if authHeader != "" {
+			// kubectl sends "Authorization: Bearer <token>", while the
+			// Kite API client sends "Authorization: kite<token>" directly.
+			// Strip the "Bearer " prefix so both formats work.
+			if after, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+				authHeader = after
+			}
 			if after, ok := strings.CutPrefix(authHeader, "kite"); ok {
 				h.RequireAPIKeyAuth(c, after)
 				return

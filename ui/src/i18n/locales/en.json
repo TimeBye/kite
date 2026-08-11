@@ -19,6 +19,8 @@
       "describe": "Describe",
       "disable": "Disable",
       "done": "Done",
+      "download": "Download",
+      "downloading": "Downloading...",
       "drain": "Drain",
       "edit": "Edit",
       "enable": "Enable",
@@ -893,7 +895,8 @@
     "actions": {
       "add": "Add Cluster",
       "import": "Import Clusters",
-      "importing": "Importing..."
+      "importing": "Importing...",
+      "downloadKubeconfig": "Download Kubeconfig"
     },
     "table": {
       "prometheus": "Prometheus"
@@ -957,6 +960,15 @@
       "connectorDescription": "Create the cluster first, then run the generated command inside the target cluster.",
       "enabled": "Enabled",
       "isDefault": "Set as Default"
+    },
+    "kubeconfig": {
+      "title": "Download Kubeconfig",
+      "description": "Generate a kubeconfig that uses Kite as a proxy to access the cluster.",
+      "clusters": "Clusters",
+      "showAll": "Show all ({{count}})",
+      "noCluster": "Please select a cluster first",
+      "downloaded": "Kubeconfig downloaded",
+      "downloadError": "Download failed"
     }
   },
   "oauthManagement": {

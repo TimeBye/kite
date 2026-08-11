@@ -2,151 +2,189 @@ package connector
 
 import (
 	"errors"
-	"io"
+	"net"
 	"net/http"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
-// recordingRoundTripper records whether it was called and returns a fixed
-// response. It is used to verify which transport the upgradeAwareTransport
-// delegates to.
-type recordingRoundTripper struct {
-	name    string
-	calls   int
-	lastReq *http.Request
-	respErr error
-}
+// --- singleConnListener tests ---
 
-func (r *recordingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	r.calls++
-	r.lastReq = req
-	if r.respErr != nil {
-		return nil, r.respErr
-	}
-	// Return a minimal non-nil response so ReverseProxy is satisfied when used
-	// in integration-style tests; here we only inspect call counts.
-	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
-}
+func TestSingleConnListener_AcceptOnce(t *testing.T) {
+	conn1, conn2 := net.Pipe()
+	defer func() { _ = conn1.Close() }()
+	defer func() { _ = conn2.Close() }()
 
-func TestUpgradeAwareTransportRouting(t *testing.T) {
-	tests := []struct {
-		name       string
-		method     string
-		upgrade    string
-		setEmpty   bool // explicitly set Upgrade: "" (empty value header)
-		wantNormal int
-		wantH1     int
-	}{
-		{name: "no upgrade header - GET", method: http.MethodGet, wantNormal: 1, wantH1: 0},
-		{name: "no upgrade header - POST", method: http.MethodPost, wantNormal: 1, wantH1: 0},
-		{name: "no upgrade header - DELETE", method: http.MethodDelete, wantNormal: 1, wantH1: 0},
-		{name: "websocket upgrade", method: http.MethodGet, upgrade: "websocket", wantNormal: 0, wantH1: 1},
-		{name: "spdy/3.1 upgrade", method: http.MethodGet, upgrade: "SPDY/3.1", wantNormal: 0, wantH1: 1},
-		{name: "spdy/4 upgrade", method: http.MethodGet, upgrade: "SPDY/4", wantNormal: 0, wantH1: 1},
-		{name: "post exec upgrade", method: http.MethodPost, upgrade: "SPDY/3.1", wantNormal: 0, wantH1: 1},
-		// An empty-valued Upgrade header is treated by http.Header.Get as ""
-		// and should route to the normal transport.
-		{name: "empty upgrade header value", method: http.MethodGet, setEmpty: true, wantNormal: 1, wantH1: 0},
-	}
+	listener := &singleConnListener{conn: conn1}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			normal := &recordingRoundTripper{name: "normal"}
-			http1Only := &recordingRoundTripper{name: "http1Only"}
-			transport := &upgradeAwareTransport{
-				normal:    normal,
-				http1Only: http1Only,
-			}
-
-			req, err := http.NewRequest(tt.method, "https://k8s.example.com/api/v1/namespaces/default/pods", nil)
-			if err != nil {
-				t.Fatalf("create request: %v", err)
-			}
-			if tt.setEmpty {
-				req.Header.Set("Upgrade", "")
-			} else if tt.upgrade != "" {
-				req.Header.Set("Upgrade", tt.upgrade)
-			}
-
-			resp, err := transport.RoundTrip(req)
-			if err != nil {
-				t.Fatalf("RoundTrip error: %v", err)
-			}
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-
-			if normal.calls != tt.wantNormal {
-				t.Errorf("normal transport calls = %d, want %d", normal.calls, tt.wantNormal)
-			}
-			if http1Only.calls != tt.wantH1 {
-				t.Errorf("http1Only transport calls = %d, want %d", http1Only.calls, tt.wantH1)
-			}
-		})
-	}
-}
-
-// TestUpgradeAwareTransportErrorPropagation verifies that errors from the
-// underlying transport are returned to the caller, not swallowed.
-func TestUpgradeAwareTransportErrorPropagation(t *testing.T) {
-	wantErr := errors.New("transport failure")
-	normal := &recordingRoundTripper{name: "normal", respErr: wantErr}
-	http1Only := &recordingRoundTripper{name: "http1Only"}
-	transport := &upgradeAwareTransport{
-		normal:    normal,
-		http1Only: http1Only,
-	}
-
-	req, err := http.NewRequest(http.MethodGet, "https://k8s.example.com/api/v1", nil)
+	// First Accept should return the connection
+	got, err := listener.Accept()
 	if err != nil {
-		t.Fatalf("create request: %v", err)
+		t.Fatalf("first Accept() error: %v", err)
+	}
+	if got != conn1 {
+		t.Fatal("first Accept() should return the original connection")
 	}
 
-	resp, err := transport.RoundTrip(req)
+	// Second Accept should return an error
+	_, err = listener.Accept()
 	if err == nil {
-		_ = resp.Body.Close()
-		t.Fatal("expected error, got nil")
-	}
-	if !errors.Is(err, wantErr) {
-		t.Errorf("expected error %v, got %v", wantErr, err)
-	}
-	if http1Only.calls != 0 {
-		t.Errorf("http1Only should not be called for non-upgrade request, got %d calls", http1Only.calls)
+		t.Fatal("second Accept() should return an error")
 	}
 }
 
-// TestUpgradeAwareTransportRequestPassthrough verifies that the original
-// request is forwarded to the underlying transport unmodified.
-func TestUpgradeAwareTransportRequestPassthrough(t *testing.T) {
-	normal := &recordingRoundTripper{name: "normal"}
-	http1Only := &recordingRoundTripper{name: "http1Only"}
-	transport := &upgradeAwareTransport{
-		normal:    normal,
-		http1Only: http1Only,
+func TestSingleConnListener_ConcurrentAccept(t *testing.T) {
+	conn1, conn2 := net.Pipe()
+	defer func() { _ = conn1.Close() }()
+	defer func() { _ = conn2.Close() }()
+
+	listener := &singleConnListener{conn: conn1}
+
+	var (
+		wg           sync.WaitGroup
+		successCount int
+		errorCount   int
+		mu           sync.Mutex
+	)
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := listener.Accept()
+			mu.Lock()
+			if err == nil {
+				successCount++
+			} else {
+				errorCount++
+			}
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	if successCount != 1 {
+		t.Errorf("expected exactly 1 successful Accept, got %d", successCount)
+	}
+	if errorCount != 4 {
+		t.Errorf("expected 4 errors, got %d", errorCount)
+	}
+}
+
+func TestSingleConnListener_Close(t *testing.T) {
+	conn1, conn2 := net.Pipe()
+	defer func() { _ = conn1.Close() }()
+	defer func() { _ = conn2.Close() }()
+
+	listener := &singleConnListener{conn: conn1}
+	// Close should be a no-op and never error
+	if err := listener.Close(); err != nil {
+		t.Errorf("Close() returned error: %v", err)
+	}
+	// Can close multiple times
+	if err := listener.Close(); err != nil {
+		t.Errorf("second Close() returned error: %v", err)
+	}
+}
+
+func TestSingleConnListener_Addr(t *testing.T) {
+	conn1, conn2 := net.Pipe()
+	defer func() { _ = conn1.Close() }()
+	defer func() { _ = conn2.Close() }()
+
+	listener := &singleConnListener{conn: conn1}
+	addr := listener.Addr()
+	if addr == nil {
+		t.Fatal("Addr() should not return nil")
+	}
+	// For net.Pipe, LocalAddr() returns a pipeAddr
+	if addr.String() != "pipe" {
+		t.Logf("Addr() = %s (expected 'pipe' for net.Pipe)", addr.String())
+	}
+}
+
+// --- localDialer integration test via UpgradeAwareHandler ---
+
+// TestLocalDialer_RejectsInvalidTarget verifies that the dialer created in
+// Run() rejects connections to addresses other than KubernetesAPITarget.
+// Since localDialer is a closure inside Run(), we test the same logic
+// pattern here.
+func TestLocalDialer_RejectsInvalidTarget(t *testing.T) {
+	checkTarget := func(network, address string) error {
+		if network != "tcp" || address != KubernetesAPITarget {
+			return errors.New("unsupported tunnel target")
+		}
+		return nil
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "https://k8s.example.com/api/v1/namespaces/default/pods/x/exec", nil)
+	// Valid target
+	err := checkTarget("tcp", KubernetesAPITarget)
 	if err != nil {
-		t.Fatalf("create request: %v", err)
+		t.Errorf("expected success for valid target, got: %v", err)
 	}
-	req.Header.Set("Upgrade", "SPDY/3.1")
-	req.Header.Set("X-Custom", "keep-me")
 
-	resp, err := transport.RoundTrip(req)
+	// Invalid address
+	err = checkTarget("tcp", "wrong-target")
+	if err == nil {
+		t.Error("expected error for wrong address")
+	}
+
+	// Invalid network
+	err = checkTarget("udp", KubernetesAPITarget)
+	if err == nil {
+		t.Error("expected error for wrong network")
+	}
+}
+
+// TestLocalDialer_PipeHTTPRoundTrip is an end-to-end test that simulates
+// the localDialer pattern: create a pipe, serve HTTP on one end via
+// singleConnListener, and verify the other end can make an HTTP request.
+func TestLocalDialer_PipeHTTPRoundTrip(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		listener := &singleConnListener{conn: serverConn}
+		server := &http.Server{
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
+		_ = server.Serve(listener)
+	}()
+
+	// Write the HTTP request to the client end of the pipe.
+	request := "GET /healthz HTTP/1.1\r\nHost: localhost\r\n\r\n"
+	_ = clientConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	_, err := clientConn.Write([]byte(request))
 	if err != nil {
-		t.Fatalf("RoundTrip error: %v", err)
+		t.Fatalf("failed to write request: %v", err)
 	}
-	_ = resp.Body.Close()
 
-	if http1Only.lastReq != req {
-		t.Error("http1Only transport did not receive the original request pointer")
+	// Read the response from the server.
+	buf := make([]byte, 4096)
+	_ = clientConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	n, err := clientConn.Read(buf)
+	if err != nil {
+		t.Fatalf("failed to read response: %v", err)
 	}
-	if got := http1Only.lastReq.Header.Get("X-Custom"); got != "keep-me" {
-		t.Errorf("custom header not preserved, got %q", got)
+
+	_ = clientConn.Close()
+	<-serverDone
+
+	response := string(buf[:n])
+	if !strings.Contains(response, "200 OK") {
+		t.Errorf("response does not contain '200 OK': %s", response)
 	}
-	if got := http1Only.lastReq.Header.Get("Upgrade"); got != "SPDY/3.1" {
-		t.Errorf("Upgrade header not preserved, got %q", got)
-	}
-	if normal.calls != 0 {
-		t.Errorf("normal transport should not be called for upgrade request, got %d calls", normal.calls)
+	if !strings.Contains(response, "ok") {
+		t.Errorf("response body does not contain 'ok': %s", response)
 	}
 }

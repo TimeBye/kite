@@ -42,6 +42,18 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 	clusters, errors, defaultContext := cm.snapshotState()
 	result := make([]common.ClusterInfo, 0, len(clusters))
 	user := c.MustGet("user").(model.User)
+
+	// Build a name→UUID lookup from the DB so the frontend can reference
+	// clusters by UUID for the kubeconfig download.
+	uuidMap := make(map[string]string)
+	if model.DB != nil {
+		if dbClusters, err := model.ListClusters(); err == nil {
+			for _, dc := range dbClusters {
+				uuidMap[dc.Name] = dc.UUID
+			}
+		}
+	}
+
 	for name, cluster := range clusters {
 		if !rbac.CanAccessCluster(user, name) {
 			continue
@@ -50,6 +62,7 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 			Name:      name,
 			Version:   cluster.Version,
 			IsDefault: name == defaultContext,
+			UUID:      uuidMap[name],
 		})
 	}
 	for name, errMsg := range errors {
@@ -60,6 +73,7 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 			Name:      name,
 			Version:   "",
 			IsDefault: false,
+			UUID:      uuidMap[name],
 			Error:     errMsg,
 		})
 	}
@@ -89,6 +103,7 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 			"connected":     cluster.Connector && cm.connectorManager.Connected(cluster.ID),
 			"isDefault":     cluster.IsDefault,
 			"prometheusURL": cluster.PrometheusURL,
+			"uuid":          cluster.UUID,
 			"config":        "",
 		}
 
@@ -340,6 +355,34 @@ func (cm *ClusterManager) GetConnectorManifest(c *gin.Context) {
 	c.Header("Cache-Control", "no-store")
 	c.Header("Content-Disposition", `attachment; filename="kite-connector.yaml"`)
 	c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(manifest))
+}
+
+func (cm *ClusterManager) DownloadKubeconfig(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+
+	clusterUUIDs := strings.Split(c.Query("clusters"), ",")
+	var validUUIDs []string
+	for _, id := range clusterUUIDs {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			validUUIDs = append(validUUIDs, id)
+		}
+	}
+	if len(validUUIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one cluster must be selected"})
+		return
+	}
+
+	serverURL := connectorServerURL(c)
+	yaml, err := GenerateKubeconfig(user, validUUIDs, serverURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Cache-Control", "no-store")
+	c.Header("Content-Disposition", `attachment; filename="kubeconfig"`)
+	c.Data(http.StatusOK, "text/yaml; charset=utf-8", []byte(yaml))
 }
 
 func (cm *ClusterManager) ImportClustersFromKubeconfig(c *gin.Context) {

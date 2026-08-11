@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
@@ -248,6 +249,7 @@ func applyClusters(clusters []ClusterConfig) error {
 				InCluster:     c.InCluster,
 				IsDefault:     c.Default,
 				Enable:        true,
+				UUID:          uuid.NewString(),
 			}
 			if err := tx.Create(cluster).Error; err != nil {
 				return err

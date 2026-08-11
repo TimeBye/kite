@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -43,10 +43,21 @@ export function DeleteConfirmationDialog({
   const [forceDelete, setForceDelete] = useState(false)
   const [wait, setWait] = useState(true)
 
+  // Reset all internal state whenever the dialog opens / closes or when the
+  // target resource changes. This prevents a stale confirmation value from
+  // leaking across invocations (e.g. delete cluster A, then immediately open
+  // the dialog for cluster B).
+  useEffect(() => {
+    setConfirmationInput('')
+    setForceDelete(false)
+    setWait(true)
+  }, [open, resourceName])
+
   const handleDialogChange = (open: boolean) => {
     if (!open) {
       setConfirmationInput('')
       setForceDelete(false)
+      setWait(true)
     }
     onOpenChange(open)
   }

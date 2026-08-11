@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/glebarez/sqlite"
+	"github.com/google/uuid"
 	"github.com/zxh326/kite/pkg/common"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
@@ -111,10 +112,27 @@ func InitDB() {
 			panic("failed to migrate database: " + err.Error())
 		}
 	}
+
+	// Backfill UUID for clusters that predate the uuid column.
+	migrateClusterUUIDs()
 	sqldb, err := DB.DB()
 	if err == nil {
 		sqldb.SetMaxOpenConns(common.DBMaxOpenConns)
 		sqldb.SetMaxIdleConns(common.DBMaxIdleConns)
 		sqldb.SetConnMaxLifetime(common.DBMaxIdleTime)
+	}
+}
+
+func migrateClusterUUIDs() {
+	var clusters []Cluster
+	if err := DB.Where("uuid = '' OR uuid IS NULL").Find(&clusters).Error; err != nil {
+		klog.Errorf("failed to load clusters for UUID migration: %v", err)
+		return
+	}
+	for i := range clusters {
+		clusters[i].UUID = uuid.NewString()
+		if err := DB.Model(&clusters[i]).Update("uuid", clusters[i].UUID).Error; err != nil {
+			klog.Errorf("failed to set UUID for cluster %s: %v", clusters[i].Name, err)
+		}
 	}
 }

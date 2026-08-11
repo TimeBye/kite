@@ -639,6 +639,7 @@ export interface Cluster {
   createdAt: string
   updatedAt: string
   prometheusURL?: string
+  uuid?: string
   error?: string
 }
 

@@ -46,6 +46,7 @@ type ClusterInfo struct {
 	Name      string `json:"name"`
 	Version   string `json:"version"`
 	IsDefault bool   `json:"isDefault"`
+	UUID      string `json:"uuid,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 

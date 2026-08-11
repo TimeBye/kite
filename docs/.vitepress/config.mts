@@ -176,6 +176,7 @@ export default defineConfig({
             { text: "资源历史", link: "/zh/guide/resource-history" },
             { text: "自定义侧边栏", link: "/zh/guide/custom-sidebar" },
             { text: "Kube Proxy", link: "/zh/guide/kube-proxy" },
+            { text: "Kubeconfig 下载", link: "/zh/guide/kubeconfig-download" },
           ],
         },
         {
