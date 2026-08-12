@@ -25,6 +25,8 @@ Follow the instructions on the page to fill in the basic information to use OAut
 Kite supports overriding default OIDC claims and restricting access based on user groups. These options can be configured in the **Advanced Settings** section when adding or editing an OAuth Provider:
 
 - **Username Claim**: Overrides the default claim used to extract the user's username (e.g., `preferred_username`, `upn`, or `nickname`). If left empty, Kite uses standard claims like `email` or `name`.
+- **Name Claim**: Overrides the default claim used to extract the user's display name (e.g., `given_name`, `name`, or `displayName`). If left empty, Kite uses standard claims like `nickname`, `name`, or `displayName`.
+- **Email Claim**: Overrides the default claim used to extract the user's email address (e.g., `email`, `mail`, `userPrincipalName`). If left empty, Kite tries `email`, `mail`, and `userPrincipalName` in that order.
 - **Groups Claim**: Overrides the default claim used to extract the user's groups (e.g., `groups`, `memberOf`, or `roles`). If left empty, Kite defaults to standard group representations.
 - **Allowed Groups**: Restricts login to users who belong to specific groups. Enter a comma-separated list of group names (e.g., `admin, developers`). If configured, users must belong to at least one of these groups to log in. Users without a matching group are denied access.
 

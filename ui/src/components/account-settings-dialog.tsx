@@ -12,6 +12,8 @@ import {
   enableCurrentUserMFA,
   finishCurrentUserPasskeyRegistration,
   listCurrentUserPasskeys,
+  sendEmailVerificationCode,
+  setUserEmail,
   setupCurrentUserMFA,
   updateCurrentUser,
   type MFASetupResponse,
@@ -58,12 +60,20 @@ export function AccountSettingsDialog({
   >(null)
   const [securityCurrentPassword, setSecurityCurrentPassword] = useState('')
   const [securityMFACode, setSecurityMFACode] = useState('')
+  const [securityEmailCode, setSecurityEmailCode] = useState('')
   const [securityPasswordError, setSecurityPasswordError] = useState('')
   const [profileError, setProfileError] = useState('')
+  const [emailInput, setEmailInput] = useState('')
+  const [profileSaveDialogOpen, setProfileSaveDialogOpen] = useState(false)
+  const [profileSavePassword, setProfileSavePassword] = useState('')
+  const [profileSaveEmailCode, setProfileSaveEmailCode] = useState('')
+  const [profileSaveError, setProfileSaveError] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [sendCodeCooldown, setSendCodeCooldown] = useState(0)
+  const [sendingCode, setSendingCode] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [mfaError, setMFAError] = useState('')
   const [passkeyError, setPasskeyError] = useState('')
-  const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
   const [savingMFA, setSavingMFA] = useState(false)
   const [savingPasskey, setSavingPasskey] = useState(false)
@@ -73,11 +83,13 @@ export function AccountSettingsDialog({
       setPasswordConfirmAction(null)
       setSecurityCurrentPassword('')
       setSecurityMFACode('')
+      setSecurityEmailCode('')
       setSecurityPasswordError('')
       return
     }
 
     setNickname(user?.name || '')
+    setEmailInput(user?.email || '')
     setCurrentPassword('')
     setNewPassword('')
     setConfirmPassword('')
@@ -88,8 +100,15 @@ export function AccountSettingsDialog({
     setPasswordConfirmAction(null)
     setSecurityCurrentPassword('')
     setSecurityMFACode('')
+    setSecurityEmailCode('')
     setSecurityPasswordError('')
     setProfileError('')
+    setEmailInput('')
+    setProfileSaveDialogOpen(false)
+    setProfileSavePassword('')
+    setProfileSaveEmailCode('')
+    setProfileSaveError('')
+    setSendCodeCooldown(0)
     setPasswordError('')
     setMFAError('')
     setPasskeyError('')
@@ -116,30 +135,91 @@ export function AccountSettingsDialog({
     return () => {
       cancelled = true
     }
-  }, [open, passkeyLoginEnabled, user?.name, t])
+  }, [open, passkeyLoginEnabled, user?.name, user?.email, t])
+
+  useEffect(() => {
+    if (sendCodeCooldown <= 0) return
+    const timer = setTimeout(() => setSendCodeCooldown((prev) => prev - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [sendCodeCooldown])
 
   if (!user) return null
 
   const isPasswordUser = !user.provider || user.provider === 'password'
-  if (!isPasswordUser) return null
 
   const mfaControlsDisabled = !mfaEnabled || savingMFA
   const passkeyControlsDisabled = !passkeyLoginEnabled || savingPasskey
 
   const handleUpdateProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    setSavingProfile(true)
     setProfileError('')
 
+    const trimmedNickname = nickname.trim()
+    const trimmedEmail = emailInput.trim()
+    const emailChanged = trimmedEmail !== (user.email || '')
+
+    if (!emailChanged) {
+      setSavingProfile(true)
+      try {
+        await updateCurrentUser({ name: trimmedNickname })
+        await checkAuth()
+        toast.success(t('accountSettings.profile.saved', 'Account updated'))
+      } catch (error) {
+        setProfileError(
+          error instanceof Error
+            ? error.message
+            : t('accountSettings.profile.error', 'Failed to update account')
+        )
+      } finally {
+        setSavingProfile(false)
+      }
+      return
+    }
+
+    setProfileSavePassword('')
+    setProfileSaveEmailCode('')
+    setProfileSaveError('')
+    setSendCodeCooldown(0)
+    setProfileSaveDialogOpen(true)
+  }
+
+  const handleSendProfileCode = async () => {
+    setSendingCode(true)
+    setProfileSaveError('')
     try {
-      await updateCurrentUser({ name: nickname.trim() })
-      await checkAuth()
-      toast.success(t('accountSettings.profile.saved', 'Account updated'))
+      await sendEmailVerificationCode(emailInput.trim())
+      toast.success(t('accountSettings.security.verificationCodeSent', 'Verification code sent'))
+      setSendCodeCooldown(60)
     } catch (error) {
-      setProfileError(
+      setProfileSaveError(
         error instanceof Error
           ? error.message
-          : t('accountSettings.profile.error', 'Failed to update account')
+          : t('accountSettings.security.sendCodeError', 'Failed to send verification code')
+      )
+    } finally {
+      setSendingCode(false)
+    }
+  }
+
+  const handleConfirmSaveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setProfileSaveError('')
+    setSavingProfile(true)
+    try {
+      await setUserEmail(
+        profileSavePassword,
+        emailInput.trim(),
+        profileSaveEmailCode
+      )
+      await updateCurrentUser({ name: nickname.trim() })
+      await checkAuth()
+      setProfileSaveDialogOpen(false)
+      toast.success(t('accountSettings.profile.emailSaved', 'Email updated'))
+    } catch (error) {
+      setProfileSaveError(
+        error instanceof Error
+          ? error.message
+          : t('accountSettings.profile.emailError', 'Failed to update email')
       )
     } finally {
       setSavingProfile(false)
@@ -228,6 +308,7 @@ export function AccountSettingsDialog({
     setPasswordConfirmAction(action)
     setSecurityCurrentPassword('')
     setSecurityMFACode('')
+    setSecurityEmailCode('')
     setSecurityPasswordError('')
     if (action === 'mfa') {
       setMFAError('')
@@ -236,10 +317,29 @@ export function AccountSettingsDialog({
     }
   }
 
+  const handleSendVerificationCode = async () => {
+    try {
+      await sendEmailVerificationCode()
+      toast.success(
+        t('accountSettings.security.verificationCodeSent', 'Verification code sent')
+      )
+    } catch (error) {
+      setSecurityPasswordError(
+        error instanceof Error
+          ? error.message
+          : t(
+              'accountSettings.security.sendCodeError',
+              'Failed to send verification code'
+            )
+      )
+    }
+  }
+
   const closePasswordConfirm = () => {
     setPasswordConfirmAction(null)
     setSecurityCurrentPassword('')
     setSecurityMFACode('')
+    setSecurityEmailCode('')
     setSecurityPasswordError('')
   }
 
@@ -254,7 +354,12 @@ export function AccountSettingsDialog({
     if (passwordConfirmAction === 'mfa') {
       setSavingMFA(true)
       try {
-        setMFASetup(await setupCurrentUserMFA(securityCurrentPassword))
+        setMFASetup(
+          await setupCurrentUserMFA(
+            isPasswordUser ? securityCurrentPassword : undefined,
+            isPasswordUser ? undefined : (securityEmailCode || undefined)
+          )
+        )
         setMFACode('')
         closePasswordConfirm()
       } catch (error) {
@@ -277,8 +382,11 @@ export function AccountSettingsDialog({
     try {
       const options = await beginCurrentUserPasskeyRegistration(
         passkeyName,
-        securityCurrentPassword,
-        user.mfa_enabled ? securityMFACode : undefined
+        isPasswordUser ? securityCurrentPassword : undefined,
+        user.mfa_enabled ? securityMFACode : undefined,
+        !isPasswordUser && !user.mfa_enabled
+          ? securityEmailCode
+          : undefined
       )
       beganRegistration = true
       closePasswordConfirm()
@@ -345,48 +453,103 @@ export function AccountSettingsDialog({
           </DialogHeader>
 
           <Tabs defaultValue="profile" className="gap-4">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList
+              className={`grid w-full ${isPasswordUser ? 'grid-cols-3' : 'grid-cols-2'}`}
+            >
               <TabsTrigger value="profile">
                 {t('accountSettings.tabs.profile', 'Profile')}
               </TabsTrigger>
-              <TabsTrigger value="password">
-                {t('accountSettings.tabs.password', 'Password')}
-              </TabsTrigger>
+              {isPasswordUser && (
+                <TabsTrigger value="password">
+                  {t('accountSettings.tabs.password', 'Password')}
+                </TabsTrigger>
+              )}
               <TabsTrigger value="security">
                 {t('accountSettings.tabs.security', 'Security')}
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="profile">
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="account-nickname">
-                    {t('accountSettings.profile.nickname', 'Nickname')}
-                  </Label>
-                  <Input
-                    id="account-nickname"
-                    autoComplete="name"
-                    value={nickname}
-                    onChange={(event) => setNickname(event.target.value)}
-                  />
-                </div>
-                {profileError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{profileError}</AlertDescription>
-                  </Alert>
-                )}
-                <div className="flex justify-end">
+              {isPasswordUser ? (
+                <form onSubmit={handleUpdateProfile} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="account-nickname">
+                      {t('accountSettings.profile.nickname', 'Nickname')}
+                    </Label>
+                    <Input
+                      id="account-nickname"
+                      autoComplete="name"
+                      value={nickname}
+                      onChange={(event) => setNickname(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="account-email">
+                      {t('accountSettings.profile.email', 'Email')}
+                    </Label>
+                    <Input
+                      id="account-email"
+                      type="email"
+                      autoComplete="email"
+                      value={emailInput}
+                      onChange={(event) => setEmailInput(event.target.value)}
+                    />
+                  </div>
+                  {profileError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{profileError}</AlertDescription>
+                    </Alert>
+                  )}
                   <Button type="submit" disabled={savingProfile}>
                     {savingProfile
                       ? t('common.actions.saving', 'Saving...')
                       : t('accountSettings.profile.saveButton', 'Save Profile')}
                   </Button>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="account-nickname">
+                      {t('accountSettings.profile.nickname', 'Nickname')}
+                    </Label>
+                    <Input
+                      id="account-nickname"
+                      value={user.name || ''}
+                      placeholder={t(
+                        'accountSettings.profile.notProvidedByProvider',
+                        'Not provided by identity provider'
+                      )}
+                      disabled
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="account-email">
+                      {t('accountSettings.profile.email', 'Email')}
+                    </Label>
+                    <Input
+                      id="account-email"
+                      type="email"
+                      value={user.email || ''}
+                      placeholder={t(
+                        'accountSettings.profile.notProvidedByProvider',
+                        'Not provided by identity provider'
+                      )}
+                      disabled
+                    />
+                  </div>
+                  <p className="pt-2 text-xs text-muted-foreground">
+                    {t(
+                      'accountSettings.profile.managedByProvider',
+                      'This information is managed by your identity provider'
+                    )}
+                  </p>
                 </div>
-              </form>
+              )}
             </TabsContent>
 
-            <TabsContent value="password">
-              <form onSubmit={handleChangePassword} className="space-y-4">
+            {isPasswordUser && (
+              <TabsContent value="password">
+                <form onSubmit={handleChangePassword} className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <KeyRound className="h-4 w-4" />
                   <span>{t('common.fields.password', 'Password')}</span>
@@ -453,6 +616,7 @@ export function AccountSettingsDialog({
                 </div>
               </form>
             </TabsContent>
+            )}
 
             <TabsContent value="security">
               <div className="space-y-6">
@@ -694,6 +858,102 @@ export function AccountSettingsDialog({
         </DialogContent>
       </Dialog>
       <Dialog
+        open={profileSaveDialogOpen}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !savingProfile) {
+            setProfileSaveDialogOpen(false)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t(
+                'accountSettings.profile.verifyEmailTitle',
+                'Verify Email Change'
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'accountSettings.profile.verifyEmailDescription',
+                'Enter your current password and the verification code sent to your new email to save changes.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleConfirmSaveProfile} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="profile-save-password">
+                {t(
+                  'accountSettings.password.currentPassword',
+                  'Current Password'
+                )}
+              </Label>
+              <Input
+                id="profile-save-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={profileSavePassword}
+                onChange={(event) => setProfileSavePassword(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="profile-save-email-code">
+                {t('accountSettings.security.emailCode', 'Email Verification Code')}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="profile-save-email-code"
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  required
+                  value={profileSaveEmailCode}
+                  onChange={(event) => setProfileSaveEmailCode(event.target.value)}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={sendingCode || sendCodeCooldown > 0}
+                  onClick={handleSendProfileCode}
+                >
+                  {sendCodeCooldown > 0
+                    ? t('accountSettings.security.resendIn', 'Resend in {{seconds}}s', { seconds: sendCodeCooldown })
+                    : t('accountSettings.security.sendCode', 'Send Code')}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  'accountSettings.profile.codeSentTo',
+                  'Verification code will be sent to: {{email}}',
+                  { email: emailInput.trim() }
+                )}
+              </p>
+            </div>
+            {profileSaveError && (
+              <Alert variant="destructive">
+                <AlertDescription>{profileSaveError}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={savingProfile}
+                onClick={() => setProfileSaveDialogOpen(false)}
+              >
+                {t('common.actions.cancel', 'Cancel')}
+              </Button>
+              <Button type="submit" disabled={savingProfile}>
+                {savingProfile
+                  ? t('common.actions.saving', 'Saving...')
+                  : t('common.actions.save', 'Save')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={passwordConfirmAction !== null}
         onOpenChange={(nextOpen) => {
           if (!nextOpen && !passwordConfirmLoading) {
@@ -704,53 +964,110 @@ export function AccountSettingsDialog({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {t(
-                'accountSettings.security.confirmPassword.title',
-                'Confirm password'
-              )}
+              {isPasswordUser
+                ? t(
+                    'accountSettings.security.confirmPassword.title',
+                    'Confirm password'
+                  )
+                : user.mfa_enabled
+                  ? t(
+                      'accountSettings.security.confirmMFA.title',
+                      'Confirm with MFA'
+                    )
+                  : t(
+                      'accountSettings.security.confirmEmail.title',
+                      'Confirm with email'
+                    )}
             </DialogTitle>
             <DialogDescription>
-              {t(
-                'accountSettings.security.confirmPassword.description',
-                'Enter your current password to continue.'
-              )}
+              {isPasswordUser
+                ? t(
+                    'accountSettings.security.confirmPassword.description',
+                    'Enter your current password to continue.'
+                  )
+                : user.mfa_enabled
+                  ? t(
+                      'accountSettings.security.confirmMFA.description',
+                      'Enter your authentication code to continue.'
+                    )
+                  : t(
+                      'accountSettings.security.confirmEmail.description',
+                      'Enter the verification code sent to your email to continue.'
+                    )}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleConfirmCurrentPassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="account-security-current-password">
-                {t(
-                  'accountSettings.password.currentPassword',
-                  'Current Password'
-                )}
-              </Label>
-              <Input
-                id="account-security-current-password"
-                autoComplete="current-password"
-                type="password"
-                required
-                value={securityCurrentPassword}
-                onChange={(event) =>
-                  setSecurityCurrentPassword(event.target.value)
-                }
-              />
-            </div>
-            {passwordConfirmAction === 'passkey' && user.mfa_enabled && (
+            {isPasswordUser && (
               <div className="space-y-2">
-                <Label htmlFor="account-security-mfa-code">
+                <Label htmlFor="account-security-current-password">
                   {t(
-                    'accountSettings.security.mfa.authCode',
-                    'Authentication Code'
+                    'accountSettings.password.currentPassword',
+                    'Current Password'
                   )}
                 </Label>
                 <Input
-                  id="account-security-mfa-code"
-                  autoComplete="one-time-code"
-                  inputMode="numeric"
+                  id="account-security-current-password"
+                  autoComplete="current-password"
+                  type="password"
                   required
-                  value={securityMFACode}
-                  onChange={(event) => setSecurityMFACode(event.target.value)}
+                  value={securityCurrentPassword}
+                  onChange={(event) =>
+                    setSecurityCurrentPassword(event.target.value)
+                  }
                 />
+              </div>
+            )}
+            {passwordConfirmAction === 'passkey' &&
+              user.mfa_enabled &&
+              isPasswordUser && (
+                <div className="space-y-2">
+                  <Label htmlFor="account-security-mfa-code">
+                    {t(
+                      'accountSettings.security.mfa.authCode',
+                      'Authentication Code'
+                    )}
+                  </Label>
+                  <Input
+                    id="account-security-mfa-code"
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    required
+                    value={securityMFACode}
+                    onChange={(event) => setSecurityMFACode(event.target.value)}
+                  />
+                </div>
+              )}
+            {!isPasswordUser && !user.mfa_enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="account-security-email-code">
+                  {t(
+                    'accountSettings.security.emailCode',
+                    'Email Verification Code'
+                  )}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="account-security-email-code"
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    required
+                    value={securityEmailCode}
+                    onChange={(event) =>
+                      setSecurityEmailCode(event.target.value)
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSendVerificationCode}
+                  >
+                    {t(
+                      'accountSettings.security.sendCode',
+                      'Send Code'
+                    )}
+                  </Button>
+                </div>
               </div>
             )}
             {securityPasswordError && (

@@ -28,19 +28,28 @@ Kite 支持多种用户管理方式，结合 OAuth 与本地密码用户，配�
 
 MFA 和 Passkey 登录默认启用，管理员可以在 **设置 -> 认证** 中管理。
 
-密码用户可以在账号设置弹窗中管理自己的安全设置：
+所有用户都可以在账号设置弹窗中管理自己的安全设置：
 
+- 修改显示昵称
 - 使用 TOTP 认证器应用启用 MFA
 - 添加或删除 Passkey
 - 在启用 Passkey 登录后使用 Passkey 登录
 
-MFA 和 Passkey 仅适用于密码用户。OAuth 和 LDAP 用户应使用身份提供商侧的安全策略。
+密码用户还可以在账号设置弹窗中修改账号密码。OAuth 和 LDAP 用户通过其身份提供商管理密码。
+
+MFA 和 Passkey 已对所有用户类型开放。密码用户通过当前密码验证安全操作。OAuth 和 LDAP 用户通过邮箱验证码（需配置 SMTP）或已启用的 MFA 验证码进行安全操作验证。
+
+## 邮箱配置
+
+用户可以关联邮箱地址。密码用户可以在账号设置中设置邮箱（需要验证当前密码）。OAuth 和 LDAP 用户的邮箱在登录时从身份提供商自动同步（OAuth 通过 `emailClaim` 配置，LDAP 通过 `emailAttribute` 配置）。
+
+OAuth/LDAP 用户设置 MFA 或 Passkey 时需要邮箱，因为邮箱验证码用作安全操作的 step-up 认证。在设置 → SMTP 中配置 SMTP，或通过环境变量配置（`SMTP_HOST`、`SMTP_PORT`、`SMTP_USERNAME`、`SMTP_PASSWORD`、`SMTP_FROM_EMAIL`、`SMTP_USE_TLS`）。
 
 ## 最佳实践
 
 - 推荐优先使用 OAuth 用户，实现统一身份管理
 - 密码用户适用于特殊或临时场景
-- 为密码用户启用 MFA 或 Passkey
+- 为所有用户启用 MFA 或 Passkey
 - 定期审查用户列表和角色分配，确保权限最小化
 - 禁用未使用账号，降低安全风险
 

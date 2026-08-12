@@ -92,7 +92,9 @@ export interface OAuthProviderCreateRequest {
   scopes?: string
   issuer?: string
   usernameClaim?: string
+  nameClaim?: string
   groupsClaim?: string
+  emailClaim?: string
   allowedGroups?: string
   enabled?: boolean
 }
@@ -405,6 +407,7 @@ export interface LDAPSetting {
   userFilter: string
   usernameAttribute: string
   displayNameAttribute: string
+  emailAttribute: string
   groupBaseDn: string
   groupFilter: string
   groupNameAttribute: string
@@ -420,6 +423,7 @@ export interface LDAPSettingUpdateRequest {
   userFilter: string
   usernameAttribute: string
   displayNameAttribute: string
+  emailAttribute: string
   groupBaseDn: string
   groupFilter: string
   groupNameAttribute: string
@@ -482,6 +486,59 @@ export const updateLDAPSetting = async (
   data: LDAPSettingUpdateRequest
 ): Promise<LDAPSetting> => {
   return await apiClient.put<LDAPSetting>('/admin/ldap-setting/', data)
+}
+
+export interface SMTPSetting {
+  enabled: boolean
+  host: string
+  port: number
+  username: string
+  password: string
+  passwordConfigured: boolean
+  fromEmail: string
+  useTLS: boolean
+  envManaged: boolean
+}
+
+export interface SMTPSettingUpdateRequest {
+  enabled?: boolean
+  host?: string
+  port?: number
+  username?: string
+  password?: string
+  fromEmail?: string
+  useTLS?: boolean
+}
+
+export const fetchSMTPSetting = async (): Promise<SMTPSetting> => {
+  return fetchAPI<SMTPSetting>('/admin/smtp-setting/')
+}
+
+export const useSMTPSetting = (options?: {
+  staleTime?: number
+  enabled?: boolean
+}) => {
+  return useQuery({
+    queryKey: ['smtp-setting'],
+    queryFn: fetchSMTPSetting,
+    enabled: options?.enabled ?? true,
+    staleTime: options?.staleTime || 30000,
+  })
+}
+
+export const updateSMTPSetting = async (
+  data: SMTPSettingUpdateRequest
+): Promise<SMTPSetting> => {
+  return await apiClient.put<SMTPSetting>('/admin/smtp-setting/', data)
+}
+
+export const sendTestEmail = async (
+  to: string
+): Promise<{ message: string }> => {
+  return await apiClient.post<{ message: string }>(
+    '/admin/smtp-setting/test',
+    { to }
+  )
 }
 
 export const fetchAPIKeyList = async (): Promise<APIKey[]> => {

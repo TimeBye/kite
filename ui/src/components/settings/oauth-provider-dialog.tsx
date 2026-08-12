@@ -36,6 +36,8 @@ function createOAuthProviderFormData(provider?: OAuthProvider | null) {
     scopes: provider?.scopes || 'openid,profile,email',
     issuer: provider?.issuer || '',
     usernameClaim: provider?.usernameClaim || '',
+    nameClaim: provider?.nameClaim || '',
+    emailClaim: provider?.emailClaim || '',
     groupsClaim: provider?.groupsClaim || '',
     allowedGroups: provider?.allowedGroups || '',
     enabled: provider?.enabled ?? true,
@@ -118,6 +120,8 @@ function OAuthProviderDialogContent({
     if (formData.issuer) submitData.issuer = formData.issuer
     if (formData.usernameClaim)
       submitData.usernameClaim = formData.usernameClaim
+    if (formData.nameClaim) submitData.nameClaim = formData.nameClaim
+    if (formData.emailClaim) submitData.emailClaim = formData.emailClaim
     if (formData.groupsClaim) submitData.groupsClaim = formData.groupsClaim
     if (formData.allowedGroups)
       submitData.allowedGroups = formData.allowedGroups
@@ -330,6 +334,34 @@ function OAuthProviderDialogContent({
                 placeholder={t(
                   'common.placeholders.usernameClaim',
                   'e.g., preferred_username'
+                )}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nameClaim">
+                {t('common.fields.nameClaim', 'Name Claim')}
+              </Label>
+              <Input
+                id="nameClaim"
+                value={formData.nameClaim}
+                onChange={handleInputChange('nameClaim')}
+                placeholder={t(
+                  'common.placeholders.nameClaim',
+                  'e.g., given_name'
+                )}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="emailClaim">
+                {t('settings.oauth.emailClaim', 'Email Claim')}
+              </Label>
+              <Input
+                id="emailClaim"
+                value={formData.emailClaim}
+                onChange={handleInputChange('emailClaim')}
+                placeholder={t(
+                  'settings.oauth.emailClaimPlaceholder',
+                  'e.g., email, mail, userPrincipalName'
                 )}
               />
             </div>

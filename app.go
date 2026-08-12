@@ -8,6 +8,8 @@ import (
 	"github.com/zxh326/kite/internal"
 	"github.com/zxh326/kite/pkg/cluster"
 	"github.com/zxh326/kite/pkg/common"
+	"github.com/zxh326/kite/pkg/email"
+	"github.com/zxh326/kite/pkg/i18n"
 	"github.com/zxh326/kite/pkg/middleware"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
@@ -28,6 +30,7 @@ func initializeApp(ctx context.Context) (*cluster.ClusterManager, error) {
 	if _, err := model.GetGeneralSetting(); err != nil {
 		klog.Warningf("Failed to load general setting: %v", err)
 	}
+	email.StartCleanup()
 
 	rbac.InitRBAC()
 	templates.InitTemplates()
@@ -58,6 +61,7 @@ func buildEngine(cm *cluster.ClusterManager) *gin.Engine {
 	}
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
+	r.Use(i18n.Middleware())
 	r.Use(middleware.DevCORS(common.CORSAllowedOrigins))
 
 	base := r.Group(common.Base)

@@ -250,6 +250,7 @@ config:
 | `userInfoUrl`   | string  | 用户信息端点（无 issuer 时）            | 否   |
 | `scopes`        | string  | 逗号分隔的 scopes                       | 否   |
 | `usernameClaim` | string  | 用于用户名的 JWT claim                  | 否   |
+| `nameClaim`     | string  | 用于昵称的 JWT claim                    | 否   |
 | `groupsClaim`   | string  | 用于组的 JWT claim                      | 否   |
 | `allowedGroups` | string  | 逗号分隔的允许组列表                    | 否   |
 | `enabled`       | boolean | 启用此提供者                            | 否   |

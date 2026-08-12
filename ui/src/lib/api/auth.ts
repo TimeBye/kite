@@ -12,6 +12,7 @@ export interface AuthUser {
   id: string
   username: string
   name: string
+  email?: string
   avatar_url: string
   provider: string
   mfa_enabled?: boolean
@@ -80,6 +81,24 @@ export const changeCurrentUserPassword = async (
   })
 }
 
+export const setUserEmail = async (
+  currentPassword: string,
+  email: string,
+  emailCode: string
+): Promise<void> => {
+  await authApiClient.post<void>('/users/me/email', {
+    current_password: currentPassword,
+    email,
+    email_code: emailCode,
+  })
+}
+
+export const sendEmailVerificationCode = async (
+  email?: string
+): Promise<void> => {
+  await authApiClient.post<void>('/users/me/email/send-code', email ? { email } : undefined)
+}
+
 export interface MFASetupResponse {
   secret: string
   otpauth_url: string
@@ -95,10 +114,12 @@ export interface PasskeyCredential {
 }
 
 export const setupCurrentUserMFA = async (
-  currentPassword: string
+  currentPassword?: string,
+  emailCode?: string
 ): Promise<MFASetupResponse> => {
   return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', {
-    current_password: currentPassword,
+    current_password: currentPassword || '',
+    ...(emailCode ? { email_code: emailCode } : {}),
   })
 }
 
@@ -123,15 +144,17 @@ export const listCurrentUserPasskeys = async (): Promise<
 
 export const beginCurrentUserPasskeyRegistration = async (
   name: string,
-  currentPassword: string,
-  mfaCode?: string
+  currentPassword?: string,
+  mfaCode?: string,
+  emailCode?: string
 ): Promise<WebAuthnCreationOptionsJSON> => {
   return authApiClient.post<WebAuthnCreationOptionsJSON>(
     '/users/me/passkeys/begin',
     {
       name,
-      current_password: currentPassword,
+      current_password: currentPassword || '',
       ...(mfaCode ? { mfa_code: mfaCode } : {}),
+      ...(emailCode ? { email_code: emailCode } : {}),
     }
   )
 }

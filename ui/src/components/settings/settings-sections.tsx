@@ -7,6 +7,7 @@ import { AuthenticationManagement } from './authentication-management'
 import { ClusterManagement } from './cluster-management'
 import { GeneralManagement } from './general-management'
 import { RBACManagement } from './rbac-management'
+import { SMTPManagement } from './smtp-management'
 import { TemplateManagement } from './template-management'
 import { UserManagement } from './user-management'
 
@@ -49,6 +50,12 @@ export const settingsSectionRegistry: SettingsSectionDefinition[] = [
     'settings.tabs.oauth',
     'Authentication',
     AuthenticationManagement
+  ),
+  createSettingsSectionDefinition(
+    'smtp',
+    'settings.tabs.smtp',
+    'SMTP',
+    SMTPManagement
   ),
   createSettingsSectionDefinition(
     'rbac',

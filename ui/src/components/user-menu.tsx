@@ -47,7 +47,6 @@ export function UserMenu() {
   const [open, setOpen] = useState(false)
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false)
   const [scaleInput, setScaleInput] = useState(String(displayScale))
-  const isPasswordUser = !user?.provider || user.provider === 'password'
 
   if (!user) return null
 
@@ -135,7 +134,7 @@ export function UserMenu() {
 
           <DropdownMenuSeparator />
 
-          {isPasswordUser && (
+          {user.provider !== 'Anonymous' && (
             <>
               <DropdownMenuItem
                 onSelect={() => {
@@ -302,7 +301,7 @@ export function UserMenu() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {isPasswordUser && (
+      {user.provider !== 'Anonymous' && (
         <AccountSettingsDialog
           open={accountSettingsOpen}
           onOpenChange={setAccountSettingsOpen}

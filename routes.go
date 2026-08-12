@@ -82,6 +82,8 @@ func registerUserRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {
 	userGroup := r.Group("/api/users")
 	userGroup.PUT("/me", authHandler.RequireAuth(), users.UpdateCurrentUser)
 	userGroup.POST("/me/password", authHandler.RequireAuth(), users.ChangeCurrentUserPassword)
+	userGroup.POST("/me/email", authHandler.RequireAuth(), users.SetCurrentUserEmail)
+	userGroup.POST("/me/email/send-code", authHandler.RequireAuth(), users.SendEmailVerificationCode)
 	userGroup.POST("/me/mfa/setup", authHandler.RequireAuth(), users.SetupCurrentUserMFA)
 	userGroup.POST("/me/mfa/enable", authHandler.RequireAuth(), users.EnableCurrentUserMFA)
 	userGroup.POST("/me/mfa/disable", authHandler.RequireAuth(), users.DisableCurrentUserMFA)
@@ -143,6 +145,11 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	generalSettingAPI := adminAPI.Group("/general-setting")
 	generalSettingAPI.GET("/", settings.HandleGetGeneralSetting)
 	generalSettingAPI.PUT("/", settings.HandleUpdateGeneralSetting)
+
+	smtpSettingAPI := adminAPI.Group("/smtp-setting")
+	smtpSettingAPI.GET("/", settings.HandleGetSMTPSetting)
+	smtpSettingAPI.PUT("/", settings.HandleUpdateSMTPSetting)
+	smtpSettingAPI.POST("/test", settings.HandleSendTestEmail)
 
 	templateAPI := adminAPI.Group("/templates")
 	templateAPI.POST("/", templates.CreateTemplate)

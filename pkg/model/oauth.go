@@ -38,6 +38,8 @@ type OAuthProvider struct {
 	Issuer        string          `json:"issuer" gorm:"type:varchar(255)"`
 	Enabled       bool            `json:"enabled" gorm:"type:boolean;default:true"`
 	UsernameClaim string          `json:"usernameClaim" gorm:"type:varchar(255)"`
+	NameClaim     string          `json:"nameClaim" gorm:"type:varchar(255)"`
+	EmailClaim    string          `json:"emailClaim" gorm:"type:varchar(255)"`
 	GroupsClaim   string          `json:"groupsClaim" gorm:"type:varchar(255)"`
 	AllowedGroups string          `json:"allowedGroups" gorm:"type:text"`
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/email"
+	"github.com/zxh326/kite/pkg/i18n"
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/passkey"
@@ -125,10 +127,6 @@ func UpdateUser(c *gin.Context) {
 
 func UpdateCurrentUser(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "account settings are only available for password users"})
-		return
-	}
 
 	var req struct {
 		Name string `json:"name"`
@@ -175,23 +173,28 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 
 func SetupCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
-		return
-	}
 	if !ensureMFAEnabled(c) {
 		return
 	}
 	var req struct {
-		CurrentPassword string `json:"current_password" binding:"required"`
+		CurrentPassword string `json:"current_password"`
+		EmailCode       string `json:"email_code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !model.CheckPassword(user.Password, req.CurrentPassword) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
-		return
+	if user.Provider == "" || user.Provider == model.AuthProviderPassword {
+		if !model.CheckPassword(user.Password, req.CurrentPassword) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			return
+		}
+	} else {
+		if !verifyEmailCode(c, user.Email, req.EmailCode) {
+			lang := i18n.FromContext(c)
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.T(lang, "email_verification_code_invalid")})
+			return
+		}
 	}
 	if user.MFAEnabled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is already enabled"})
@@ -223,10 +226,6 @@ func SetupCurrentUserMFA(c *gin.Context) {
 
 func EnableCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
-		return
-	}
 	if !ensureMFAEnabled(c) {
 		return
 	}
@@ -257,10 +256,6 @@ func EnableCurrentUserMFA(c *gin.Context) {
 
 func DisableCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
-		return
-	}
 	if !ensureMFAEnabled(c) {
 		return
 	}
@@ -292,10 +287,6 @@ func DisableCurrentUserMFA(c *gin.Context) {
 
 func ListCurrentUserPasskeys(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
 	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
@@ -309,30 +300,42 @@ func ListCurrentUserPasskeys(c *gin.Context) {
 
 func BeginCurrentUserPasskeyRegistration(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
 	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
 
 	var req struct {
 		Name            string `json:"name"`
-		CurrentPassword string `json:"current_password" binding:"required"`
+		CurrentPassword string `json:"current_password"`
 		MFACode         string `json:"mfa_code"`
+		EmailCode       string `json:"email_code"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !model.CheckPassword(user.Password, req.CurrentPassword) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
-		return
-	}
-	if user.MFAEnabled && !mfa.Verify(string(user.MFASecret), req.MFACode) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
-		return
+	switch {
+	case user.Provider == "" || user.Provider == model.AuthProviderPassword:
+		if !model.CheckPassword(user.Password, req.CurrentPassword) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			return
+		}
+		// password users with MFA also verify MFA code
+		if user.MFAEnabled && !mfa.Verify(string(user.MFASecret), req.MFACode) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+			return
+		}
+	case user.MFAEnabled:
+		if !mfa.Verify(string(user.MFASecret), req.MFACode) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+			return
+		}
+	default:
+		if !verifyEmailCode(c, user.Email, req.EmailCode) {
+			lang := i18n.FromContext(c)
+			c.JSON(http.StatusBadRequest, gin.H{"error": i18n.T(lang, "email_verification_code_invalid")})
+			return
+		}
 	}
 
 	creation, err := passkey.BeginRegistration(c, user, req.Name)
@@ -345,10 +348,6 @@ func BeginCurrentUserPasskeyRegistration(c *gin.Context) {
 
 func FinishCurrentUserPasskeyRegistration(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
 	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
@@ -363,10 +362,6 @@ func FinishCurrentUserPasskeyRegistration(c *gin.Context) {
 
 func DeleteCurrentUserPasskey(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
 	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
@@ -408,6 +403,94 @@ func ensureMFAEnabled(c *gin.Context) bool {
 		return false
 	}
 	return true
+}
+
+func verifyEmailCode(c *gin.Context, emailAddr, code string) bool {
+	if emailAddr == "" || code == "" {
+		return false
+	}
+	lang := i18n.FromContext(c)
+	return email.GetCodeManager().Verify(emailAddr, code, lang) == nil
+}
+
+// SendEmailVerificationCode sends a verification code to the current user's email.
+// Used as step-up verification for OAuth/LDAP users before MFA/Passkey operations,
+// and for password users to verify a new email address before changing it.
+func SendEmailVerificationCode(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+	lang := i18n.FromContext(c)
+
+	if !email.IsSMTPEnabled() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": i18n.T(lang, "email_service_not_configured")})
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	targetEmail := strings.TrimSpace(req.Email)
+	if targetEmail == "" {
+		targetEmail = strings.TrimSpace(user.Email)
+	}
+	if targetEmail == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.T(lang, "no_email_associated")})
+		return
+	}
+
+	code, err := email.GetCodeManager().GenerateAndStore(targetEmail, lang)
+	if err != nil {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := email.SendVerificationCode(targetEmail, code, lang); err != nil {
+		klog.Errorf("failed to send verification code to %s: %v", targetEmail, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.T(lang, "failed_to_send_verification_email")})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// SetCurrentUserEmail sets or updates the email for the current password user.
+// Requires current password verification and email verification code to verify
+// ownership of the new email address.
+func SetCurrentUserEmail(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+	lang := i18n.FromContext(c)
+	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
+		c.JSON(http.StatusForbidden, gin.H{"error": i18n.T(lang, "email_can_only_set_for_password")})
+		return
+	}
+
+	var req struct {
+		CurrentPassword string `json:"current_password" binding:"required"`
+		Email           string `json:"email" binding:"required"`
+		EmailCode       string `json:"email_code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if !model.CheckPassword(user.Password, req.CurrentPassword) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.T(lang, "current_password_incorrect")})
+		return
+	}
+
+	emailAddr := strings.TrimSpace(req.Email)
+	if err := email.GetCodeManager().Verify(emailAddr, req.EmailCode, lang); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := model.UpdateUserEmail(user.ID, emailAddr); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": i18n.T(lang, "failed_to_update_email")})
+		return
+	}
+	user.Email = emailAddr
+	c.JSON(http.StatusOK, user)
 }
 
 func DeleteUser(c *gin.Context) {

@@ -2,6 +2,7 @@ package common
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -71,6 +72,16 @@ var (
 
 	// ConfigFilePath is the path to the external config file (set via KITE_CONFIG_FILE env)
 	ConfigFilePath = ""
+
+	// SMTP env overrides (set via SMTP_HOST, SMTP_PORT, etc.)
+	// When non-empty, these take priority over DB-stored SMTP settings.
+	SMTPHost       = ""
+	SMTPPort       = 0
+	SMTPUsername   = ""
+	SMTPPassword   = ""
+	SMTPFromEmail  = ""
+	SMTPUseTLS     = true
+	SMTPEnvEnabled = false
 
 	// ManagedSections tracks which configuration sections are managed by the config file.
 	// Keys: "clusters", "oauth", "ldap", "rbac", "superUser"
@@ -194,4 +205,33 @@ func LoadEnvs() {
 		}
 	}
 	klog.Infof("Trusted proxies configured: %v", TrustedProxies)
+
+	loadSMTPEnvs()
+}
+
+func loadSMTPEnvs() {
+	if v := os.Getenv("SMTP_HOST"); v != "" {
+		SMTPHost = v
+		SMTPEnvEnabled = true
+	}
+	if v := os.Getenv("SMTP_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			SMTPPort = port
+		}
+	}
+	if v := os.Getenv("SMTP_USERNAME"); v != "" {
+		SMTPUsername = v
+	}
+	if v := os.Getenv("SMTP_PASSWORD"); v != "" {
+		SMTPPassword = v
+	}
+	if v := os.Getenv("SMTP_FROM_EMAIL"); v != "" {
+		SMTPFromEmail = v
+	}
+	if v := os.Getenv("SMTP_USE_TLS"); v != "" {
+		SMTPUseTLS = v == "true"
+	}
+	if SMTPEnvEnabled && SMTPPort == 0 {
+		SMTPPort = 587
+	}
 }

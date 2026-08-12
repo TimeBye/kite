@@ -62,6 +62,8 @@ type GenericProvider struct {
 	UserInfoURL   string
 	Name          string
 	UsernameClaim string
+	NameClaim     string
+	EmailClaim    string
 	GroupsClaim   string
 	AllowedGroups []string
 }
@@ -159,6 +161,8 @@ func NewGenericProvider(op model.OAuthProvider) (*GenericProvider, error) {
 		UserInfoURL:   op.UserInfoURL,
 		Name:          string(op.Name),
 		UsernameClaim: op.UsernameClaim,
+		NameClaim:     op.NameClaim,
+		EmailClaim:    op.EmailClaim,
 		GroupsClaim:   op.GroupsClaim,
 		AllowedGroups: allowedGroups,
 	}
@@ -235,7 +239,8 @@ func (g *GenericProvider) GetUserInfo(accessToken string) (*model.User, error) {
 		Provider:   g.Name,
 		Sub:        extractSub(userInfo),
 		Username:   extractUsername(userInfo, g.UsernameClaim),
-		Name:       extractName(userInfo),
+		Name:       extractName(userInfo, g.NameClaim),
+		Email:      extractEmail(userInfo, g.EmailClaim),
 		AvatarURL:  extractAvatarURL(userInfo),
 		OIDCGroups: g.extractOIDCGroups(userInfo, accessToken),
 	}
@@ -314,7 +319,10 @@ func extractUsername(userInfo map[string]interface{}, customClaim string) string
 	return ""
 }
 
-func extractName(userInfo map[string]interface{}) string {
+func extractName(userInfo map[string]interface{}, customClaim string) string {
+	if value := customClaimValue(userInfo, customClaim); value != "" {
+		return value
+	}
 	if nickname, ok := userInfo["nickname"]; ok {
 		return fmt.Sprintf("%v", nickname)
 	}
@@ -322,7 +330,20 @@ func extractName(userInfo map[string]interface{}) string {
 		return v
 	}
 	if nested, ok := unwrapDataField(userInfo); ok {
-		return extractName(nested)
+		return extractName(nested, customClaim)
+	}
+	return ""
+}
+
+func extractEmail(userInfo map[string]interface{}, customClaim string) string {
+	if value := customClaimValue(userInfo, customClaim); value != "" {
+		return value
+	}
+	if v := firstClaimValue(userInfo, "email", "mail", "userPrincipalName"); v != "" {
+		return v
+	}
+	if nested, ok := unwrapDataField(userInfo); ok {
+		return extractEmail(nested, customClaim)
 	}
 	return ""
 }

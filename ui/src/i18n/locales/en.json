@@ -9,6 +9,7 @@
       "close": "Close",
       "clone": "Clone",
       "confirm": "Confirm",
+      "continue": "Continue",
       "copy": "Copy",
       "collapse": "Collapse",
       "cordon": "Cordon",
@@ -208,6 +209,7 @@
       "user": "User",
       "username": "Username",
       "usernameClaim": "Username Claim",
+      "nameClaim": "Name Claim",
       "users": "Users",
       "value": "Value",
       "variables": "Variables",
@@ -310,6 +312,7 @@
       "emptyTemplate": "Empty Template",
       "no": "No",
       "none": "None",
+      "notSet": "Not set",
       "or": "or",
       "required": "This field is required",
       "yes": "Yes"
@@ -328,7 +331,8 @@
       "subject": "username or group name",
       "tokenUrl": "https://provider.com/oauth/token",
       "userInfoUrl": "https://provider.com/oauth/userinfo",
-      "usernameClaim": "e.g., preferred_username"
+      "usernameClaim": "e.g., preferred_username",
+      "nameClaim": "e.g., given_name"
     }
   },
   "globalSearch": {
@@ -739,7 +743,11 @@
   },
   "errors": {
     "crdNotInstalledTitle": "Resource Type Not Available",
-    "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature."
+    "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature.",
+    "noPermission": {
+      "title": "Access Denied",
+      "adminRequired": "You do not have permission to access this page."
+    }
   },
   "rbac": {
     "noPermissionCluster": "User {{user}} does not have permission to {{verb}} {{resource}} on cluster {{cluster}}",
@@ -769,8 +777,114 @@
       "clusters": "Cluster",
       "general": "General",
       "oauth": "Authentication",
+      "smtp": "SMTP",
       "rbac": "RBAC",
       "users": "User"
+    },
+    "oauth": {
+      "emailClaim": "Email Claim",
+      "emailClaimPlaceholder": "e.g., email, mail, userPrincipalName"
+    },
+    "smtp": {
+      "title": "SMTP",
+      "description": "Configure email server for sending verification codes",
+      "enabled": "Enabled",
+      "host": "Host",
+      "hostPlaceholder": "smtp.example.com",
+      "port": "Port",
+      "username": "Username",
+      "usernamePlaceholder": "user@example.com",
+      "password": "Password",
+      "passwordPlaceholder": "Leave blank to keep current password",
+      "fromEmail": "From Email",
+      "fromEmailPlaceholder": "noreply@example.com",
+      "useTLS": "Use TLS",
+      "save": "Save",
+      "testEmail": "Test Email",
+      "testEmailDescription": "Send a test email to verify SMTP configuration",
+      "testEmailRecipient": "Recipient",
+      "testEmailRecipientPlaceholder": "test@example.com",
+      "sendTest": "Send Test",
+      "testEmailSent": "Test email sent successfully",
+      "envManaged": "SMTP is managed by environment variables and cannot be modified through the UI"
+    }
+  },
+  "accountSettings": {
+    "title": "Account Settings",
+    "tabs": {
+      "profile": "Profile",
+      "password": "Password",
+      "security": "Security"
+    },
+    "profile": {
+      "nickname": "Nickname",
+      "email": "Email",
+      "newEmail": "New Email",
+      "saveButton": "Save Profile",
+      "managedByProvider": "This information is managed by your identity provider",
+      "saved": "Account updated",
+      "error": "Failed to update account",
+      "emailSaved": "Email updated",
+      "emailError": "Failed to update email",
+      "verifyEmailTitle": "Verify Email Change",
+      "verifyEmailDescription": "Enter your current password and the verification code sent to your new email to save changes.",
+      "codeSentTo": "Verification code will be sent to: {{email}}",
+      "notProvidedByProvider": "Not provided by identity provider"
+    },
+    "password": {
+      "currentPassword": "Current Password",
+      "newPassword": "New Password",
+      "confirmNewPassword": "Confirm New Password",
+      "changeButton": "Change Password",
+      "mismatch": "New passwords do not match",
+      "changed": "Password changed",
+      "error": "Failed to change password"
+    },
+    "security": {
+      "mfa": {
+        "setupButton": "Set Up MFA",
+        "enableButton": "Enable MFA",
+        "disableButton": "Disable MFA",
+        "authCode": "Authentication Code",
+        "qrCodeAlt": "MFA QR code",
+        "otpauthUrl": "otpauth URL",
+        "enabled": "MFA enabled",
+        "disabled": "MFA disabled",
+        "enableError": "Failed to enable MFA",
+        "disableError": "Failed to disable MFA",
+        "setupError": "Failed to set up MFA"
+      },
+      "passkeys": {
+        "title": "Passkeys",
+        "namePlaceholder": "Passkey name",
+        "addButton": "Add Passkey",
+        "empty": "No passkeys added.",
+        "lastUsed": "Last used {{date}}",
+        "addedOn": "Added {{date}}",
+        "deleteAriaLabel": "Delete {{name}}",
+        "added": "Passkey added",
+        "deleted": "Passkey deleted",
+        "loadError": "Failed to load passkeys",
+        "addError": "Failed to add passkey",
+        "deleteError": "Failed to delete passkey"
+      },
+      "confirmPassword": {
+        "title": "Confirm password",
+        "description": "Enter your current password to continue."
+      },
+      "confirmMFA": {
+        "title": "Confirm with MFA",
+        "description": "Enter your authentication code to continue."
+      },
+      "confirmEmail": {
+        "title": "Confirm with email",
+        "description": "Enter the verification code sent to your email to continue."
+      },
+      "emailCode": "Email Verification Code",
+      "sendCode": "Send Code",
+      "resendIn": "Resend in {{seconds}}s",
+      "verificationCodeSent": "Verification code sent",
+      "sendCodeError": "Failed to send verification code"
     }
   },
   "generalManagement": {
@@ -858,6 +972,8 @@
         "userFilter": "User Filter",
         "usernameAttribute": "Username Attribute",
         "displayNameAttribute": "Display Name Attribute",
+        "emailAttribute": "Email Attribute",
+        "emailAttributePlaceholder": "mail",
         "groupBaseDn": "Group Base DN",
         "groupFilter": "Group Filter",
         "groupNameAttribute": "Group Name Attribute"

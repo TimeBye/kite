@@ -17,6 +17,7 @@ type User struct {
 	Username    string       `json:"username" gorm:"type:varchar(50);uniqueIndex;not null"`
 	Password    string       `json:"-" gorm:"type:varchar(255)"`
 	Name        string       `json:"name,omitempty" gorm:"type:varchar(100);index"`
+	Email       string       `json:"email,omitempty" gorm:"type:varchar(255);index"`
 	AvatarURL   string       `json:"avatar_url,omitempty" gorm:"type:text"`
 	Provider    string       `json:"provider,omitempty" gorm:"type:varchar(50);default:password;index"`
 	OIDCGroups  SliceString  `json:"oidc_groups,omitempty" gorm:"type:text"`
@@ -123,11 +124,23 @@ func FindWithSubOrUpsertUser(user *User) error {
 		}
 		return err
 	}
-	user.Enabled = existingUser.Enabled
 
 	user.ID = existingUser.ID
 	user.CreatedAt = existingUser.CreatedAt
+	user.Enabled = existingUser.Enabled
 	user.SidebarPreference = existingUser.SidebarPreference
+
+	if user.Name == "" {
+		user.Name = existingUser.Name
+	}
+	if user.Email == "" {
+		user.Email = existingUser.Email
+	}
+	user.MFAEnabled = existingUser.MFAEnabled
+	user.MFASecret = existingUser.MFASecret
+	user.Password = existingUser.Password
+	user.APIKey = existingUser.APIKey
+
 	err := DB.Save(user).Error
 	InvalidateUserCache(uint64(user.ID))
 	return err
@@ -265,6 +278,12 @@ func UpdateUserName(id uint, name string) error {
 	return err
 }
 
+func UpdateUserEmail(id uint, email string) error {
+	err := DB.Model(&User{}).Where("id = ?", id).Update("email", email).Error
+	InvalidateUserCache(uint64(id))
+	return err
+}
+
 // StoreMFASecret persists a pending MFA secret without enabling MFA yet.
 func StoreMFASecret(id uint, secret string) error {
 	err := DB.Model(&User{}).Where("id = ?", id).Updates(map[string]any{
@@ -349,6 +368,12 @@ func UpsertLDAPUser(user *User) (*User, error) {
 	if strings.TrimSpace(user.AvatarURL) == "" {
 		user.AvatarURL = existingUser.AvatarURL
 	}
+	if strings.TrimSpace(user.Email) == "" {
+		user.Email = existingUser.Email
+	}
+	user.MFAEnabled = existingUser.MFAEnabled
+	user.MFASecret = existingUser.MFASecret
+	user.APIKey = existingUser.APIKey
 
 	err := DB.Save(user).Error
 	if err == nil {

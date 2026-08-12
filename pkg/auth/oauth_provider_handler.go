@@ -123,6 +123,8 @@ func (h *AuthHandler) UpdateOAuthProvider(c *gin.Context) {
 		"scopes":         provider.Scopes,
 		"issuer":         provider.Issuer,
 		"username_claim": provider.UsernameClaim,
+		"name_claim":     provider.NameClaim,
+		"email_claim":    provider.EmailClaim,
 		"groups_claim":   provider.GroupsClaim,
 		"allowed_groups": provider.AllowedGroups,
 		"enabled":        provider.Enabled,

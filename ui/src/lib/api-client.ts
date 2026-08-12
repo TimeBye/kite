@@ -1,4 +1,6 @@
 // API client with authentication support
+import i18next from 'i18next'
+
 import { appendCurrentClusterHeader } from './current-cluster'
 import { withSubPath } from './subpath'
 
@@ -46,6 +48,10 @@ class ApiClient {
 
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string>),
+    }
+
+    if (!headers['Accept-Language']) {
+      headers['Accept-Language'] = i18next.language || 'en'
     }
 
     // Only set default Content-Type to application/json if not already set and body is not FormData

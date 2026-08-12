@@ -35,6 +35,7 @@ function createDefaultSettings(): AuthenticationFormData {
     userFilter: '',
     usernameAttribute: '',
     displayNameAttribute: '',
+    emailAttribute: '',
     groupBaseDn: '',
     groupFilter: '',
     groupNameAttribute: '',
@@ -57,6 +58,7 @@ function toFormData(data?: LDAPSetting): AuthenticationFormData {
     userFilter: data.userFilter || '',
     usernameAttribute: data.usernameAttribute || '',
     displayNameAttribute: data.displayNameAttribute || '',
+    emailAttribute: data.emailAttribute || '',
     groupBaseDn: data.groupBaseDn || '',
     groupFilter: data.groupFilter || '',
     groupNameAttribute: data.groupNameAttribute || '',
@@ -144,6 +146,7 @@ export function AuthenticationManagement() {
       userFilter: formData.userFilter.trim(),
       usernameAttribute: formData.usernameAttribute.trim(),
       displayNameAttribute: formData.displayNameAttribute.trim(),
+      emailAttribute: formData.emailAttribute.trim(),
       groupBaseDn: formData.groupBaseDn.trim(),
       groupFilter: formData.groupFilter.trim(),
       groupNameAttribute: formData.groupNameAttribute.trim(),
@@ -504,6 +507,29 @@ export function AuthenticationManagement() {
                           displayNameAttribute: e.target.value,
                         }))
                       }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ldap-email-attribute">
+                      {t(
+                        'authenticationManagement.ldap.form.emailAttribute',
+                        'Email Attribute'
+                      )}
+                    </Label>
+                    <Input
+                      id="ldap-email-attribute"
+                      value={formData.emailAttribute}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          emailAttribute: e.target.value,
+                        }))
+                      }
+                      placeholder={t(
+                        'authenticationManagement.ldap.form.emailAttributePlaceholder',
+                        'mail'
+                      )}
                     />
                   </div>
 

@@ -22,6 +22,7 @@ type KiteConfig struct {
 	Clusters  []ClusterConfig  `yaml:"clusters"`
 	OAuth     []OAuthConfig    `yaml:"oauth"`
 	LDAP      *LDAPConfig      `yaml:"ldap"`
+	SMTP      *SMTPConfig      `yaml:"smtp"`
 	RBAC      *RBACConfig      `yaml:"rbac"`
 }
 
@@ -52,6 +53,8 @@ type OAuthConfig struct {
 	Issuer        string `yaml:"issuer"`
 	Enabled       *bool  `yaml:"enabled"`
 	UsernameClaim string `yaml:"usernameClaim"`
+	NameClaim     string `yaml:"nameClaim"`
+	EmailClaim    string `yaml:"emailClaim"`
 	GroupsClaim   string `yaml:"groupsClaim"`
 	AllowedGroups string `yaml:"allowedGroups"`
 }
@@ -66,9 +69,20 @@ type LDAPConfig struct {
 	UserFilter           string `yaml:"userFilter"`
 	UsernameAttribute    string `yaml:"usernameAttribute"`
 	DisplayNameAttribute string `yaml:"displayNameAttribute"`
+	EmailAttribute       string `yaml:"emailAttribute"`
 	GroupBaseDN          string `yaml:"groupBaseDn"`
 	GroupFilter          string `yaml:"groupFilter"`
 	GroupNameAttribute   string `yaml:"groupNameAttribute"`
+}
+
+type SMTPConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	Username  string `yaml:"username"`
+	Password  string `yaml:"password"`
+	FromEmail string `yaml:"fromEmail"`
+	UseTLS    bool   `yaml:"useTLS"`
 }
 
 type RBACConfig struct {
@@ -154,6 +168,15 @@ func applyConfig(path string, cfg *KiteConfig) AppliedSections {
 		} else {
 			sections["ldap"] = true
 			klog.Info("Applied LDAP settings from config file")
+		}
+	}
+
+	if cfg.SMTP != nil {
+		if err := applySMTP(cfg.SMTP); err != nil {
+			klog.Errorf("Failed to apply SMTP config: %v", err)
+		} else {
+			sections["smtp"] = true
+			klog.Info("Applied SMTP settings from config file")
 		}
 	}
 
@@ -283,6 +306,8 @@ func applyOAuth(providers []OAuthConfig) error {
 				Issuer:        p.Issuer,
 				Enabled:       enabled,
 				UsernameClaim: p.UsernameClaim,
+				NameClaim:     p.NameClaim,
+				EmailClaim:    p.EmailClaim,
 				GroupsClaim:   p.GroupsClaim,
 				AllowedGroups: p.AllowedGroups,
 			}
@@ -305,12 +330,27 @@ func applyLDAP(cfg *LDAPConfig) error {
 		UserFilter:           cfg.UserFilter,
 		UsernameAttribute:    cfg.UsernameAttribute,
 		DisplayNameAttribute: cfg.DisplayNameAttribute,
+		EmailAttribute:       cfg.EmailAttribute,
 		GroupBaseDN:          cfg.GroupBaseDN,
 		GroupFilter:          cfg.GroupFilter,
 		GroupNameAttribute:   cfg.GroupNameAttribute,
 	}
 
 	_, err := model.UpdateLDAPSetting(setting)
+	return err
+}
+
+func applySMTP(cfg *SMTPConfig) error {
+	setting := &model.SMTPSetting{
+		Enabled:   cfg.Enabled,
+		Host:      cfg.Host,
+		Port:      cfg.Port,
+		Username:  cfg.Username,
+		Password:  model.SecretString(cfg.Password),
+		FromEmail: cfg.FromEmail,
+		UseTLS:    cfg.UseTLS,
+	}
+	_, err := model.UpdateSMTPSetting(setting)
 	return err
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -15,6 +15,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+const INITIAL_BATCH = 6
+const LOAD_MORE_BATCH = 6
+
 interface KubeconfigDownloadDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -28,13 +31,18 @@ export function KubeconfigDownloadDialog({
   const { clusters, currentCluster } = useCluster()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [downloading, setDownloading] = useState(false)
-  const [showAll, setShowAll] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const clustersWithUuid = clusters.filter((c) => c.uuid)
+  const hasMore = visibleCount < clustersWithUuid.length
+  const visibleClusters = clustersWithUuid.slice(0, visibleCount)
 
   // Reset state when dialog closes; default-select current cluster on open.
   useEffect(() => {
     if (!open) {
       setSelected(new Set())
-      setShowAll(false)
+      setVisibleCount(INITIAL_BATCH)
     } else if (currentCluster) {
       const current = clusters.find((c) => c.name === currentCluster)
       if (current?.uuid) {
@@ -43,11 +51,13 @@ export function KubeconfigDownloadDialog({
     }
   }, [open, currentCluster, clusters])
 
-  const clustersWithUuid = clusters.filter((c) => c.uuid)
-  const visibleClusters =
-    showAll || clustersWithUuid.length <= 8
-      ? clustersWithUuid
-      : clustersWithUuid.slice(0, 8)
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || !hasMore) return
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+      setVisibleCount((prev) => Math.min(prev + LOAD_MORE_BATCH, clustersWithUuid.length))
+    }
+  }, [hasMore, clustersWithUuid.length])
 
   const handleToggle = (uuid: string) => {
     setSelected((prev) => {
@@ -136,7 +146,11 @@ export function KubeconfigDownloadDialog({
               </Button>
             )}
           </div>
-          <div className="h-[240px] overflow-y-auto rounded-md border p-2">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="h-[240px] overflow-y-auto rounded-md border p-2"
+          >
             <div className="space-y-1">
               {visibleClusters.map((cluster) => (
                 <label
@@ -155,22 +169,6 @@ export function KubeconfigDownloadDialog({
                   )}
                 </label>
               ))}
-              {clustersWithUuid.length > 8 && !showAll && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setShowAll(true)}
-                >
-                  {t(
-                    'clusterManagement.kubeconfig.showAll',
-                    'Show all ({{count}})',
-                    {
-                      count: clustersWithUuid.length,
-                    }
-                  )}
-                </Button>
-              )}
             </div>
           </div>
         </div>

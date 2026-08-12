@@ -29,6 +29,7 @@ type ldapConfig struct {
 	UserFilter           string
 	UsernameAttribute    string
 	DisplayNameAttribute string
+	EmailAttribute       string
 	GroupBaseDN          string
 	GroupFilter          string
 	GroupNameAttribute   string
@@ -98,9 +99,12 @@ func (a *LDAPAuthenticator) Authenticate(setting *model.LDAPSetting, username, p
 		displayName = canonicalUsername
 	}
 
+	email := strings.TrimSpace(entry.GetAttributeValue(cfg.EmailAttribute))
+
 	return &model.User{
 		Username:   canonicalUsername,
 		Name:       displayName,
+		Email:      email,
 		Provider:   model.AuthProviderLDAP,
 		Password:   "",
 		OIDCGroups: groups,
@@ -127,6 +131,7 @@ func newLDAPConfig(setting *model.LDAPSetting) (ldapConfig, error) {
 		UserFilter:           normalized.UserFilter,
 		UsernameAttribute:    normalized.UsernameAttribute,
 		DisplayNameAttribute: normalized.DisplayNameAttribute,
+		EmailAttribute:       normalized.EmailAttribute,
 		GroupBaseDN:          normalized.GroupBaseDN,
 		GroupFilter:          normalized.GroupFilter,
 		GroupNameAttribute:   normalized.GroupNameAttribute,
@@ -169,7 +174,7 @@ func findLDAPUser(conn *ldap.Conn, cfg ldapConfig, username string) (*ldap.Entry
 		0,
 		false,
 		filter,
-		[]string{cfg.UsernameAttribute, cfg.DisplayNameAttribute},
+		[]string{cfg.UsernameAttribute, cfg.DisplayNameAttribute, cfg.EmailAttribute},
 		nil,
 	)
 

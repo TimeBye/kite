@@ -66,6 +66,7 @@ ldap:
   userFilter: "(uid=%s)"
   usernameAttribute: "uid"
   displayNameAttribute: "cn"
+  emailAttribute: "mail"
   groupBaseDn: "ou=groups,dc=example,dc=com"
   groupFilter: "(member=%s)"
   groupNameAttribute: "cn"
@@ -250,6 +251,7 @@ The super user is created on first startup if it doesn't exist. On subsequent st
 | `userInfoUrl`   | string  | User info endpoint (if no issuer)           | No       |
 | `scopes`        | string  | Comma-separated scopes                      | No       |
 | `usernameClaim` | string  | JWT claim for username                      | No       |
+| `nameClaim`     | string  | JWT claim for display name                  | No       |
 | `groupsClaim`   | string  | JWT claim for groups                        | No       |
 | `allowedGroups` | string  | Comma-separated list of allowed groups      | No       |
 | `enabled`       | boolean | Enable this provider                        | No       |
@@ -270,6 +272,21 @@ The super user is created on first startup if it doesn't exist. On subsequent st
 | `groupBaseDn`          | string  | Base DN for group searches           |                |
 | `groupFilter`          | string  | Group membership filter              | `(member=%s)`  |
 | `groupNameAttribute`   | string  | Group name attribute                 | `cn`           |
+
+### SMTP Configuration
+
+Configure email server for sending verification codes.
+
+```yaml
+smtp:
+  enabled: true
+  host: smtp.example.com
+  port: 587
+  username: user@example.com
+  password: secret
+  fromEmail: noreply@example.com
+  useTLS: true
+```
 
 ### RBAC Configuration
 

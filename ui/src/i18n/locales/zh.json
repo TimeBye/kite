@@ -9,6 +9,7 @@
       "close": "关闭",
       "clone": "克隆",
       "confirm": "确认",
+      "continue": "继续",
       "copy": "复制",
       "collapse": "收起",
       "cordon": "停止调度",
@@ -208,6 +209,7 @@
       "user": "用户",
       "username": "用户名",
       "usernameClaim": "用户名 Claim",
+      "nameClaim": "昵称 Claim",
       "users": "用户",
       "value": "值",
       "variables": "变量",
@@ -310,6 +312,7 @@
       "emptyTemplate": "空模板",
       "no": "否",
       "none": "无",
+      "notSet": "未设置",
       "or": "或",
       "required": "必填",
       "yes": "是"
@@ -328,7 +331,8 @@
       "subject": "用户名或用户组名称",
       "tokenUrl": "https://provider.com/oauth/token",
       "userInfoUrl": "https://provider.com/oauth/userinfo",
-      "usernameClaim": "例如：preferred_username"
+      "usernameClaim": "例如：preferred_username",
+      "nameClaim": "例如：given_name"
     }
   },
   "globalSearch": {
@@ -744,7 +748,11 @@
   },
   "errors": {
     "crdNotInstalledTitle": "资源类型不可用",
-    "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。"
+    "crdNotInstalled": "此集群未安装 {{kind}} ({{version}})。请先安装对应的 CRD。",
+    "noPermission": {
+      "title": "无权访问",
+      "adminRequired": "您没有权限访问此页面。"
+    }
   },
   "rbac": {
     "title": "RBAC 管理",
@@ -779,9 +787,115 @@
       "clusters": "集群",
       "general": "通用",
       "oauth": "认证",
+      "smtp": "SMTP",
       "rbac": "RBAC",
       "users": "用户",
       "apikeys": "API 密钥"
+    },
+    "oauth": {
+      "emailClaim": "邮箱 Claim",
+      "emailClaimPlaceholder": "例如 email, mail, userPrincipalName"
+    },
+    "smtp": {
+      "title": "SMTP",
+      "description": "配置邮件服务器以发送验证码",
+      "enabled": "启用",
+      "host": "主机",
+      "hostPlaceholder": "smtp.example.com",
+      "port": "端口",
+      "username": "用户名",
+      "usernamePlaceholder": "user@example.com",
+      "password": "密码",
+      "passwordPlaceholder": "留空保留当前密码",
+      "fromEmail": "发件邮箱",
+      "fromEmailPlaceholder": "noreply@example.com",
+      "useTLS": "使用 TLS",
+      "save": "保存",
+      "testEmail": "测试邮件",
+      "testEmailDescription": "发送测试邮件以验证 SMTP 配置",
+      "testEmailRecipient": "收件人",
+      "testEmailRecipientPlaceholder": "test@example.com",
+      "sendTest": "发送测试",
+      "testEmailSent": "测试邮件发送成功",
+      "envManaged": "SMTP 由环境变量管理，无法通过界面修改"
+    }
+  },
+  "accountSettings": {
+    "title": "账户设置",
+    "tabs": {
+      "profile": "个人资料",
+      "password": "密码",
+      "security": "安全"
+    },
+    "profile": {
+      "nickname": "昵称",
+      "email": "邮箱",
+      "newEmail": "新邮箱",
+      "saveButton": "保存资料",
+      "managedByProvider": "以上信息由身份提供商管理",
+      "saved": "账户已更新",
+      "error": "更新账户失败",
+      "emailSaved": "邮箱已更新",
+      "emailError": "更新邮箱失败",
+      "verifyEmailTitle": "验证邮箱变更",
+      "verifyEmailDescription": "输入当前密码和发送到新邮箱的验证码以保存更改。",
+      "codeSentTo": "验证码将发送至：{{email}}",
+      "notProvidedByProvider": "身份提供商未提供"
+    },
+    "password": {
+      "currentPassword": "当前密码",
+      "newPassword": "新密码",
+      "confirmNewPassword": "确认新密码",
+      "changeButton": "修改密码",
+      "mismatch": "两次输入的新密码不一致",
+      "changed": "密码已修改",
+      "error": "修改密码失败"
+    },
+    "security": {
+      "mfa": {
+        "setupButton": "设置 MFA",
+        "enableButton": "启用 MFA",
+        "disableButton": "禁用 MFA",
+        "authCode": "验证码",
+        "qrCodeAlt": "MFA 二维码",
+        "otpauthUrl": "otpauth URL",
+        "enabled": "MFA 已启用",
+        "disabled": "MFA 已禁用",
+        "enableError": "启用 MFA 失败",
+        "disableError": "禁用 MFA 失败",
+        "setupError": "设置 MFA 失败"
+      },
+      "passkeys": {
+        "title": "Passkey",
+        "namePlaceholder": "Passkey 名称",
+        "addButton": "添加 Passkey",
+        "empty": "尚未添加 Passkey。",
+        "lastUsed": "上次使用 {{date}}",
+        "addedOn": "添加于 {{date}}",
+        "deleteAriaLabel": "删除 {{name}}",
+        "added": "Passkey 已添加",
+        "deleted": "Passkey 已删除",
+        "loadError": "加载 Passkey 列表失败",
+        "addError": "添加 Passkey 失败",
+        "deleteError": "删除 Passkey 失败"
+      },
+      "confirmPassword": {
+        "title": "确认密码",
+        "description": "输入当前密码以继续。"
+      },
+      "confirmMFA": {
+        "title": "通过 MFA 确认",
+        "description": "输入验证码以继续。"
+      },
+      "confirmEmail": {
+        "title": "邮箱验证",
+        "description": "输入发送到您邮箱的验证码以继续。"
+      },
+      "emailCode": "邮箱验证码",
+      "sendCode": "发送验证码",
+      "resendIn": "{{seconds}}秒后可重发",
+      "verificationCodeSent": "验证码已发送",
+      "sendCodeError": "发送验证码失败"
     }
   },
   "generalManagement": {
@@ -869,6 +983,8 @@
         "userFilter": "用户过滤器",
         "usernameAttribute": "用户名属性",
         "displayNameAttribute": "显示名属性",
+        "emailAttribute": "邮箱属性",
+        "emailAttributePlaceholder": "mail",
         "groupBaseDn": "用户组 Base DN",
         "groupFilter": "用户组过滤器",
         "groupNameAttribute": "用户组名称属性"
