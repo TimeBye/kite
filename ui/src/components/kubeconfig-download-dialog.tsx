@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -32,7 +32,6 @@ export function KubeconfigDownloadDialog({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [downloading, setDownloading] = useState(false)
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   const clustersWithUuid = clusters.filter((c) => c.uuid)
   const hasMore = visibleCount < clustersWithUuid.length
@@ -50,14 +49,6 @@ export function KubeconfigDownloadDialog({
       }
     }
   }, [open, currentCluster, clusters])
-
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current
-    if (!el || !hasMore) return
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
-      setVisibleCount((prev) => Math.min(prev + LOAD_MORE_BATCH, clustersWithUuid.length))
-    }
-  }, [hasMore, clustersWithUuid.length])
 
   const handleToggle = (uuid: string) => {
     setSelected((prev) => {
@@ -146,11 +137,7 @@ export function KubeconfigDownloadDialog({
               </Button>
             )}
           </div>
-          <div
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="h-[240px] overflow-y-auto rounded-md border p-2"
-          >
+          <div className="h-[240px] overflow-y-auto rounded-md border p-2">
             <div className="space-y-1">
               {visibleClusters.map((cluster) => (
                 <label
@@ -170,6 +157,20 @@ export function KubeconfigDownloadDialog({
                 </label>
               ))}
             </div>
+            {hasMore && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-1 w-full"
+                onClick={() =>
+                  setVisibleCount((prev) =>
+                    Math.min(prev + LOAD_MORE_BATCH, clustersWithUuid.length)
+                  )
+                }
+              >
+                {t('common.actions.showMore', 'Show more')}
+              </Button>
+            )}
           </div>
         </div>
 
