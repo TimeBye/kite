@@ -541,7 +541,7 @@ export function ClusterManagement() {
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
-            maxBodyHeightClassName="max-h-[600px]"
+            fitViewportHeight
           />
         </CardContent>
       </Card>

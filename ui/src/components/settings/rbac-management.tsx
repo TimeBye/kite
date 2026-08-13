@@ -501,7 +501,7 @@ export function RBACManagement() {
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
-            maxBodyHeightClassName="max-h-[600px]"
+            fitViewportHeight
           />
         </CardContent>
       </Card>

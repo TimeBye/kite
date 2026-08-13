@@ -598,7 +598,7 @@ export function UserManagement() {
             searchQuery={searchQuery}
             pagination={pagination}
             setPagination={setPagination}
-            maxBodyHeightClassName="max-h-[600px]"
+            fitViewportHeight
           />
         </CardContent>
       </Card>

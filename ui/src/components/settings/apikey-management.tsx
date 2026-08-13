@@ -347,7 +347,7 @@ export function APIKeyManagement() {
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
-            maxBodyHeightClassName="max-h-[600px]"
+            fitViewportHeight
           />
         </CardContent>
       </Card>

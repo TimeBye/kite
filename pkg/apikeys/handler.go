@@ -44,7 +44,7 @@ func ListAPIKeys(c *gin.Context) {
 	}
 
 	var apiKeys []model.User
-	if err := query.Preload("Owner").Order("id desc").Offset((page - 1) * size).Limit(size).Find(&apiKeys).Error; err != nil {
+	if err := query.Preload("Owner").Order("id").Offset((page - 1) * size).Limit(size).Find(&apiKeys).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list API keys"})
 		return
 	}

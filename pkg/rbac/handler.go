@@ -59,7 +59,7 @@ func ListRoles(c *gin.Context) {
 	}
 
 	var roles []model.Role
-	if err := query.Preload("Assignments").Order("id desc").Offset((page - 1) * size).Limit(size).Find(&roles).Error; err != nil {
+	if err := query.Preload("Assignments").Order("id").Offset((page - 1) * size).Limit(size).Find(&roles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list roles: " + err.Error()})
 		return
 	}

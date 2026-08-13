@@ -110,7 +110,7 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 	}
 
 	var clusters []model.Cluster
-	if err := model.DB.Order("id desc").Offset((page - 1) * size).Limit(size).Find(&clusters).Error; err != nil {
+	if err := model.DB.Order("id").Offset((page - 1) * size).Limit(size).Find(&clusters).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -119,17 +119,17 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 	result := make([]gin.H, 0, len(clusters))
 	for _, cluster := range clusters {
 		clusterInfo := gin.H{
-			"id":               cluster.ID,
-			"name":             cluster.Name,
-			"description":      cluster.Description,
-			"enabled":          cluster.Enable,
-			"inCluster":        cluster.InCluster,
-			"connector":        cluster.Connector,
-			"connected":        cluster.Connector && cm.connectorManager.Connected(cluster.ID),
-			"isDefault":        cluster.IsDefault,
-			"prometheusURL":    cluster.PrometheusURL,
-			"uuid":             cluster.UUID,
-			"config":           "",
+			"id":            cluster.ID,
+			"name":          cluster.Name,
+			"description":   cluster.Description,
+			"enabled":       cluster.Enable,
+			"inCluster":     cluster.InCluster,
+			"connector":     cluster.Connector,
+			"connected":     cluster.Connector && cm.connectorManager.Connected(cluster.ID),
+			"isDefault":     cluster.IsDefault,
+			"prometheusURL": cluster.PrometheusURL,
+			"uuid":          cluster.UUID,
+			"config":        "",
 		}
 
 		if cluster.Connector {
