@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import {
   APIKey,
@@ -271,6 +271,7 @@ export const useUserList = (
     queryKey: ['user-list', page, size, search, sortBy, sortOrder, role],
     queryFn: () => fetchUserList(page, size, search, sortBy, sortOrder, role),
     staleTime: 20000,
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -350,6 +351,7 @@ export const useAuditLogs = (
         namespace
       ),
     staleTime: 20000,
+    placeholderData: keepPreviousData,
   })
 }
 // API Key Management
