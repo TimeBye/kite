@@ -10,11 +10,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,7 +23,6 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"golang.org/x/crypto/hkdf"
 	"gorm.io/gorm"
-	"k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/klog/v2"
 )
 
@@ -34,6 +31,9 @@ const (
 	connectorTokenSize   = 32
 	manifestGrantTimeout = 10 * time.Minute
 	manifestGrantAAD     = "kite:connector-manifest-grant:v1"
+	// connectorVersionHeader is the HTTP header sent by the Agent during
+	// WebSocket handshake to report its build version.
+	connectorVersionHeader = "X-Kite-Connector-Version"
 )
 
 var ErrInvalidManifestGrant = errors.New("invalid manifest grant")
@@ -49,24 +49,21 @@ type manifestGrant struct {
 	ExpiresAt      int64  `json:"exp"`
 }
 
-type localProxy struct {
-	address string
-	server  *http.Server
-}
-
 type Manager struct {
 	server    *remotedialer.Server
 	onChange  func()
 	jwtSecret string
-	proxies   map[uint]*localProxy
-	mu        sync.Mutex
+	creds     map[uint]*K8sCredentials
+	versions  map[uint]string
+	mu        sync.RWMutex
 }
 
 func NewManager(onChange func()) *Manager {
 	m := &Manager{
 		onChange:  onChange,
 		jwtSecret: common.JwtSecret,
-		proxies:   make(map[uint]*localProxy),
+		creds:     make(map[uint]*K8sCredentials),
+		versions:  make(map[uint]string),
 	}
 	m.server = remotedialer.New(m.authorize, remotedialer.DefaultErrorWriter)
 	return m
@@ -191,6 +188,27 @@ func (m *Manager) authorize(req *http.Request) (string, bool, error) {
 	if cluster == nil {
 		return "", false, nil
 	}
+
+	// Extract Kubernetes API credentials sent by the Agent. These are used
+	// by the Server to perform TLS + auth directly (TCP forwarding mode).
+	if credHeader := req.Header.Get(credentialsHeaderName()); credHeader != "" {
+		creds, err := UnmarshalHeader(credHeader)
+		if err != nil {
+			klog.Errorf("Failed to parse credentials from connector: %v", err)
+			return "", false, errors.New("invalid credentials header")
+		}
+		m.mu.Lock()
+		m.creds[cluster.ID] = creds
+		m.mu.Unlock()
+	}
+
+	// Store the connector version for display in the cluster list.
+	if ver := req.Header.Get(connectorVersionHeader); ver != "" {
+		m.mu.Lock()
+		m.versions[cluster.ID] = ver
+		m.mu.Unlock()
+	}
+
 	if state, ok := req.Context().Value(requestStateKey{}).(*requestState); ok {
 		state.authenticated = true
 	}
@@ -234,69 +252,25 @@ func (m *Manager) Dialer(clusterID uint) func(context.Context, string, string) (
 	}
 }
 
-// Listen creates (or returns an existing) local HTTP proxy on 127.0.0.1 that
-// forwards all requests through the connector tunnel to the agent. The SPDY
-// and WebSocket executors used by terminal/exec/files ignore config.Transport
-// and create their own transports with net.Dialer, which would fail to resolve
-// the "kubernetes-api" hostname. By providing a local listener on a real IP,
-// those executors connect to 127.0.0.1:<port> (no DNS) and the local
-// UpgradeAwareHandler handles SPDY/WebSocket upgrades and forwards through
-// the tunnel to the agent's own UpgradeAwareHandler → kube-apiserver.
-func (m *Manager) Listen(clusterID uint) (string, error) {
-	m.mu.Lock()
-	if lp, ok := m.proxies[clusterID]; ok {
-		m.mu.Unlock()
-		return lp.address, nil
-	}
-	m.mu.Unlock()
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", err
-	}
-	address := listener.Addr().String()
-
-	dialer := m.Dialer(clusterID)
-	transport := &http.Transport{
-		DialContext: dialer,
-		Proxy:       func(*http.Request) (*url.URL, error) { return nil, nil },
-	}
-
-	targetURL := &url.URL{Scheme: "http", Host: KubernetesAPITarget}
-	handler := proxy.NewUpgradeAwareHandler(targetURL, transport, false, false, &connectorResponder{})
-	handler.UpgradeTransport = proxy.NewUpgradeRequestRoundTripper(transport, proxy.MirrorRequest)
-	handler.UseRequestLocation = true
-	handler.FlushInterval = 200 * time.Millisecond
-
-	server := &http.Server{
-		Handler:           handler,
-		ReadHeaderTimeout: 30 * time.Second,
-	}
-	go func() { _ = server.Serve(listener) }()
-
-	m.mu.Lock()
-	m.proxies[clusterID] = &localProxy{address: address, server: server}
-	m.mu.Unlock()
-
-	return address, nil
+// GetCredentials returns the Kubernetes API credentials for a connector cluster.
+func (m *Manager) GetCredentials(clusterID uint) *K8sCredentials {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.creds[clusterID]
 }
 
-// Remove closes the local proxy for the given cluster and cleans up.
+// GetVersion returns the connector agent version for a connector cluster.
+func (m *Manager) GetVersion(clusterID uint) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.versions[clusterID]
+}
+
+// Remove cleans up credentials and version for a connector cluster.
 // Called when a connector cluster is disabled or deleted.
 func (m *Manager) Remove(clusterID uint) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if lp, ok := m.proxies[clusterID]; ok {
-		_ = lp.server.Close()
-		delete(m.proxies, clusterID)
-	}
-}
-
-// connectorResponder implements proxy.ErrorResponder for the server-side
-// local proxy UpgradeAwareHandler.
-type connectorResponder struct{}
-
-func (r *connectorResponder) Error(w http.ResponseWriter, req *http.Request, err error) {
-	klog.Errorf("connector proxy error: method=%s, path=%s, err=%v", req.Method, req.URL.Path, err)
-	http.Error(w, fmt.Sprintf("proxy error: %s", err), http.StatusBadGateway)
+	delete(m.creds, clusterID)
+	delete(m.versions, clusterID)
 }

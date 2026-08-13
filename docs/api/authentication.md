@@ -130,9 +130,12 @@ After creating a key, copy the full value and use it as the `Authorization` head
 
 ## Permissions
 
-API keys use the same RBAC model as regular users.
+API keys use the same RBAC model as regular users. There are two types of API keys:
 
-- Creating an API key does not automatically grant any resource permissions.
+- **Standalone API Keys** (created manually in **Settings -> API Keys**): These have no owner and require roles to be assigned directly via RBAC role assignment. Use `subjectType: "apikey"` when assigning roles through the API, or select "API Key" in the RBAC assignment dialog.
+- **Kubeconfig API Keys** (auto-generated when downloading a kubeconfig): These are linked to the downloading user as their **owner** and dynamically inherit the owner's current RBAC roles. When the owner's roles change, the API key's permissions update automatically. Only one kubeconfig API key per user is valid at a time — downloading a new kubeconfig revokes the previous one.
+
+- Creating a standalone API key does not automatically grant any resource permissions.
 - Resource access under `/api/v1/...` is still checked by RBAC.
 - Admin APIs under `/api/v1/admin/...` require the caller to have the `admin` role.
 - Cluster resource APIs usually also require `x-cluster-name`.

@@ -31,6 +31,10 @@ type RoleAssignment struct {
 const (
 	SubjectTypeUser  = "user"
 	SubjectTypeGroup = "group"
+	// SubjectTypeAPIKey is a frontend-only subject type that maps to
+	// SubjectTypeUser in the database. It is used in the RBAC assignment
+	// dialog to let admins pick API Keys as a distinct category.
+	SubjectTypeAPIKey = "apikey"
 )
 
 var (

@@ -21,6 +21,7 @@ import {
   importClusters,
   updateCluster,
   useClusterList,
+  useVersionInfo,
 } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -36,7 +37,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
@@ -52,6 +52,7 @@ import { ClusterImportDialog } from './cluster-import-dialog'
 export function ClusterManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { data: versionInfo } = useVersionInfo()
 
   const {
     data: clusters = [],
@@ -188,6 +189,37 @@ export function ClusterManagement() {
         cell: ({ row: { original: cluster } }) => getClusterTypeBadge(cluster),
       },
       {
+        id: 'connectorVersion',
+        header: t('clusterManagement.connectorVersion', 'Connector Version'),
+        cell: ({ row: { original: cluster } }) => {
+          if (!cluster.connector) {
+            return <span className="text-muted-foreground">-</span>
+          }
+          const ver = cluster.connectorVersion
+          if (!ver) {
+            return <span className="text-muted-foreground">-</span>
+          }
+          const isOutdated = versionInfo?.version && ver !== versionInfo.version
+          return (
+            <Badge
+              variant="outline"
+              className={
+                isOutdated
+                  ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 font-mono'
+                  : 'border-green-500/50 bg-green-500/10 text-green-700 dark:text-green-400 font-mono'
+              }
+            >
+              {ver}
+              {isOutdated && (
+                <span className="ml-1">
+                  {t('clusterManagement.needsUpgrade', 'Needs upgrade')}
+                </span>
+              )}
+            </Badge>
+          )
+        },
+      },
+      {
         id: 'status',
         header: t('common.fields.status', 'Status'),
         cell: ({ row: { original: cluster } }) => (
@@ -206,7 +238,7 @@ export function ClusterManagement() {
         ),
       },
     ],
-    [getClusterTypeBadge, getStatusBadge, t]
+    [getClusterTypeBadge, getStatusBadge, t, versionInfo]
   )
 
   const actions = useMemo<Action<Cluster>[]>(
@@ -512,16 +544,15 @@ export function ClusterManagement() {
               )}
             </DialogDescription>
           </DialogHeader>
-          <Tabs defaultValue="command">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="command">
-                {t('clusterManagement.connector.command', 'Command')}
-              </TabsTrigger>
-              <TabsTrigger value="yaml">
-                {t('clusterManagement.connector.yaml', 'Kubernetes YAML')}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="command" className="space-y-2">
+          <div className="space-y-4">
+            {/* Section 1: Command */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                {t(
+                  'clusterManagement.connector.runCommand',
+                  'Run Connector directly'
+                )}
+              </Label>
               <div className="flex gap-2">
                 <Input
                   readOnly
@@ -562,72 +593,78 @@ export function ClusterManagement() {
                   )}
                 </p>
               )}
-            </TabsContent>
-            <TabsContent value="yaml" className="space-y-2">
-              {connectorManifestURL && (
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    {t(
-                      'clusterManagement.connector.applyUrl',
-                      'Apply directly with URL'
-                    )}
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      readOnly
-                      className="font-mono text-xs"
-                      value={`kubectl apply -f "${connectorManifestURL}"`}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label={t(
-                        'clusterManagement.connector.copyApplyCommand',
-                        'Copy apply command'
-                      )}
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(
-                            `kubectl apply -f "${connectorManifestURL}"`
-                          )
-                          setConnectorCopyError(null)
-                          toast.success(t('common.messages.copied', 'Copied'))
-                        } catch {
-                          setConnectorCopyError('yaml')
-                        }
-                      }}
-                    >
-                      <IconCopy className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-              <div className="space-y-1">
+            </div>
+
+            <div className="border-t" />
+
+            {/* Section 2: URL deploy */}
+            {connectorManifestURL && (
+              <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">
                   {t(
-                    'clusterManagement.connector.orUseYaml',
-                    'Or deploy with YAML'
+                    'clusterManagement.connector.applyUrl',
+                    'Deploy via Kubernetes YAML URL'
                   )}
                 </Label>
-                {isConnectorYamlLoading ? (
-                  <Skeleton className="h-96 w-full" />
-                ) : connectorYamlError ? (
-                  <p role="alert" className="text-sm text-destructive">
-                    {connectorYamlError}
-                  </p>
-                ) : (
-                  <Textarea
+                <div className="flex gap-2">
+                  <Input
                     readOnly
-                    className="h-96 resize-none font-mono text-xs"
-                    aria-label={t(
-                      'clusterManagement.connector.yaml',
-                      'Kubernetes YAML'
-                    )}
-                    value={connectorYaml}
+                    className="font-mono text-xs"
+                    value={`kubectl apply -f "${connectorManifestURL}"`}
                   />
-                )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label={t(
+                      'clusterManagement.connector.copyApplyCommand',
+                      'Copy apply command'
+                    )}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(
+                          `kubectl apply -f "${connectorManifestURL}"`
+                        )
+                        setConnectorCopyError(null)
+                        toast.success(t('common.messages.copied', 'Copied'))
+                      } catch {
+                        setConnectorCopyError('yaml')
+                      }
+                    }}
+                  >
+                    <IconCopy className="size-4" />
+                  </Button>
+                </div>
               </div>
+            )}
+
+            <div className="border-t" />
+
+            {/* Section 3: Copy YAML */}
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                {t(
+                  'clusterManagement.connector.copyYamlManually',
+                  'Copy Kubernetes YAML manually'
+                )}
+              </Label>
+              {isConnectorYamlLoading ? (
+                <Skeleton className="h-96 w-full" />
+              ) : connectorYamlError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {connectorYamlError}
+                </p>
+              ) : (
+                <Textarea
+                  readOnly
+                  className="h-96 resize-none font-mono text-xs"
+                  aria-label={t(
+                    'clusterManagement.connector.yaml',
+                    'Kubernetes YAML'
+                  )}
+                  value={connectorYaml}
+                />
+              )}
               {connectorYaml && (
                 <div className="flex justify-end">
                   <Button
@@ -656,8 +693,8 @@ export function ClusterManagement() {
                   )}
                 </p>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
           <DialogFooter>
             <Button
               type="button"

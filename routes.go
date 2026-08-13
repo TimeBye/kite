@@ -141,6 +141,7 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	apiKeyAPI.GET("/", apikeys.ListAPIKeys)
 	apiKeyAPI.POST("/", apikeys.CreateAPIKey)
 	apiKeyAPI.DELETE("/:id", apikeys.DeleteAPIKey)
+	apiKeyAPI.GET("/independent", apikeys.ListIndependentAPIKeys)
 
 	generalSettingAPI := adminAPI.Group("/general-setting")
 	generalSettingAPI.GET("/", settings.HandleGetGeneralSetting)

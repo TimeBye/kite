@@ -80,7 +80,9 @@ func CanAccessNamespace(user model.User, cluster, name string) bool {
 	return false
 }
 
-// GetUserRoles returns all roles for a user/oidcGroups
+// GetUserRoles returns all roles for a user/oidcGroups. If the user is an API
+// Key with an OwnerUserID, the owner's roles are merged in so that the key
+// inherits the owner's permissions.
 func GetUserRoles(user model.User) []common.Role {
 	if user.Roles != nil {
 		return user.Roles
@@ -91,6 +93,25 @@ func GetUserRoles(user model.User) []common.Role {
 	if RBACConfig == nil {
 		return nil
 	}
+	collectRolesLocked(&user, rolesMap)
+	// If this is an API Key with an owner, merge the owner's roles.
+	if user.OwnerUserID != nil {
+		var owner model.User
+		if err := model.DB.First(&owner, *user.OwnerUserID).Error; err == nil {
+			owner.Roles = nil // force fresh lookup
+			collectRolesLocked(&owner, rolesMap)
+		}
+	}
+	roles := make([]common.Role, 0, len(rolesMap))
+	for _, role := range rolesMap {
+		roles = append(roles, role)
+	}
+	return roles
+}
+
+// collectRolesLocked populates rolesMap with all roles matching the given user.
+// Caller must hold rwlock.RLock.
+func collectRolesLocked(user *model.User, rolesMap map[string]common.Role) {
 	for _, mapping := range RBACConfig.RoleMapping {
 		if contains(mapping.Users, "*") || contains(mapping.Users, user.Key()) {
 			if r := findRoleLocked(mapping.Name); r != nil {
@@ -105,11 +126,6 @@ func GetUserRoles(user model.User) []common.Role {
 			}
 		}
 	}
-	roles := make([]common.Role, 0, len(rolesMap))
-	for _, role := range rolesMap {
-		roles = append(roles, role)
-	}
-	return roles
 }
 
 func findRoleLocked(name string) *common.Role {

@@ -13,7 +13,7 @@ Kite Connector 用于接入 Kite Server 无法主动访问的 Kubernetes 集群�
 Kite Connector 将连接方向反转：
 
 - Connector 从集群侧主动连接 Kite Server，不要求 Kite 主动进入集群网络。
-- Kubernetes 凭据保留在 Connector 运行环境中，不需要上传到 Kite Server。
+- WebSocket 握手时，Connector 将从 kubeconfig 或集群内 ServiceAccount 提取的 Kubernetes API 凭证发送给 Kite Server。Kite 仅在内存中保存（不持久化到磁盘或数据库），并用于直接向 kube-apiserver 认证。
 - Kite 仍然使用现有 Kubernetes Client 访问集群，资源管理、日志和终端等功能不需要单独实现一套协议。
 
 ## 原理
@@ -24,13 +24,13 @@ Kite Connector 将连接方向反转：
 Kite Kubernetes Client
         │
         ▼
-Kite Server 认证 HTTPS 回环代理
+Kite Server（rest.Config + 隧道 dialer + 凭证）
         │
         ▼
 WebSocket 隧道（由 Connector 主动建立）
         │
         ▼
-Connector 进程内 Kubernetes API 反向代理
+Connector 原始 TCP 转发器
         │
         ▼
 目标集群 kube-apiserver
@@ -39,10 +39,10 @@ Connector 进程内 Kubernetes API 反向代理
 具体过程：
 
 1. 在 Kite UI 中创建 Connector 集群时，Kite 生成一个随机连接 Token，只保存 Token 的 SHA-256 哈希，并在创建成功后展示一次原始 Token。
-2. Connector 使用 Token 连接 Kite Server 的 `/api/v1/connector/connect` WebSocket 接口。Kite 校验 Token 后，将连接绑定到对应集群。
-3. Kite Server 为该集群创建一个仅监听随机 `127.0.0.1` 端口的认证 HTTPS 代理。其凭据和固定证书只保存在进程内存中，请求通过认证后才会经隧道转发到 Connector。
-4. Connector 通过进程内连接提供 Kubernetes API 反向代理，并使用本地 ServiceAccount 或 kubeconfig 访问 kube-apiserver。
-5. Connector 会移除来自 Kite 的 `Authorization` 和 `Impersonate-*` 请求头，再由本地 Kubernetes Transport 注入 Connector 自己的集群凭据。
+2. Connector 从 kubeconfig 或集群内 ServiceAccount 提取 Kubernetes API 凭证（bearer token、CA 证书、客户端证书/密钥），然后使用连接 Token 连接 Kite Server 的 `/api/v1/connector/connect` WebSocket 接口。凭证通过 WebSocket 握手头发送（受 WSS/TLS 加密保护）。Kite 校验 Token 后，将凭证存储在内存中，并将连接绑定到对应集群。
+3. Kite Server 使用存储的凭证和 remotedialer 隧道 dialer 构造 `rest.Config`。TLS 和认证由 Kite Server 的 transport 端到端完成——不需要本地代理或 HTTP 监听端口。
+4. 当 Kite 请求隧道连接时，Connector 使用 `net.Dial` 创建到 kube-apiserver 的原始 TCP 连接。Connector 不解析 HTTP、不注入请求头、不管理 transport——只做纯字节转发。
+5. 请求头清洗（移除 `Authorization` 和 `Impersonate-*` 头）由 Kite Server 的 `HandleK8sProxy` 处理器在请求进入隧道之前完成。
 
 一条 Connector WebSocket 可以承载多个 Kubernetes API 连接。日志、Watch 和终端等流式请求也通过同一条隧道传输。
 
@@ -134,19 +134,20 @@ kite connector \
 - 生产环境必须使用 `https://`，并使用 Connector 运行环境信任的 CA 签发 Kite Server 证书。Connector 会按标准 TLS 规则校验证书域名和信任链，从而避免连接到伪造的 Kite Server。
 - 使用 `http://` 时没有服务端身份校验，Token 和隧道数据也不受 TLS 保护，只适合受控的本地测试。
 - 当前连接使用 Bearer Token，尚未实现 mTLS、客户端证书签发和证书轮换。
+- Connector 握手时会将 Kubernetes API 凭证（bearer token、CA 证书、客户端证书/密钥）通过 `X-Kite-K8s-Credentials` 头发送给 Kite Server。该传输受 WSS/TLS 加密保护，凭证仅在 Kite Server 内存中保存（不持久化），断开连接后自动清除。ServiceAccount Token 轮转时，Connector 重连即自动更新凭证。
 
 ### Kubernetes 权限与审计
 
 - Connector 的 ServiceAccount 或 kubeconfig 权限决定 Kite 能够在集群中执行哪些操作。若需要使用日志、终端等功能，应同时授予对应的 Kubernetes RBAC 权限。
 - 当前生成的 YAML 会把 Connector ServiceAccount 绑定到 `cluster-admin`，拥有整个集群的管理权限。部署前应确认这符合你的安全要求。
 - Kite 用户仍受 Kite 自身 RBAC 控制，但 kube-apiserver 看到的请求身份是 Connector 使用的 ServiceAccount 或 kubeconfig 用户，而不是实际的 Kite 登录用户。
-- Connector 不接受 Kite 传入的 Kubernetes `Authorization` 或 `Impersonate-*` 请求头。
+- 请求头清洗（移除 `Authorization` 和 `Impersonate-*` 头）由 Kite Server 在请求进入隧道前完成。Connector 本身是纯 TCP 转发器，不处理任何 HTTP 头。
 
 ### 网络与可用性
 
 - Connector 只需要主动访问 Kite Server 和目标集群 kube-apiserver，不需要向集群外暴露新的监听端口。
-- Kite Server 的内部代理使用仅绑定 `127.0.0.1` 的认证 HTTPS 端点；Connector 侧使用进程内连接。
+- Kite Server 不为 connector 集群打开任何本地监听端口，而是直接在 `rest.Config` 中使用存储的凭证和 remotedialer 隧道 dialer。Connector 只对外发起 TCP 连接到 kube-apiserver。
 - Kite 前方的 Ingress 或反向代理必须支持 WebSocket Upgrade 和长连接。
 - 当前尚未实现跨多个 Kite Server 副本的 Connector Session 路由。使用 Connector 集群时，应先使用单个 Kite Server 副本。
 - 隧道断开会中止正在运行的日志、Watch 或终端连接。Connector 重连后，需要由客户端重新发起这些流式请求。
-- 终端和命令执行优先使用 WebSocket，并在升级失败时回退到 SPDY；API Server 及中间代理需要支持对应的连接升级。
+- Connector 集群的终端和命令执行使用 SPDY 协议（通过 `UpgradeTransport` 注入隧道 dialer）。非 connector 集群使用标准的 WebSocket → SPDY 回退。

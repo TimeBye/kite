@@ -3,8 +3,11 @@ package rbac
 import (
 	"testing"
 
+	"github.com/glebarez/sqlite"
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func TestGetUserRoles(t *testing.T) {
@@ -204,5 +207,60 @@ func TestUserHasRole(t *testing.T) {
 	}
 	if UserHasRole(user, "viewer") {
 		t.Fatal("did not expect viewer role")
+	}
+}
+
+func TestGetUserRolesWithOwner(t *testing.T) {
+	originalConfig := RBACConfig
+	originalDB := model.DB
+	t.Cleanup(func() {
+		RBACConfig = originalConfig
+		model.DB = originalDB
+	})
+
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		t.Fatalf("migrate database: %v", err)
+	}
+	model.DB = db
+
+	RBACConfig = &common.RolesConfig{
+		Roles: []common.Role{
+			{Name: "viewer"},
+			{Name: "editor"},
+		},
+		RoleMapping: []common.RoleMapping{
+			{Name: "viewer", Users: []string{"alice"}},
+			{Name: "editor", Users: []string{"bob"}},
+		},
+	}
+
+	// Create owner and API key user with OwnerUserID
+	owner := model.User{Username: "alice", Provider: model.AuthProviderPassword}
+	if err := db.Create(&owner).Error; err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	apiKeyUser := model.User{Username: "kubeconfig-alice-1", Provider: "apikey", OwnerUserID: &owner.ID}
+	if err := db.Create(&apiKeyUser).Error; err != nil {
+		t.Fatalf("create api key user: %v", err)
+	}
+
+	// API key should inherit owner's "viewer" role
+	roles := GetUserRoles(apiKeyUser)
+	if len(roles) != 1 || roles[0].Name != "viewer" {
+		t.Fatalf("expected inherited viewer role, got %#v", roles)
+	}
+
+	// API key without owner should not inherit anything
+	standalone := model.User{Username: "standalone-key", Provider: "apikey"}
+	if err := db.Create(&standalone).Error; err != nil {
+		t.Fatalf("create standalone key: %v", err)
+	}
+	roles = GetUserRoles(standalone)
+	if len(roles) != 0 {
+		t.Fatalf("expected no roles for standalone key, got %#v", roles)
 	}
 }

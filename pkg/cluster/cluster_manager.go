@@ -429,14 +429,18 @@ func (cm *ClusterManager) buildClientSet(cluster *model.Cluster) (*ClientSet, er
 	if !cluster.Connector {
 		return buildClientSet(cluster)
 	}
-	address, err := cm.connectorManager.Listen(cluster.ID)
+	creds := cm.connectorManager.GetCredentials(cluster.ID)
+	if creds == nil {
+		return nil, fmt.Errorf("connector cluster %s has no credentials (agent not connected?)", cluster.Name)
+	}
+	dialer := cm.connectorManager.Dialer(cluster.ID)
+	restConfig := creds.ToRestConfig(dialer)
+	cs, err := newClientSet(cluster.Name, restConfig, cluster.PrometheusURL)
 	if err != nil {
 		return nil, err
 	}
-	return newClientSet(cluster.Name, &rest.Config{
-		Host:  "http://" + address,
-		Proxy: func(*http.Request) (*url.URL, error) { return nil, nil },
-	}, cluster.PrometheusURL)
+	cs.K8sClient.IsConnector = true
+	return cs, nil
 }
 
 func (cm *ClusterManager) syncClusters() error {

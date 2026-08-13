@@ -263,6 +263,7 @@
       "noErrorMessage": "没有错误信息",
       "noItemsConfigured": "暂无{{resource}}",
       "noItemsFound": "暂无{{resource}}",
+      "noAPIKeysFound": "暂无 API Key",
       "noOwner": "无 Owner",
       "noPods": "暂无 Pods",
       "noUsersFound": "暂无用户",
@@ -328,6 +329,8 @@
       "searchUsers": "搜索用户...",
       "selectTemplate": "选择模板",
       "selectUser": "选择用户",
+      "selectAPIKey": "选择 API Key",
+      "searchAPIKeys": "搜索 API Key...",
       "subject": "用户名或用户组名称",
       "tokenUrl": "https://provider.com/oauth/token",
       "userInfoUrl": "https://provider.com/oauth/userinfo",
@@ -1028,6 +1031,8 @@
     "table": {
       "prometheus": "Prometheus"
     },
+    "connectorVersion": "Connector 版本",
+    "needsUpgrade": "需升级",
     "type": {
       "inCluster": "集群内",
       "external": "外部",
@@ -1039,14 +1044,15 @@
     },
     "connector": {
       "title": "连接 Kite Connector",
-      "description": "选择命令行或 Kubernetes YAML 在目标集群中运行。此连接信息仅显示一次。",
+      "description": "选择以下任一方式在目标集群中运行。此连接信息仅显示一次。",
       "command": "命令行",
       "yaml": "Kubernetes YAML",
+      "runCommand": "直接运行 Connector 命令",
       "copyCommand": "复制命令行",
       "copyYaml": "复制 YAML",
-      "applyUrl": "通过 URL 直接部署",
+      "applyUrl": "通过 Kubernetes YAML URL 直接部署",
       "copyApplyCommand": "复制部署命令",
-      "orUseYaml": "或使用 YAML 部署",
+      "copyYamlManually": "复制 Kubernetes YAML 手动部署",
       "loadYamlError": "无法通过 Manifest URL 加载 YAML。",
       "copyError": "复制失败，请手动复制内容。"
     },

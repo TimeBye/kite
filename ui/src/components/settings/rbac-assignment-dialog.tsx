@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronsUpDown, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Role } from '@/types/api'
-import { useUserList } from '@/lib/api'
+import { useIndependentAPIKeyList, useUserList } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -47,12 +47,12 @@ interface Props {
   role?: Role | null
   onAssign: (
     roleId: number,
-    subjectType: 'user' | 'group',
+    subjectType: 'user' | 'group' | 'apikey',
     subject: string
   ) => void
   onUnassign: (
     roleId: number,
-    subjectType: 'user' | 'group',
+    subjectType: 'user' | 'group' | 'apikey',
     subject: string
   ) => void
   isAssigning?: boolean
@@ -70,12 +70,14 @@ export function RBACAssignmentDialog({
 }: Props) {
   const { t } = useTranslation()
   const { user } = useAuth()
-  const [subjectType, setSubjectType] = useState<'user' | 'group'>('user')
+  const [subjectType, setSubjectType] = useState<
+    'user' | 'group' | 'apikey'
+  >('user')
   const [subject, setSubject] = useState('')
   const [userSelectOpen, setUserSelectOpen] = useState(false)
   const [userSearch, setUserSearch] = useState('')
   const [pendingRemoval, setPendingRemoval] = useState<{
-    subjectType: 'user' | 'group'
+    subjectType: 'user' | 'group' | 'apikey'
     subject: string
   } | null>(null)
 
@@ -84,6 +86,8 @@ export function RBACAssignmentDialog({
     50,
     subjectType === 'user' ? userSearch : ''
   )
+  const { data: apiKeyList, isFetching: isFetchingAPIKeys } =
+    useIndependentAPIKeyList({ staleTime: 30000 })
 
   useEffect(() => {
     if (open) {
@@ -104,7 +108,7 @@ export function RBACAssignmentDialog({
   }
 
   const handleRemoveAssignment = (
-    assignmentSubjectType: 'user' | 'group',
+    assignmentSubjectType: 'user' | 'group' | 'apikey',
     assignmentSubject: string
   ) => {
     if (!role) return
@@ -234,7 +238,7 @@ export function RBACAssignmentDialog({
                 <Select
                   value={subjectType}
                   onValueChange={(v) => {
-                    setSubjectType(v as 'user' | 'group')
+                    setSubjectType(v as 'user' | 'group' | 'apikey')
                     setSubject('')
                     setUserSelectOpen(false)
                     setUserSearch('')
@@ -250,6 +254,9 @@ export function RBACAssignmentDialog({
                     </SelectItem>
                     <SelectItem value="group">
                       {t('common.fields.oidcGroup', 'OIDC Group')}
+                    </SelectItem>
+                    <SelectItem value="apikey">
+                      {t('common.fields.apiKey', 'API Key')}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -380,6 +387,100 @@ export function RBACAssignmentDialog({
                                     </div>
                                   </CommandItem>
                                 ))}
+                              </CommandGroup>
+                            </>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : subjectType === 'apikey' ? (
+                  <Popover
+                    open={userSelectOpen}
+                    onOpenChange={setUserSelectOpen}
+                    modal
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={userSelectOpen}
+                        disabled={isAssigning}
+                        className="w-full justify-between"
+                      >
+                        <span
+                          className={cn(
+                            'truncate',
+                            !subject && 'text-muted-foreground'
+                          )}
+                        >
+                          {subject ||
+                            t('common.placeholders.selectAPIKey', 'Select API key')}
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      className="w-[var(--radix-popover-trigger-width)] p-0"
+                      align="start"
+                    >
+                      <Command shouldFilter>
+                        <CommandInput
+                          placeholder={t(
+                            'common.placeholders.searchAPIKeys',
+                            'Search API keys...'
+                          )}
+                          className="h-9"
+                        />
+                        <CommandList
+                          className="max-h-[min(45dvh,240px)] overflow-x-hidden overflow-y-auto overscroll-contain"
+                          onWheelCapture={(event) => event.stopPropagation()}
+                          onTouchMove={(event) => event.stopPropagation()}
+                        >
+                          {isFetchingAPIKeys ? (
+                            <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              {t('common.actions.search', 'Search')}...
+                            </div>
+                          ) : (
+                            <>
+                              <CommandEmpty>
+                                {t(
+                                  'common.messages.noAPIKeysFound',
+                                  'No API keys found'
+                                )}
+                              </CommandEmpty>
+                              <CommandGroup className="p-0">
+                                {(apiKeyList || [])
+                                  .filter(
+                                    (k) => !assignedUsers.has(k.username)
+                                  )
+                                  .map((k) => (
+                                    <CommandItem
+                                      key={k.id}
+                                      value={k.username}
+                                      className="min-h-11 rounded-none border-b px-3 py-1.5 last:border-b-0"
+                                      onSelect={() => {
+                                        setSubject(k.username)
+                                        setUserSelectOpen(false)
+                                      }}
+                                    >
+                                      <Avatar className="size-7">
+                                        <AvatarFallback className="bg-muted-foreground text-xs font-medium text-background">
+                                          {k.username.slice(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div className="flex min-w-0 flex-1 flex-col">
+                                        <span
+                                          className="truncate text-sm font-semibold"
+                                          title={k.username}
+                                        >
+                                          {k.username}
+                                        </span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
                               </CommandGroup>
                             </>
                           )}

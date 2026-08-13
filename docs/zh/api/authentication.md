@@ -130,9 +130,12 @@ Authorization: kite12-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ## 权限说明
 
-API 密钥与普通用户共用同一套 RBAC 权限模型。
+API 密钥与普通用户共用同一套 RBAC 权限模型。API 密钥分为两种类型：
 
-- 创建 API 密钥本身不会自动获得任何资源权限。
+- **独立 API 密钥**（在 **设置 -> API 密钥** 中手动创建）：没有 Owner，需要通过 RBAC 角色分配直接为其分配角色。通过 API 分配角色时使用 `subjectType: "apikey"`，或在 RBAC 角色分配对话框中选择"API Key"。
+- **Kubeconfig API 密钥**（下载 kubeconfig 时自动生成）：关联到下载用户作为其 **Owner**，动态继承 Owner 当前的 RBAC 角色。Owner 角色变更后权限自动更新，无需重新下载。同一时间每个用户只有一个 kubeconfig API 密钥有效 —— 下载新 kubeconfig 会自动作废旧的。
+
+- 创建独立 API 密钥本身不会自动获得任何资源权限。
 - `/api/v1/...` 下的资源访问仍然会经过 RBAC 校验。
 - `/api/v1/admin/...` 下的管理接口要求调用方拥有 `admin` 角色。
 - 集群资源接口通常还需要传 `x-cluster-name`。

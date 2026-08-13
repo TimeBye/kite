@@ -132,6 +132,18 @@ export function APIKeyManagement() {
           </div>
         ),
       },
+      {
+        id: 'owner',
+        header: t('common.fields.owner', 'Owner'),
+        cell: ({ row: { original: apiKey } }) =>
+          apiKey.owner ? (
+            <Badge variant="outline">
+              {apiKey.owner.name || apiKey.owner.username}
+            </Badge>
+          ) : (
+            <span className="text-sm text-muted-foreground">-</span>
+          ),
+      },
     ],
     [t, visibleKeys, toggleKeyVisibility, copyToClipboard]
   )
@@ -146,6 +158,7 @@ export function APIKeyManagement() {
           </>
         ),
         onClick: (apiKey) => setAssigningKey(apiKey),
+        hidden: (apiKey) => !!apiKey.ownerUserId,
       },
       {
         label: (

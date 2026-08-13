@@ -132,8 +132,9 @@ Content-Type: application/json
 
 当前服务端实现支持的 `subjectType`：
 
-- `user`
-- `group`
+- `user` — 普通用户或服务账号
+- `group` — OIDC 用户组
+- `apikey` — 独立 API 密钥（内部存储为 `user`）。只有没有 Owner 的 API 密钥（手动创建的）才能直接分配角色。通过 kubeconfig 下载生成的 API 密钥从 Owner 动态继承角色，不能直接分配。
 
 示例：
 

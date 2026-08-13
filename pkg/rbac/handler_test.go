@@ -150,6 +150,23 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // handler lifecycle test
 			t.Fatalf("assignment count after unassign = %d, want 1", assignmentCount)
 		}
 
+		// 'apikey' subject type is normalized to 'user' in storage
+		response = perform(http.MethodPost, rolePath+"/assign", `{"subjectType":"apikey","subject":"ci-deploy-key"}`)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("assign apikey returned %d, want %d; body=%s", response.Code, http.StatusCreated, response.Body.String())
+		}
+		var stored model.RoleAssignment
+		if err := db.Where("role_id = ? AND subject = ?", created.Role.ID, "ci-deploy-key").First(&stored).Error; err != nil {
+			t.Fatalf("apikey assignment not found: %v", err)
+		}
+		if stored.SubjectType != model.SubjectTypeUser {
+			t.Fatalf("apikey stored as subjectType %q, want %q", stored.SubjectType, model.SubjectTypeUser)
+		}
+		response = perform(http.MethodDelete, rolePath+"/assign?subjectType=apikey&subject=ci-deploy-key", "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("unassign apikey returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
+		}
+
 		response = perform(http.MethodDelete, rolePath, "")
 		if response.Code != http.StatusOK {
 			t.Fatalf("delete returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())

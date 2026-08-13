@@ -130,10 +130,11 @@ Request body:
 }
 ```
 
-Supported `subjectType` values in the current server implementation:
+Supported `subjectType` values:
 
-- `user`
-- `group`
+- `user` — a regular user or service account
+- `group` — an OIDC group
+- `apikey` — a standalone API key (stored as `user` internally). Only API keys without an owner (manually created) can be assigned roles. Kubeconfig-generated API keys inherit roles dynamically from their owner and cannot be assigned roles directly.
 
 Example:
 

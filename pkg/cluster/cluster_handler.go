@@ -94,17 +94,21 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 	result := make([]gin.H, 0, len(clusters))
 	for _, cluster := range clusters {
 		clusterInfo := gin.H{
-			"id":            cluster.ID,
-			"name":          cluster.Name,
-			"description":   cluster.Description,
-			"enabled":       cluster.Enable,
-			"inCluster":     cluster.InCluster,
-			"connector":     cluster.Connector,
-			"connected":     cluster.Connector && cm.connectorManager.Connected(cluster.ID),
-			"isDefault":     cluster.IsDefault,
-			"prometheusURL": cluster.PrometheusURL,
-			"uuid":          cluster.UUID,
-			"config":        "",
+			"id":               cluster.ID,
+			"name":             cluster.Name,
+			"description":      cluster.Description,
+			"enabled":          cluster.Enable,
+			"inCluster":        cluster.InCluster,
+			"connector":        cluster.Connector,
+			"connected":        cluster.Connector && cm.connectorManager.Connected(cluster.ID),
+			"isDefault":        cluster.IsDefault,
+			"prometheusURL":    cluster.PrometheusURL,
+			"uuid":             cluster.UUID,
+			"config":           "",
+		}
+
+		if cluster.Connector {
+			clusterInfo["connectorVersion"] = cm.connectorManager.GetVersion(cluster.ID)
 		}
 
 		if clientSet, exists := clusterState[cluster.Name]; exists {

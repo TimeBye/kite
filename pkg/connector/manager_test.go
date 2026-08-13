@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/glebarez/sqlite"
@@ -300,117 +299,129 @@ func TestResolveManifestGrant_TamperedCiphertext(t *testing.T) {
 	}
 }
 
-// --- Listen / Remove caching tests ---
+// --- GetCredentials / Remove tests ---
 
-func TestListen_CachesAddress(t *testing.T) {
+func TestGetCredentials_NotSet(t *testing.T) {
 	m := NewManager(func() {})
-
-	addr1, err := m.Listen(1)
-	if err != nil {
-		t.Fatalf("first Listen() error: %v", err)
-	}
-	if addr1 == "" {
-		t.Fatal("first Listen() returned empty address")
-	}
-
-	// Second call should return the same cached address
-	addr2, err := m.Listen(1)
-	if err != nil {
-		t.Fatalf("second Listen() error: %v", err)
-	}
-	if addr1 != addr2 {
-		t.Errorf("Listen() caching failed: addr1=%q, addr2=%q", addr1, addr2)
+	if creds := m.GetCredentials(1); creds != nil {
+		t.Errorf("expected nil for unconnected cluster, got %+v", creds)
 	}
 }
 
-func TestListen_DifferentClusters(t *testing.T) {
+func TestGetCredentials_AfterManualSet(t *testing.T) {
 	m := NewManager(func() {})
+	creds := &K8sCredentials{Host: "https://10.0.0.1:443", BearerToken: "abc"}
+	m.creds[1] = creds
 
-	addr1, err := m.Listen(1)
-	if err != nil {
-		t.Fatalf("Listen(1) error: %v", err)
-	}
-	addr2, err := m.Listen(2)
-	if err != nil {
-		t.Fatalf("Listen(2) error: %v", err)
-	}
-	if addr1 == addr2 {
-		t.Fatal("different clusters should get different addresses")
+	got := m.GetCredentials(1)
+	if got == nil || got.Host != "https://10.0.0.1:443" || got.BearerToken != "abc" {
+		t.Errorf("unexpected credentials: %+v", got)
 	}
 }
 
-func TestListen_ReturnsValidLocalAddress(t *testing.T) {
+func TestRemove_CleansUpCredentials(t *testing.T) {
 	m := NewManager(func() {})
+	m.creds[1] = &K8sCredentials{Host: "https://10.0.0.1:443"}
 
-	addr, err := m.Listen(42)
-	if err != nil {
-		t.Fatalf("Listen() error: %v", err)
-	}
-
-	// Address should be 127.0.0.1:<port>
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		t.Fatalf("invalid address format %q: %v", addr, err)
-	}
-	if host != "127.0.0.1" {
-		t.Errorf("expected host 127.0.0.1, got %q", host)
-	}
-	if port == "" {
-		t.Error("expected non-empty port")
-	}
-}
-
-func TestRemove_CleansUpProxy(t *testing.T) {
-	m := NewManager(func() {})
-
-	addr1, err := m.Listen(1)
-	if err != nil {
-		t.Fatalf("first Listen() error: %v", err)
-	}
-
-	// Remove should close the server and clean up the map entry
 	m.Remove(1)
 
-	// After Remove, Listen should create a new proxy with a different address
-	addr2, err := m.Listen(1)
-	if err != nil {
-		t.Fatalf("Listen() after Remove() error: %v", err)
-	}
-	if addr1 == addr2 {
-		t.Fatal("Listen() after Remove() should return a new address")
+	if creds := m.GetCredentials(1); creds != nil {
+		t.Errorf("expected nil after Remove(), got %+v", creds)
 	}
 }
 
-func TestRemove_NeverListened_NoPanic(t *testing.T) {
+func TestRemove_NonExistent_NoPanic(t *testing.T) {
 	m := NewManager(func() {})
-	// Should not panic
-	m.Remove(999)
+	m.Remove(999) // should not panic
 }
 
 func TestRemove_MultipleCalls(t *testing.T) {
 	m := NewManager(func() {})
-	_, _ = m.Listen(1)
+	m.creds[1] = &K8sCredentials{Host: "https://10.0.0.1:443"}
 	m.Remove(1)
-	// Second Remove should not panic
-	m.Remove(1)
+	m.Remove(1) // second call should not panic
 }
 
-// --- connectorResponder tests ---
+// --- Connector version tests ---
 
-func TestConnectorResponder_Error(t *testing.T) {
-	responder := &connectorResponder{}
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/api/v1/pods", nil)
-	testErr := context.DeadlineExceeded
-
-	responder.Error(w, req, testErr)
-
-	if w.Code != http.StatusBadGateway {
-		t.Errorf("expected status %d, got %d", http.StatusBadGateway, w.Code)
+func TestGetVersion_NotSet(t *testing.T) {
+	m := NewManager(func() {})
+	if v := m.GetVersion(1); v != "" {
+		t.Errorf("expected empty version for unconnected cluster, got %q", v)
 	}
-	body := w.Body.String()
-	if !strings.Contains(body, "proxy error") {
-		t.Errorf("response body should contain 'proxy error', got: %s", body)
+}
+
+func TestGetVersion_AfterManualSet(t *testing.T) {
+	m := NewManager(func() {})
+	m.versions[1] = "v1.2.3"
+
+	if v := m.GetVersion(1); v != "v1.2.3" {
+		t.Errorf("expected version v1.2.3, got %q", v)
+	}
+}
+
+func TestRemove_CleansUpVersion(t *testing.T) {
+	m := NewManager(func() {})
+	m.versions[1] = "v1.2.3"
+
+	m.Remove(1)
+
+	if v := m.GetVersion(1); v != "" {
+		t.Errorf("expected empty after Remove(), got %q", v)
+	}
+}
+
+// --- Credentials serialization tests ---
+
+func TestK8sCredentials_MarshalUnmarshalHeader(t *testing.T) {
+	original := &K8sCredentials{
+		Host:        "https://10.0.0.1:443",
+		BearerToken: "secret-token",
+		CAData:      []byte("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----"),
+		Insecure:    false,
+	}
+
+	header, err := original.MarshalHeader()
+	if err != nil {
+		t.Fatalf("MarshalHeader() error: %v", err)
+	}
+
+	decoded, err := UnmarshalHeader(header)
+	if err != nil {
+		t.Fatalf("UnmarshalHeader() error: %v", err)
+	}
+
+	if decoded.Host != original.Host {
+		t.Errorf("Host mismatch: %q vs %q", decoded.Host, original.Host)
+	}
+	if decoded.BearerToken != original.BearerToken {
+		t.Errorf("BearerToken mismatch: %q vs %q", decoded.BearerToken, original.BearerToken)
+	}
+	if string(decoded.CAData) != string(original.CAData) {
+		t.Errorf("CAData mismatch")
+	}
+}
+
+func TestK8sCredentials_ToRestConfig(t *testing.T) {
+	creds := &K8sCredentials{
+		Host:        "https://kubernetes.default.svc:443",
+		BearerToken: "my-token",
+		CAData:      []byte("fake-ca"),
+	}
+
+	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return nil, nil // not actually used in test
+	}
+
+	cfg := creds.ToRestConfig(dialer)
+	if cfg.Host != creds.Host {
+		t.Errorf("Host mismatch: %q vs %q", cfg.Host, creds.Host)
+	}
+	if cfg.BearerToken != creds.BearerToken {
+		t.Errorf("BearerToken mismatch")
+	}
+	if cfg.Dial == nil {
+		t.Error("Dial should not be nil")
 	}
 }
 

@@ -184,9 +184,13 @@ func AssignRole(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	// validate subject type
-	if req.SubjectType != model.SubjectTypeUser && req.SubjectType != model.SubjectTypeGroup {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "subjectType must be 'user' or 'group'"})
+	// validate subject type and normalize: 'apikey' is stored as 'user'
+	storeSubjectType := req.SubjectType
+	if req.SubjectType == model.SubjectTypeAPIKey {
+		storeSubjectType = model.SubjectTypeUser
+	}
+	if storeSubjectType != model.SubjectTypeUser && storeSubjectType != model.SubjectTypeGroup {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "subjectType must be 'user', 'group', or 'apikey'"})
 		return
 	}
 	// ensure role exists
@@ -198,14 +202,14 @@ func AssignRole(c *gin.Context) {
 
 	// check exists
 	var existing model.RoleAssignment
-	if err := model.DB.Where("role_id = ? AND subject_type = ? AND subject = ?", role.ID, req.SubjectType, req.Subject).First(&existing).Error; err == nil {
+	if err := model.DB.Where("role_id = ? AND subject_type = ? AND subject = ?", role.ID, storeSubjectType, req.Subject).First(&existing).Error; err == nil {
 		c.JSON(http.StatusOK, gin.H{"assignment": existing})
 		return
 	}
 
 	assignment := model.RoleAssignment{
 		RoleID:      role.ID,
-		SubjectType: req.SubjectType,
+		SubjectType: storeSubjectType,
 		Subject:     req.Subject,
 	}
 	if err := model.DB.Create(&assignment).Error; err != nil {
@@ -234,6 +238,10 @@ func UnassignRole(c *gin.Context) {
 	if subjectType == "" || subject == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "subjectType and subject query params are required"})
 		return
+	}
+	// normalize: 'apikey' is stored as 'user'
+	if subjectType == model.SubjectTypeAPIKey {
+		subjectType = model.SubjectTypeUser
 	}
 	if err := model.DB.Where("role_id = ? AND subject_type = ? AND subject = ?", uint(dbID), subjectType, subject).Delete(&model.RoleAssignment{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove assignment: " + err.Error()})

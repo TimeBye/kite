@@ -136,6 +136,7 @@ type K8sClient struct {
 	Configuration *rest.Config
 	MetricsClient *metricsclient.Clientset
 	CacheEnabled  bool // true when using controller-runtime informer cache
+	IsConnector   bool // true for connector clusters (affects SPDY executor creation)
 
 	cancel context.CancelFunc
 }

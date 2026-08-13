@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/common"
-	"github.com/zxh326/kite/pkg/connector"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -170,15 +169,12 @@ func (cm *ClusterManager) getRestConfig(cluster *model.Cluster) (*rest.Config, e
 		return rest.InClusterConfig()
 	}
 	if cluster.Connector {
-		dialer := cm.connectorManager.Dialer(cluster.ID)
-		transport := &http.Transport{
-			DialContext: dialer,
-			Proxy:       func(*http.Request) (*url.URL, error) { return nil, nil },
+		creds := cm.connectorManager.GetCredentials(cluster.ID)
+		if creds == nil {
+			return nil, fmt.Errorf("connector cluster %s has no credentials (agent not connected?)", cluster.Name)
 		}
-		return &rest.Config{
-			Host:      "http://" + connector.KubernetesAPITarget,
-			Transport: transport,
-		}, nil
+		dialer := cm.connectorManager.Dialer(cluster.ID)
+		return creds.ToRestConfig(dialer), nil
 	}
 	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(string(cluster.Config)))
 	if err != nil {

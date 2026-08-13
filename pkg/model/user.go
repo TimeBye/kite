@@ -30,6 +30,8 @@ type User struct {
 	APIKey SecretString  `json:"apiKey,omitempty" gorm:"type:text"`
 	Roles  []common.Role `json:"roles,omitempty" gorm:"-"`
 
+	OwnerUserID       *uint  `json:"ownerUserId,omitempty" gorm:"column:owner_user_id;index"`
+	Owner             *User  `json:"owner,omitempty" gorm:"foreignKey:OwnerUserID"`
 	SidebarPreference string `json:"sidebar_preference,omitempty" gorm:"type:text"`
 }
 
@@ -419,7 +421,21 @@ func NewAPIKeyUser(name string) (*User, error) {
 }
 
 func ListAPIKeyUsers() (users []User, err error) {
-	err = DB.Order("id desc").Where("provider = ?", common.APIKeyProvider).Find(&users).Error
+	err = DB.Preload("Owner").Order("id desc").Where("provider = ?", common.APIKeyProvider).Find(&users).Error
+	return users, err
+}
+
+// ListAPIKeyUsersByOwner returns API key users whose owner_user_id matches the
+// given user ID. These are kubeconfig-generated keys.
+func ListAPIKeyUsersByOwner(ownerID uint) (users []User, err error) {
+	err = DB.Where("provider = ? AND owner_user_id = ?", common.APIKeyProvider, ownerID).Find(&users).Error
+	return users, err
+}
+
+// ListIndependentAPIKeyUsers returns API key users without an owner (i.e.
+// manually created keys that can have roles assigned directly).
+func ListIndependentAPIKeyUsers() (users []User, err error) {
+	err = DB.Order("id desc").Where("provider = ? AND owner_user_id IS NULL", common.APIKeyProvider).Find(&users).Error
 	return users, err
 }
 

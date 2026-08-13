@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/wsutil"
@@ -12,7 +11,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/klog/v2"
-	"k8s.io/streaming/pkg/httpstream"
 )
 
 const EndOfTransmission = "\u0004"
@@ -63,24 +61,10 @@ func (session *TerminalSession) Start(ctx context.Context, subResource string) e
 		TTY:       true,
 	}, scheme.ParameterCodec)
 
-	spdyExec, err := remotecommand.NewSPDYExecutor(session.k8sClient.Configuration, http.MethodPost, req.URL())
+	spdyExec, err := buildExecutor(session.k8sClient, req.URL())
 	if err != nil {
 		log.Printf("Failed to create executor: %v", err)
 		session.SendErrorMessage(fmt.Sprintf("Failed to create executor: %v", err))
-		return err
-	}
-	websocketExec, err := remotecommand.NewWebSocketExecutor(session.k8sClient.Configuration, http.MethodGet, req.URL().String())
-	if err != nil {
-		log.Printf("Failed to create WebSocket executor: %v", err)
-		session.SendErrorMessage(fmt.Sprintf("Failed to create WebSocket executor: %v", err))
-		return err
-	}
-	exec, err := remotecommand.NewFallbackExecutor(websocketExec, spdyExec, func(err error) bool {
-		return httpstream.IsUpgradeFailure(err) || httpstream.IsHTTPSProxyError(err)
-	})
-	if err != nil {
-		log.Printf("Failed to create fallback executor: %v", err)
-		session.SendErrorMessage(fmt.Sprintf("Failed to create fallback executor: %v", err))
 		return err
 	}
 
@@ -88,7 +72,7 @@ func (session *TerminalSession) Start(ctx context.Context, subResource string) e
 	session.SendMessage("connected", "Terminal connected successfully")
 
 	// Start the exec session
-	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+	err = spdyExec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:             session,
 		Stdout:            session,
 		Stderr:            session,

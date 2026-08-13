@@ -13,7 +13,7 @@ In private networks, edge environments, or firewall-restricted scenarios, the ta
 Kite Connector reverses the connection direction:
 
 - The Connector dials Kite Server from the cluster side; Kite does not need to enter the cluster network.
-- Kubernetes credentials stay in the Connector's runtime environment and are never uploaded to Kite Server.
+- During the WebSocket handshake, the Connector sends the Kubernetes API credentials (extracted from its kubeconfig or in-cluster ServiceAccount) to Kite Server. Kite stores them in memory only (never persisted to disk or database) and uses them to authenticate directly against kube-apiserver.
 - Kite still uses its existing Kubernetes Client to access the cluster, so resource management, logs, and terminals do not need a separate protocol.
 
 ## How It Works
@@ -24,13 +24,13 @@ The connection chain looks like this:
 Kite Kubernetes Client
         │
         ▼
-Kite Server authenticated HTTPS loopback proxy
+Kite Server (rest.Config with tunnel dialer + credentials)
         │
         ▼
 WebSocket tunnel (established by the Connector)
         │
         ▼
-Connector in-process Kubernetes API reverse proxy
+Connector raw TCP forwarder
         │
         ▼
 Target cluster kube-apiserver
@@ -39,10 +39,10 @@ Target cluster kube-apiserver
 The detailed process:
 
 1. When you create a Connector cluster in the Kite UI, Kite generates a random connection token, stores only its SHA-256 hash, and shows the raw token once after creation.
-2. The Connector connects to Kite Server's `/api/v1/connector/connect` WebSocket endpoint using the token. Kite validates the token and binds the connection to the corresponding cluster.
-3. Kite Server creates an authenticated HTTPS proxy on a random `127.0.0.1` port for that cluster. Its credentials and pinned certificate remain in process memory, and requests are tunneled to the Connector after authentication.
-4. The Connector serves its Kubernetes API reverse proxy over in-process connections and uses its local ServiceAccount or kubeconfig to reach kube-apiserver.
-5. The Connector strips any `Authorization` and `Impersonate-*` headers coming from Kite, then its local Kubernetes Transport injects the Connector's own cluster credentials.
+2. The Connector extracts Kubernetes API credentials (bearer token, CA cert, client cert/key) from its kubeconfig or in-cluster ServiceAccount, then connects to Kite Server's `/api/v1/connector/connect` WebSocket endpoint using the connection token. The credentials are sent via a header during the WebSocket handshake (protected by WSS/TLS). Kite validates the token, stores the credentials in memory, and binds the connection to the corresponding cluster.
+3. Kite Server builds a `rest.Config` using the stored credentials and a custom dialer that routes through the remotedialer tunnel. TLS and authentication are handled end-to-end by Kite Server's transport — no local proxy or HTTP listener is needed.
+4. When Kite requests a tunnel connection, the Connector creates a raw TCP connection to kube-apiserver using `net.Dial`. The Connector does not parse HTTP, inject headers, or manage transports — it simply forwards bytes.
+5. Header cleanup (stripping `Authorization` and `Impersonate-*` headers from the incoming request) is performed by Kite Server's `HandleK8sProxy` handler before the request enters the tunnel.
 
 A single Connector WebSocket can carry multiple Kubernetes API connections. Streaming requests such as logs, watches, and terminals also travel over the same tunnel.
 
@@ -134,19 +134,20 @@ The Connector then uses the API server and credentials from the kubeconfig's cur
 - Production must use `https://` with a Kite Server certificate issued by a CA trusted by the Connector's runtime environment. The Connector validates the certificate domain and trust chain by standard TLS rules, preventing connections to a forged Kite Server.
 - With `http://` there is no server identity verification, and neither the token nor the tunnel data is protected by TLS. Use it only for controlled local testing.
 - The connection currently uses a Bearer Token; mTLS, client certificate issuance, and certificate rotation are not yet implemented.
+- During the WebSocket handshake, the Connector sends Kubernetes API credentials (bearer token, CA cert, client cert/key) to Kite Server via the `X-Kite-K8s-Credentials` header. This transmission is protected by WSS/TLS encryption. The credentials are stored in Kite Server memory only (never persisted to disk or database) and are automatically cleared when the connection drops. When the ServiceAccount token rotates, the Connector automatically updates the credentials on reconnect.
 
 ### Kubernetes Permissions and Auditing
 
 - The permissions of the Connector's ServiceAccount or kubeconfig determine what Kite can do in the cluster. If you need features like logs or terminals, grant the corresponding Kubernetes RBAC permissions as well.
 - The generated YAML binds the Connector ServiceAccount to `cluster-admin`, granting administrative privileges over the entire cluster. Confirm this meets your security requirements before deploying.
 - Kite users are still governed by Kite's own RBAC, but the identity kube-apiserver sees is the ServiceAccount or kubeconfig user used by the Connector, not the actual logged-in Kite user.
-- The Connector does not accept Kubernetes `Authorization` or `Impersonate-*` headers passed in from Kite.
+- Header cleanup (stripping `Authorization` and `Impersonate-*` headers) is performed by Kite Server before requests enter the tunnel. The Connector itself is a pure TCP forwarder and does not process HTTP headers.
 
 ### Network and Availability
 
 - The Connector only needs outbound access to Kite Server and the target cluster's kube-apiserver; it does not expose any new listening port to the outside.
-- Kite Server's internal proxy uses an authenticated HTTPS endpoint bound only to `127.0.0.1`. The Connector side uses in-process connections and does not open a local operating-system port for the proxy.
+- Kite Server does not open any local listening port for connector clusters. It uses the stored credentials and the remotedialer tunnel dialer directly in its `rest.Config`. The Connector only makes outbound TCP connections to kube-apiserver.
 - The Ingress or reverse proxy in front of Kite must support WebSocket Upgrade and long-lived connections.
 - Connector session routing across multiple Kite Server replicas is not yet implemented. When using Connector clusters, run a single Kite Server replica first.
 - A tunnel disconnect aborts any running logs, watch, or terminal connections. After the Connector reconnects, clients must re-initiate these streaming requests.
-- Terminals and command execution prefer WebSocket and fall back to SPDY on upgrade failure; the API server and intermediate proxies must support the corresponding connection upgrade.
+- For connector clusters, terminals and command execution use the SPDY protocol (with the tunnel dialer injected via `UpgradeTransport`). Non-connector clusters use the standard WebSocket → SPDY fallback.

@@ -23,6 +23,23 @@ func ListAPIKeys(c *gin.Context) {
 	for i := range apiKeys {
 		apiKeys[i].Roles = rbac.GetUserRoles(apiKeys[i])
 		apiKeys[i].APIKey = model.SecretString(apiKeys[i].GetAPIKey())
+		// Don't expose the owner's API key or password
+		if apiKeys[i].Owner != nil {
+			apiKeys[i].Owner.APIKey = ""
+			apiKeys[i].Owner.Password = ""
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"apiKeys": apiKeys})
+}
+
+// ListIndependentAPIKeys returns API keys without an owner (manually created).
+// Used by the RBAC assignment dialog to list API keys that can have roles
+// assigned directly.
+func ListIndependentAPIKeys(c *gin.Context) {
+	apiKeys, err := model.ListIndependentAPIKeyUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list API keys"})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"apiKeys": apiKeys})
 }

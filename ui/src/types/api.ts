@@ -635,6 +635,7 @@ export interface Cluster {
   inCluster: boolean
   connector: boolean
   connected: boolean
+  connectorVersion?: string
   isDefault: boolean
   createdAt: string
   updatedAt: string
@@ -714,6 +715,8 @@ export interface APIKey {
   createdAt: string
   updatedAt: string
   roles?: Role[]
+  ownerUserId?: number
+  owner?: { id: number; username: string; name?: string } | null
 }
 
 // Resource History types

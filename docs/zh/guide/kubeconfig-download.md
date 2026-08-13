@@ -21,7 +21,7 @@ Kite 允许你下载一个以 Kite 为代理访问集群的 kubeconfig 文件。
        │ Authorization: Bearer kite-api-key
        ▼
 ┌─────────────────────────────────────────┐
-│         Kite Server (反向代理)           │
+│         Kite Server（反向代理）          │
 │  ┌───────────────────────────────────┐  │
 │  │ 1. 认证：验证 API Key             │  │
 │  │ 2. 集群级 RBAC：CanAccessCluster  │  │
@@ -34,22 +34,24 @@ Kite 允许你下载一个以 Kite 为代理访问集群的 kubeconfig 文件。
        │
        ├──────────────┬───────────────────────┐
        ▼ 直连         ▼ Connector 隧道         ▼
-┌──────────────┐ ┌──────────────┐          ┌──────────────┐
-│ K8s API Server│ │ 127.0.0.1   │          │  Agent       │
-│ (直连集群)    │ │ 本地代理     │──WSS────→│  (反向连接)   │
-└──────────────┘ └──────────────┘          └──────┬───────┘
-                                                   │ HTTPS
+┌──────────────┐                            ┌──────────────┐
+│ K8s API Server│          WSS 隧道          │  Agent       │
+│（直连集群）    │◀──────────────────────────│ （TCP        │
+└──────────────┘   rest.Config + dialer     │  转发器）     │
+                                            └──────┬───────┘
+                                                   │ 原始 TCP
                                                    ▼
                                            ┌──────────────┐
                                            │ K8s API Server│
-                                           │ (内网集群)     │
+                                           │（内网集群）    │
                                            └──────────────┘
 ```
 
 当你下载 kubeconfig 时，Kite 会：
 
-1. 创建一个新的 **API Key**，继承你当前的所有 RBAC 角色。
-2. 生成 kubeconfig YAML 文件，其中：
+1. **删除该用户之前下载 kubeconfig 生成的所有旧 API Key**，确保同一时间只有一个 kubeconfig API Key 有效。
+2. 创建一个新的 **API Key**，并将其关联到你的账户作为 **Owner**。该 Key 会**动态继承**你的 RBAC 角色 —— 后续角色变更时权限自动更新，无需重新下载。
+3. 生成 kubeconfig YAML 文件，其中：
    - `server` 指向 Kite 的 K8s API 代理端点（`/api/v1/clusters/{uuid}/k8s-proxy`）。
    - `token` 为新创建的 API Key。
    - `insecure-skip-tls-verify` 设置为 `true`（流量通过 Kite 转发）。
@@ -124,26 +126,24 @@ Kite 的 `UpgradeAwareHandler` 升级 TCP 连接，直接转发 SPDY 帧：
 
 #### Connector 集群（远程，防火墙后）
 
-对于通过 Connector 连接的集群，SPDY 升级无法直接到达 K8s API Server，请求需要经过 Connector 隧道：
+对于通过 Connector 连接的集群，请求经过 Connector 隧道转发。Agent 是纯 TCP 转发器——不解析 HTTP、不管理 transport。TLS 和认证由 Kite Server 的 transport 端到端完成，使用 Agent 在 WebSocket 握手时发送的凭证：
 
 ```
-┌──────────┐               ┌─────────────┐    WSS 隧道     ┌──────────┐   HTTPS   ┌────────────┐
-│   Kite   │ SPDY 升级     │ 服务端       │ ──────────────→ │  Agent   │ ────────→ │ K8s API    │
-│  服务端   │ ───────────→ │ 本地代理      │  remotedialer   │ (Upgrade │ SPDY+TLS │ Server     │
-│          │ 127.0.0.1     │ (Upgrade    │  WebSocket      │ Aware    │ Bearer   │            │
-│          │ HTTP loopback │ AwareHandler)│  (加密)         │ Handler) │ Token    │            │
+┌──────────┐               ┌─────────────┐    WSS 隧道     ┌──────────┐  原始 TCP  ┌────────────┐
+│   Kite   │ TLS + 认证    │ Kite Server │ ──────────────→ │  Agent   │ ────────→ │ K8s API    │
+│  服务端   │ ───────────→ │ rest.Config │  remotedialer   │ (TCP     │ net.Dial  │ Server     │
+│          │ (存储的凭证   │ + dialer    │  WebSocket      │ 转发器)   │           │            │
+│          │  + dialer)    │             │  (加密)         │          │           │            │
 └──────────┘               └─────────────┘                 └──────────┘           └────────────┘
 ```
 
 **Connector 集群分步流程：**
 
-1. **Kite 构建 `rest.Config`**，设置 `Transport` 为一个自定义的 `http.Transport`，其 `DialContext` 调用 `connectorManager.Dialer(clusterID)`。
-2. **`Dialer`** 通过 `remotedialer` 向 Agent 发起隧道连接请求，目标地址为 `kubernetes-api`。
-3. **Agent 端的 `localDialer`** 收到隧道请求后，创建 `net.Pipe()`，在管道的服务端启动一个 `http.Server`，使用 `UpgradeAwareHandler` 处理请求。
-4. **SPDY 升级请求** 流经路径：`kubectl → Kite UpgradeAwareHandler → remotedialer 隧道 → Agent http.Server → Agent UpgradeAwareHandler → kube-apiserver`。
-5. **Agent 的 `UpgradeAwareHandler`** 注入集群的真实凭证（来自 Agent 的 kubeconfig），通过 HTTPS 转发给 K8s API Server。
-
-Kite 服务端的本地代理监听在 `127.0.0.1:<随机端口>`，使用明文 HTTP。这是安全的，因为：（1）只绑定 loopback，外部无法访问；（2）真正的网络安全由 WSS 加密的 remotedialer 隧道提供；（3）SPDY/WebSocket executor 会创建自己的 transport，忽略 `config.Transport`，所以 config 上的 TLS 设置本来也不起作用。
+1. **Agent 发送凭证**：WebSocket 握手时，Connector 从 kubeconfig 或集群内 ServiceAccount 提取 Kubernetes API 凭证（bearer token、CA 证书、客户端证书/密钥），通过 `X-Kite-K8s-Credentials` 头发送给 Kite Server（受 WSS/TLS 加密保护）。
+2. **Kite 构建 `rest.Config`**，使用 `creds.ToRestConfig(dialer)`，其中 `dialer` 通过 remotedialer 隧道路由。config 包含真实的 kube-apiserver 地址、TLS 设置和 bearer token——全部来自存储的凭证。
+3. **`Dialer`** 通过 `remotedialer` 向 Agent 发起隧道连接请求，目标地址为 `kubernetes-api`。
+4. **Agent 端的 `localDialer`** 收到隧道请求后，使用 `net.Dial` 创建到 kube-apiserver 的原始 TCP 连接。不解析 HTTP、不注入请求头、不管理 transport——纯字节转发。
+5. **TLS 握手**在 Kite Server 的 transport 和 kube-apiserver 之间端到端完成，透明地穿过隧道和 Agent 的 TCP 连接。
 
 ### 阶段 4：K8s API Server 响应
 
@@ -156,7 +156,7 @@ K8s API Server 验证集群凭证后，打开 SPDY 连接，建立多个流：
 | Stream 2 | Server → Client | stdout（命令输出） |
 | Stream 3 | Server → Client | stderr（错误输出） |
 
-这些 SPDY 帧沿原路返回：`K8s API → (Agent UpgradeAwareHandler → 隧道 → Kite 本地代理 →) Kite UpgradeAwareHandler → kubectl`。
+这些 SPDY 帧沿原路返回：`K8s API → Agent TCP 转发器 → 隧道 → Kite UpgradeAwareHandler → kubectl`。
 
 ### 阶段 5：交互式会话
 
@@ -168,11 +168,11 @@ K8s 客户端组件对 `config.Transport` 的使用方式不同。Kite 通过两
 
 | 路径 | 组件 | Transport 使用方式 | 配置 |
 |------|------|-------------------|------|
-| kubectl/ktctl proxy | `UpgradeAwareHandler` | `utilnet.DialerFor(transport)` 提取 `DialContext` | `Transport` + 隧道 dialer |
-| terminal/files | `SPDY/WebSocket Executor` | 忽略 `config.Transport`，自建 transport | 本地代理 `Listen()` |
+| kubectl/ktctl proxy | `UpgradeAwareHandler` | `utilnet.DialerFor(transport)` 提取 `DialContext` | `Transport` + 隧道 dialer（直连集群）或 `Dial` + 凭证（connector 集群） |
+| terminal/files | `SPDY/WebSocket Executor` | 忽略 `config.Transport`，自建 transport | SPDY + `UpgradeTransport` 注入（connector）或 WebSocket → SPDY 回退（直连） |
 
-- **`getRestConfig`**（用于 `HandleK8sProxy`）：使用 `Transport` + 隧道 dialer。有效，因为 `UpgradeAwareHandler.DialForUpgrade()` 会正确提取 `DialContext`。
-- **`buildClientSet`**（用于终端/文件）：使用本地代理 `Listen()`（`127.0.0.1:<端口>`）。有效，因为 SPDY/WebSocket executor 连接的是真实 IP 地址，无需 DNS 解析。
+- **`getRestConfig`**（用于 `HandleK8sProxy`）：直连集群使用 `Transport` + `MirrorRequest` 认证。Connector 集群使用 `creds.ToRestConfig(dialer)`，设置 `Host`、`TLSClientConfig`、`BearerToken` 和 `Dial`——TLS 和认证由 transport 端到端完成。
+- **`buildClientSet`**（用于终端/文件）：Connector 集群的 `K8sClient` 标记 `IsConnector = true`。创建 executor 时，`buildExecutor()` 分发到 `buildSPDYExecutorWithDialer()`，手动创建 SPDY round tripper 并设置 `UpgradeTransport` 为包含隧道 dialer 的 `*http.Transport`。这有效，因为 SPDY 的 `dialerFor()` 会从 `UpgradeTransport` 中提取 `DialContext`。
 
 此外，每个 transport 按 HTTP 版本分离：
 
@@ -243,8 +243,8 @@ Discovery 端点（`/api`、`/apis`、`/version`、`/openapi`）仅需集群级�
 
 ## 注意事项
 
-- 每次下载都会创建一个 **新的 API Key**。你可以在 **个人设置 → API Keys** 中管理和删除 API Key。
-- API Key 继承的是用户 **下载时** 的角色。如果后续角色变更，需要重新下载 kubeconfig。
+- 每次下载都会创建一个 **新的 API Key**，并自动作废上一个 kubeconfig API Key。同一时间每个用户只有一个 kubeconfig API Key 有效。
+- kubeconfig API Key **动态继承**下载用户的当前 RBAC 角色。用户角色变更后，API Key 的权限会自动更新，无需重新下载。
 - kubeconfig 使用 `insecure-skip-tls-verify: true`，因为 TLS 终止在 Kite 服务端，而非 Kubernetes API Server。
 - 对于通过 Connector 连接的集群，代理会自动通过 connector 隧道路由请求。
 - 查询参数（如 `?watch=true`、`?container=...`、`?command=...`）会被代理透明转发。

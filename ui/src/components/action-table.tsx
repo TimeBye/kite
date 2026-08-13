@@ -34,6 +34,7 @@ export interface Action<T> {
   dynamicLabel?: (item: T) => string | React.ReactNode
   onClick: (item: T) => void
   shouldDisable?: (item: T) => boolean
+  hidden?: (item: T) => boolean
 }
 
 export function ActionTable<T>({
@@ -60,18 +61,20 @@ export function ActionTable<T>({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {actions.map((action, index) => (
-                  <DropdownMenuItem
-                    key={index}
-                    disabled={action.shouldDisable?.(row.original)}
-                    onClick={() => action.onClick(row.original)}
-                    className="gap-2"
-                  >
-                    {action.dynamicLabel
-                      ? action.dynamicLabel(row.original)
-                      : action.label}
-                  </DropdownMenuItem>
-                ))}
+                {actions
+                  .filter((action) => !action.hidden?.(row.original))
+                  .map((action, index) => (
+                    <DropdownMenuItem
+                      key={index}
+                      disabled={action.shouldDisable?.(row.original)}
+                      onClick={() => action.onClick(row.original)}
+                      className="gap-2"
+                    >
+                      {action.dynamicLabel
+                        ? action.dynamicLabel(row.original)
+                        : action.label}
+                    </DropdownMenuItem>
+                  ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

@@ -23,7 +23,10 @@ func sanitizeClusterName(name string) string {
 }
 
 // GenerateKubeconfig creates a kubeconfig YAML that uses Kite as a proxy.
-// It creates a new API key that inherits the user's current roles.
+// It creates a new API key with OwnerUserID set to the current user so that
+// permissions are inherited dynamically. Any existing kubeconfig API keys
+// (those with the same owner_user_id) are deleted first so that only one
+// kubeconfig API key per user is valid at a time.
 func GenerateKubeconfig(user model.User, clusterUUIDs []string, serverURL string) (string, error) {
 	clusters := make([]*model.Cluster, 0, len(clusterUUIDs))
 	for _, uuidStr := range clusterUUIDs {
@@ -41,24 +44,30 @@ func GenerateKubeconfig(user model.User, clusterUUIDs []string, serverURL string
 		return "", fmt.Errorf("no clusters selected")
 	}
 
+	// Delete previous kubeconfig API keys for this user so only one is valid.
+	oldKeys, err := model.ListAPIKeyUsersByOwner(user.ID)
+	if err != nil {
+		return "", fmt.Errorf("failed to list old API keys: %w", err)
+	}
+	for _, oldKey := range oldKeys {
+		_ = model.DeleteUserByID(oldKey.ID)
+	}
+
 	apiKeyName := fmt.Sprintf("kubeconfig-%s-%d", user.Key(), time.Now().UnixNano())
 	apiKeyUser, err := model.NewAPIKeyUser(apiKeyName)
 	if err != nil {
 		return "", fmt.Errorf("failed to create API key: %w", err)
 	}
 
-	// If anything fails after API key creation, clean up the key so we don't
-	// leave orphaned credentials.
-	cleanupOnError := func() {
+	// Set owner so permissions are inherited dynamically.
+	apiKeyUser.OwnerUserID = &user.ID
+	if err := model.DB.Model(&model.User{}).Where("id = ?", apiKeyUser.ID).Update("owner_user_id", user.ID).Error; err != nil {
 		_ = model.DeleteUserByID(apiKeyUser.ID)
+		return "", fmt.Errorf("failed to set API key owner: %w", err)
 	}
 
-	// Inherit the user's current roles.
-	for _, role := range rbac.GetUserRoles(user) {
-		if err := model.AddRoleAssignment(role.Name, model.SubjectTypeUser, apiKeyUser.Username); err != nil {
-			cleanupOnError()
-			return "", fmt.Errorf("failed to assign role %s: %w", role.Name, err)
-		}
+	cleanupOnError := func() {
+		_ = model.DeleteUserByID(apiKeyUser.ID)
 	}
 
 	token := apiKeyUser.GetAPIKey()

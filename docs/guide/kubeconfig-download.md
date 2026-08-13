@@ -34,11 +34,12 @@ Kite allows you to download a kubeconfig file that uses Kite as a proxy to acces
        │
        ├──────────────┬───────────────────────┐
        ▼ Direct       ▼ Connector tunnel       ▼
-┌──────────────┐ ┌──────────────┐          ┌──────────────┐
-│ K8s API Server│ │ 127.0.0.1   │          │  Agent       │
-│ (direct)      │ │ local proxy │──WSS────→│  (reverse)   │
-└──────────────┘ └──────────────┘          └──────┬───────┘
-                                                   │ HTTPS
+┌──────────────┐                            ┌──────────────┐
+│ K8s API Server│          WSS tunnel        │  Agent       │
+│ (direct)      │◀──────────────────────────│  (TCP        │
+└──────────────┘   rest.Config + dialer     │   forwarder) │
+                                            └──────┬───────┘
+                                                   │ raw TCP
                                                    ▼
                                            ┌──────────────┐
                                            │ K8s API Server│
@@ -48,8 +49,9 @@ Kite allows you to download a kubeconfig file that uses Kite as a proxy to acces
 
 When you download a kubeconfig, Kite:
 
-1. Creates a new **API Key** that inherits your current RBAC roles.
-2. Generates a kubeconfig YAML where:
+1. **Deletes any previously downloaded kubeconfig API keys** for the current user, so only one kubeconfig API key is valid at a time.
+2. Creates a new **API Key** linked to your account as its **owner**. The key dynamically inherits your RBAC roles — if your roles change later, the key's permissions update automatically without re-downloading.
+3. Generates a kubeconfig YAML where:
    - `server` points to Kite's K8s API proxy endpoint (`/api/v1/clusters/{uuid}/k8s-proxy`).
    - `token` is the newly created API Key.
    - `insecure-skip-tls-verify` is set to `true` (traffic goes through Kite).
@@ -125,26 +127,24 @@ The `UpgradeTransport` mechanism injects the cluster's own credentials (bearer t
 
 #### Connector Clusters (Remote, behind firewall)
 
-For connector-based clusters, the SPDY upgrade cannot directly reach the K8s API server. Instead, the request travels through the connector tunnel:
+For connector-based clusters, the request travels through the connector tunnel. The Agent is a pure TCP forwarder — it does not parse HTTP or manage transports. TLS and authentication are handled end-to-end by Kite Server's transport, using credentials that the Agent sent during the WebSocket handshake:
 
 ```
-┌──────────┐               ┌─────────────┐    WSS tunnel    ┌──────────┐   HTTPS   ┌────────────┐
-│   Kite   │ SPDY upgrade  │ Server-side │ ──────────────→ │  Agent   │ ────────→ │ K8s API    │
-│  Server  │ ───────────→  │ local proxy │  remotedialer   │ (Upgrade │ SPDY+TLS │ Server     │
-│          │ 127.0.0.1     │ (Upgrade    │  WebSocket      │ Aware    │ Bearer   │            │
-│          │ HTTP loopback │ AwareHandler)│  (encrypted)    │ Handler) │ Token    │            │
+┌──────────┐               ┌─────────────┐    WSS tunnel    ┌──────────┐   raw TCP  ┌────────────┐
+│   Kite   │ TLS + auth    │ Kite Server │ ──────────────→ │  Agent   │ ────────→ │ K8s API    │
+│  Server  │ ───────────→  │ rest.Config │  remotedialer   │ (TCP     │ net.Dial  │ Server     │
+│          │ (stored creds │ + dialer    │  WebSocket      │ forwarder)│           │            │
+│          │  + dialer)    │             │  (encrypted)    │          │           │            │
 └──────────┘               └─────────────┘                 └──────────┘           └────────────┘
 ```
 
 **Step-by-step for connector clusters:**
 
-1. **Kite builds a `rest.Config`** with `Transport` set to a custom `http.Transport` whose `DialContext` calls `connectorManager.Dialer(clusterID)`.
-2. **The `Dialer`** asks `remotedialer` to open a new tunnel connection to the agent, targeting `kubernetes-api`.
-3. **On the agent side**, `localDialer` receives the tunnel request. It creates a `net.Pipe()` and serves an `http.Server` with an `UpgradeAwareHandler` on the server end.
-4. **The SPDY upgrade request** flows through: `kubectl → Kite's UpgradeAwareHandler → remotedialer tunnel → agent's http.Server → agent's UpgradeAwareHandler → kube-apiserver`.
-5. **The agent's `UpgradeAwareHandler`** injects the cluster's real credentials (from the agent's kubeconfig) and forwards to the K8s API server over HTTPS.
-
-The local proxy on the Kite server listens on `127.0.0.1:<random-port>` using plain HTTP. This is safe because: (1) it only binds to loopback — no remote access; (2) the real network security is provided by the WSS-encrypted remotedialer tunnel; (3) SPDY/WebSocket executors create their own transports and ignore `config.Transport`, so TLS settings on the config would have no effect anyway.
+1. **Agent sends credentials**: During the WebSocket handshake, the Connector extracts Kubernetes API credentials (bearer token, CA cert, client cert/key) from its kubeconfig or in-cluster ServiceAccount and sends them to Kite Server via the `X-Kite-K8s-Credentials` header (protected by WSS/TLS).
+2. **Kite builds a `rest.Config`** using `creds.ToRestConfig(dialer)`, where `dialer` routes through the remotedialer tunnel. The config includes the real kube-apiserver host, TLS settings, and bearer token — all from the stored credentials.
+3. **The `Dialer`** asks `remotedialer` to open a new tunnel connection to the agent, targeting `kubernetes-api`.
+4. **On the agent side**, `localDialer` receives the tunnel request and creates a raw TCP connection to kube-apiserver using `net.Dial`. No HTTP parsing, no header injection, no transport management — pure byte forwarding.
+5. **TLS handshake** happens end-to-end between Kite Server's transport and kube-apiserver, transparently through the tunnel and the Agent's TCP connection.
 
 ### Phase 4: K8s API Server Responds
 
@@ -157,7 +157,7 @@ The K8s API server authenticates the cluster credentials and opens a SPDY connec
 | Stream 2 | Server → Client | stdout (command output) |
 | Stream 3 | Server → Client | stderr (error output) |
 
-These SPDY frames flow back through the same path: `K8s API → (agent UpgradeAwareHandler → tunnel → Kite local proxy →) Kite UpgradeAwareHandler → kubectl`.
+These SPDY frames flow back through the same path: `K8s API → Agent TCP forwarder → tunnel → Kite UpgradeAwareHandler → kubectl`.
 
 ### Phase 5: Interactive Session
 
@@ -169,11 +169,11 @@ K8s client components use `config.Transport` differently. Kite handles this with
 
 | Path | Component | Transport usage | Config |
 |------|-----------|----------------|--------|
-| kubectl/ktctl proxy | `UpgradeAwareHandler` | `utilnet.DialerFor(transport)` extracts `DialContext` | `Transport` + tunnel dialer |
-| terminal/files | `SPDY/WebSocket Executor` | Ignores `config.Transport`, creates own transport | Local proxy `Listen()` |
+| kubectl/ktctl proxy | `UpgradeAwareHandler` | `utilnet.DialerFor(transport)` extracts `DialContext` | `Transport` + tunnel dialer (direct clusters) or `Dial` + credentials (connector clusters) |
+| terminal/files | `SPDY/WebSocket Executor` | Ignores `config.Transport`, creates own transport | SPDY with `UpgradeTransport` injection (connector) or WebSocket → SPDY fallback (direct) |
 
-- **`getRestConfig`** (for `HandleK8sProxy`): Uses `Transport` + tunnel dialer. Works because `UpgradeAwareHandler.DialForUpgrade()` correctly extracts `DialContext` from the transport.
-- **`buildClientSet`** (for terminal/files): Uses local proxy `Listen()` on `127.0.0.1:<port>`. Works because SPDY/WebSocket executors connect to the real IP address without DNS resolution.
+- **`getRestConfig`** (for `HandleK8sProxy`): For direct clusters, uses `Transport` + `MirrorRequest` for auth. For connector clusters, uses `creds.ToRestConfig(dialer)` which sets `Host`, `TLSClientConfig`, `BearerToken`, and `Dial` — TLS and auth are handled end-to-end by the transport.
+- **`buildClientSet`** (for terminal/files): For connector clusters, the `K8sClient` is marked with `IsConnector = true`. When creating executors, `buildExecutor()` dispatches to `buildSPDYExecutorWithDialer()`, which manually creates a SPDY round tripper with `UpgradeTransport` set to an `*http.Transport` containing the tunnel dialer. This works because SPDY's `dialerFor()` extracts `DialContext` from the `UpgradeTransport`.
 
 Additionally, each transport is split by HTTP version:
 
@@ -244,8 +244,8 @@ All streaming protocols are supported through the proxy:
 
 ## Notes
 
-- Each download creates a **new API Key**. You can manage and revoke API keys in **Personal Settings → API Keys**.
-- API Keys inherit the user's roles **at the time of download**. If your roles change later, you need to re-download the kubeconfig.
+- Each download creates a **new API Key** and automatically revokes the previous kubeconfig API key. Only one kubeconfig API key per user is valid at a time.
+- Kubeconfig API Keys **dynamically inherit** the downloading user's current RBAC roles. When the user's roles change, the API Key's permissions update automatically — no need to re-download.
 - The kubeconfig uses `insecure-skip-tls-verify: true` because the TLS termination happens at the Kite server, not at the Kubernetes API Server.
 - For connector-based clusters, the proxy automatically routes through the connector tunnel.
 - Query parameters (e.g. `?watch=true`, `?container=...`, `?command=...`) are forwarded transparently by the proxy.

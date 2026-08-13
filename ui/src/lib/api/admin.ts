@@ -194,7 +194,7 @@ export const assignRole = async (
 
 export const unassignRole = async (
   id: number,
-  subjectType: 'user' | 'group',
+  subjectType: 'user' | 'group' | 'apikey',
   subject: string
 ) => {
   const params = new URLSearchParams({ subjectType, subject })
@@ -551,6 +551,20 @@ export const useAPIKeyList = (options?: { staleTime?: number }) => {
   return useQuery({
     queryKey: ['apikey-list'],
     queryFn: fetchAPIKeyList,
+    staleTime: options?.staleTime || 30000,
+  })
+}
+
+export const fetchIndependentAPIKeys = async (): Promise<APIKey[]> => {
+  return fetchAPI<{ apiKeys: APIKey[] }>('/admin/apikeys/independent').then(
+    (response) => response.apiKeys
+  )
+}
+
+export const useIndependentAPIKeyList = (options?: { staleTime?: number }) => {
+  return useQuery({
+    queryKey: ['apikey-list-independent'],
+    queryFn: fetchIndependentAPIKeys,
     staleTime: options?.staleTime || 30000,
   })
 }

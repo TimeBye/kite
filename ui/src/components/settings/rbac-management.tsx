@@ -312,7 +312,7 @@ export function RBACManagement() {
 
   const handleAssign = async (
     roleId: number,
-    subjectType: 'user' | 'group',
+    subjectType: 'user' | 'group' | 'apikey',
     subject: string
   ) => {
     if (isAssigning) return
@@ -343,7 +343,7 @@ export function RBACManagement() {
 
   const handleUnassign = async (
     roleId: number,
-    subjectType: 'user' | 'group',
+    subjectType: 'user' | 'group' | 'apikey',
     subject: string
   ) => {
     if (isUnassigning) return
