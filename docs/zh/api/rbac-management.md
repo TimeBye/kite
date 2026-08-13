@@ -10,19 +10,26 @@ RBAC 管理接口位于 `/api/v1/admin/roles/`。
 GET /api/v1/admin/roles/
 ```
 
+查询参数：
+
+| 参数   | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `page` | int  | 1      | 页码（从 1 开始） |
+| `size` | int  | 20     | 每页条数 |
+
 示例：
 
 ```bash
 curl \
   -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/roles/
+  https://kite.example.com/api/v1/admin/roles/?page=1&size=20
 ```
 
 响应示例：
 
 ```json
 {
-  "roles": [
+  "data": [
     {
       "id": 2,
       "name": "viewer",
@@ -34,7 +41,10 @@ curl \
       "verbs": ["get", "log"],
       "assignments": []
     }
-  ]
+  ],
+  "total": 1,
+  "page": 1,
+  "size": 20
 }
 ```
 

@@ -8,7 +8,12 @@ import {
   IconUpload,
 } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import {
+  ColumnDef,
+  getCoreRowModel,
+  PaginationState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -20,9 +25,10 @@ import {
   deleteCluster,
   importClusters,
   updateCluster,
-  useClusterList,
+  useClusterListPaged,
   useVersionInfo,
 } from '@/lib/api'
+import { ResourceTableView } from '@/components/resource-table-view'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,6 +40,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -45,7 +57,6 @@ import {
 } from '@/components/ui/tooltip'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 
-import { Action, ActionTable } from '../action-table'
 import { ClusterDialog } from './cluster-dialog'
 import { ClusterImportDialog } from './cluster-import-dialog'
 
@@ -54,13 +65,16 @@ export function ClusterManagement() {
   const queryClient = useQueryClient()
   const { data: versionInfo } = useVersionInfo()
 
-  const {
-    data: clusters = [],
-    isLoading,
-    error,
-  } = useClusterList({
-    refetchInterval: 5000,
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
   })
+  const { data, isLoading, error } = useClusterListPaged(
+    pagination.pageIndex + 1,
+    pagination.pageSize,
+    { refetchInterval: 5000 }
+  )
+  const clusters = data?.data ?? []
 
   const [showClusterDialog, setShowClusterDialog] = useState(false)
   const [showImportDialog, setShowImportDialog] = useState(false)
@@ -241,35 +255,60 @@ export function ClusterManagement() {
     [getClusterTypeBadge, getStatusBadge, t, versionInfo]
   )
 
-  const actions = useMemo<Action<Cluster>[]>(
-    () => [
-      {
-        label: (
-          <>
-            <IconEdit className="h-4 w-4" />
-            {t('common.actions.edit', 'Edit')}
-          </>
-        ),
-        onClick: (cluster) => {
-          setEditingCluster(cluster)
-          setShowClusterDialog(true)
-        },
-      },
-      {
-        label: (
-          <div className="inline-flex items-center gap-2 text-destructive">
-            <IconTrash className="h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </div>
-        ),
-        shouldDisable: (cluster) => cluster.isDefault,
-        onClick: (cluster) => {
-          setDeletingCluster(cluster)
-        },
-      },
-    ],
-    [t]
-  )
+  const tableColumns = useMemo<ColumnDef<Cluster>[]>(() => {
+    const actionColumn: ColumnDef<Cluster> = {
+      id: 'actions',
+      header: t('common.fields.actions', 'Actions'),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('common.fields.actions', 'Actions')}
+              >
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditingCluster(row.original)
+                  setShowClusterDialog(true)
+                }}
+                className="gap-2"
+              >
+                <IconEdit className="h-4 w-4" />
+                {t('common.actions.edit', 'Edit')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={row.original.isDefault}
+                onClick={() => setDeletingCluster(row.original)}
+                className="gap-2"
+              >
+                <div className="inline-flex items-center gap-2 text-destructive">
+                  <IconTrash className="h-4 w-4" />
+                  {t('common.actions.delete', 'Delete')}
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    }
+    return [...columns, actionColumn]
+  }, [columns, t])
+
+  const table = useReactTable({
+    data: clusters,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: { pagination },
+    onPaginationChange: setPagination,
+    manualPagination: true,
+    pageCount: Math.ceil((data?.total ?? 0) / pagination.pageSize) || 0,
+  })
 
   const createMutation = useMutation({
     mutationFn: createCluster,
@@ -282,7 +321,7 @@ export function ClusterManagement() {
       connectorToken?: string
       connectorManifestURL?: string
     }) => {
-      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paged'] })
       toast.success(
         t('clusterManagement.messages.created', 'Cluster created successfully')
       )
@@ -344,7 +383,7 @@ export function ClusterManagement() {
   const importMutation = useMutation({
     mutationFn: (config: string) => importClusters({ config }),
     onSuccess: ({ importedCount }) => {
-      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paged'] })
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
       toast.success(
         t(
@@ -362,7 +401,7 @@ export function ClusterManagement() {
     mutationFn: ({ id, data }: { id: number; data: ClusterUpdateRequest }) =>
       updateCluster(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paged'] })
       toast.success(
         t('clusterManagement.messages.updated', 'Cluster updated successfully')
       )
@@ -384,7 +423,7 @@ export function ClusterManagement() {
   const deleteMutation = useMutation({
     mutationFn: deleteCluster,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paged'] })
       toast.success(
         t('clusterManagement.messages.deleted', 'Cluster deleted successfully')
       )
@@ -417,26 +456,6 @@ export function ClusterManagement() {
   const handleDeleteCluster = () => {
     if (!deletingCluster) return
     deleteMutation.mutate(deletingCluster.id)
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">
-          {t('common.messages.loading', 'Loading...')}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-destructive">
-          {t('clusterManagement.errors.loadFailed', 'Failed to load clusters')}
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -476,21 +495,54 @@ export function ClusterManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable data={clusters} columns={columns} actions={actions} />
-          {clusters.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconServer className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {t('clusterManagement.empty.title', 'No clusters configured')}
-              </p>
-              <p className="text-sm mt-1">
-                {t(
-                  'clusterManagement.empty.description',
-                  'Add your first cluster to get started'
-                )}
-              </p>
-            </div>
-          )}
+          <ResourceTableView
+            table={table}
+            columnCount={tableColumns.length}
+            isLoading={isLoading}
+            data={clusters}
+            allPageSize={data?.total ?? 0}
+            emptyState={
+              isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-muted-foreground">
+                    {t('common.messages.loading', 'Loading...')}
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-destructive">
+                    {t(
+                      'clusterManagement.errors.loadFailed',
+                      'Failed to load clusters'
+                    )}
+                  </div>
+                </div>
+              ) : clusters.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconServer className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>
+                    {t(
+                      'clusterManagement.empty.title',
+                      'No clusters configured'
+                    )}
+                  </p>
+                  <p className="text-sm mt-1">
+                    {t(
+                      'clusterManagement.empty.description',
+                      'Add your first cluster to get started'
+                    )}
+                  </p>
+                </div>
+              ) : null
+            }
+            hasActiveFilters={false}
+            filteredRowCount={clusters.length}
+            totalRowCount={data?.total ?? 0}
+            searchQuery=""
+            pagination={pagination}
+            setPagination={setPagination}
+            maxBodyHeightClassName="max-h-[600px]"
+          />
         </CardContent>
       </Card>
 

@@ -60,12 +60,17 @@ func TestClusterConfigurationLifecyclePreservesSecretsAndDefault(t *testing.T) {
 	if list.Code != http.StatusOK {
 		t.Fatalf("list status = %d, want %d", list.Code, http.StatusOK)
 	}
-	var listed []map[string]any
-	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil {
+	var listResp struct {
+		Data  []map[string]any `json:"data"`
+		Total int64            `json:"total"`
+		Page  int              `json:"page"`
+		Size  int              `json:"size"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &listResp); err != nil {
 		t.Fatalf("decoding list response: %v", err)
 	}
-	if len(listed) != 1 || listed[0]["config"] != "" || listed[0]["version"] != "v1.36.2" {
-		t.Fatalf("listed clusters = %#v", listed)
+	if len(listResp.Data) != 1 || listResp.Data[0]["config"] != "" || listResp.Data[0]["version"] != "v1.36.2" {
+		t.Fatalf("listed clusters = %#v", listResp.Data)
 	}
 	if strings.Contains(list.Body.String(), "secret-kubeconfig") {
 		t.Fatal("cluster list exposed kubeconfig")
@@ -183,4 +188,58 @@ func performClusterRequest(router *gin.Engine, method string, path string, body 
 	}
 	router.ServeHTTP(recorder, request)
 	return recorder
+}
+
+func TestGetClusterListPaginates(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	for _, name := range []string{"c1", "c2", "c3"} {
+		if err := model.AddCluster(&model.Cluster{Name: name, Enable: true}); err != nil {
+			t.Fatalf("creating cluster %s: %v", name, err)
+		}
+	}
+	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}
+	router := gin.New()
+	router.GET("/clusters", manager.GetClusterList)
+
+	list := performClusterRequest(router, http.MethodGet, "/clusters?page=1&size=2", "")
+	if list.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", list.Code, http.StatusOK, list.Body.String())
+	}
+	var resp struct {
+		Data  []map[string]any `json:"data"`
+		Total int64            `json:"total"`
+		Page  int              `json:"page"`
+		Size  int              `json:"size"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if resp.Total != 3 || resp.Page != 1 || resp.Size != 2 || len(resp.Data) != 2 {
+		t.Fatalf("pagination response = %#v", resp)
+	}
+
+	page2 := performClusterRequest(router, http.MethodGet, "/clusters?page=2&size=2", "")
+	if page2.Code != http.StatusOK {
+		t.Fatalf("page2 status = %d", page2.Code)
+	}
+	if err := json.Unmarshal(page2.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decoding page2 response: %v", err)
+	}
+	if resp.Total != 3 || resp.Page != 2 || len(resp.Data) != 1 {
+		t.Fatalf("page2 response = %#v", resp)
+	}
+}
+
+func TestGetClusterListRejectsInvalidQueryParameters(t *testing.T) {
+	setupClusterHandlerTestDB(t)
+	manager := &ClusterManager{clusters: map[string]*ClientSet{}, errors: map[string]string{}}
+	router := gin.New()
+	router.GET("/clusters", manager.GetClusterList)
+
+	for _, query := range []string{"page=0", "size=abc"} {
+		resp := performClusterRequest(router, http.MethodGet, "/clusters?"+query, "")
+		if resp.Code != http.StatusBadRequest {
+			t.Fatalf("query %q: status = %d, want %d", query, resp.Code, http.StatusBadRequest)
+		}
+	}
 }

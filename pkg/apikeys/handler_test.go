@@ -48,15 +48,18 @@ func TestAPIKeyLifecycleControlsAuthentication(t *testing.T) {
 		t.Fatalf("list status = %d, want %d: %s", listResponse.Code, http.StatusOK, listResponse.Body.String())
 	}
 	var listed struct {
-		APIKeys []model.User `json:"apiKeys"`
+		Data  []model.User `json:"data"`
+		Total int64        `json:"total"`
+		Page  int          `json:"page"`
+		Size  int          `json:"size"`
 	}
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decoding list response: %v", err)
 	}
-	if len(listed.APIKeys) != 1 || listed.APIKeys[0].ID != created.APIKey.ID {
-		t.Fatalf("listed API keys = %#v", listed.APIKeys)
+	if len(listed.Data) != 1 || listed.Data[0].ID != created.APIKey.ID {
+		t.Fatalf("listed API keys = %#v", listed)
 	}
-	fullKey := string(listed.APIKeys[0].APIKey)
+	fullKey := string(listed.Data[0].APIKey)
 	wantPrefix := fmt.Sprintf("kite%d-", created.APIKey.ID)
 	if !strings.HasPrefix(fullKey, wantPrefix) || !strings.HasSuffix(fullKey, string(created.APIKey.APIKey)) {
 		t.Fatalf("listed API key = %q, want prefix %q and created secret", fullKey, wantPrefix)
@@ -132,4 +135,54 @@ func performAPIKeyRequest(router *gin.Engine, method string, path string, body s
 	}
 	router.ServeHTTP(recorder, request)
 	return recorder
+}
+
+func TestListAPIKeysPaginates(t *testing.T) {
+	setupAPIKeyTestDB(t)
+	router := gin.New()
+	router.GET("/apikeys", ListAPIKeys)
+
+	for _, name := range []string{"k1", "k2", "k3"} {
+		if _, err := model.NewAPIKeyUser(name); err != nil {
+			t.Fatalf("creating API key %s: %v", name, err)
+		}
+	}
+
+	resp := performAPIKeyRequest(router, http.MethodGet, "/apikeys?page=1&size=2", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Data  []model.User `json:"data"`
+		Total int64        `json:"total"`
+		Page  int          `json:"page"`
+		Size  int          `json:"size"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if body.Total != 3 || body.Page != 1 || body.Size != 2 || len(body.Data) != 2 {
+		t.Fatalf("pagination response = %#v", body)
+	}
+
+	page2 := performAPIKeyRequest(router, http.MethodGet, "/apikeys?page=2&size=2", "")
+	if err := json.Unmarshal(page2.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding page2: %v", err)
+	}
+	if body.Total != 3 || body.Page != 2 || len(body.Data) != 1 {
+		t.Fatalf("page2 response = %#v", body)
+	}
+}
+
+func TestListAPIKeysRejectsInvalidQueryParameters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, query := range []string{"page=0", "size=abc"} {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/apikeys?"+query, nil)
+		ListAPIKeys(ctx)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("query %q: status = %d, want %d", query, recorder.Code, http.StatusBadRequest)
+		}
+	}
 }

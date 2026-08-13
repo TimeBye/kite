@@ -10,30 +10,42 @@
 GET /api/v1/admin/clusters/
 ```
 
+查询参数：
+
+| 参数   | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `page` | int  | 1      | 页码（从 1 开始） |
+| `size` | int  | 20     | 每页条数 |
+
 示例：
 
 ```bash
 curl \
   -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/clusters/
+  https://kite.example.com/api/v1/admin/clusters/?page=1&size=20
 ```
 
 响应示例：
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "demo-cluster",
-    "description": "staging cluster",
-    "enabled": true,
-    "inCluster": false,
-    "isDefault": true,
-    "prometheusURL": "http://prometheus.monitoring.svc:9090",
-    "config": "",
-    "version": "v1.31.0"
-  }
-]
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "demo-cluster",
+      "description": "staging cluster",
+      "enabled": true,
+      "inCluster": false,
+      "isDefault": true,
+      "prometheusURL": "http://prometheus.monitoring.svc:9090",
+      "config": "",
+      "version": "v1.31.0"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "size": 20
+}
 ```
 
 ## 创建集群

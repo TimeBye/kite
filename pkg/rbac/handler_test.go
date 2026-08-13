@@ -90,13 +90,16 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // handler lifecycle test
 			t.Fatalf("list returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
 		}
 		var listed struct {
-			Roles []model.Role `json:"roles"`
+			Data  []model.Role `json:"data"`
+			Total int64        `json:"total"`
+			Page  int          `json:"page"`
+			Size  int          `json:"size"`
 		}
 		if err := json.Unmarshal(response.Body.Bytes(), &listed); err != nil {
 			t.Fatalf("decode list response: %v", err)
 		}
-		if len(listed.Roles) != 1 || listed.Roles[0].ID != created.Role.ID {
-			t.Fatalf("listed roles = %#v", listed.Roles)
+		if len(listed.Data) != 1 || listed.Data[0].ID != created.Role.ID {
+			t.Fatalf("listed roles = %#v", listed.Data)
 		}
 
 		response = perform(http.MethodGet, rolePath, "")
@@ -260,4 +263,77 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // handler lifecycle test
 			t.Fatalf("system role changed: %#v", stored)
 		}
 	})
+}
+
+func TestListRolesPaginates(t *testing.T) {
+	originalDB := model.DB
+	originalManagedSections := common.ManagedSections
+	originalGinMode := gin.Mode()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		t.Fatalf("open database: %v", err)
+	}
+	sqlDB, _ := db.DB()
+	sqlDB.SetMaxOpenConns(1)
+	model.DB = db
+	common.SetManagedSections(map[string]bool{})
+	gin.SetMode(gin.TestMode)
+	t.Cleanup(func() {
+		model.DB = originalDB
+		common.SetManagedSections(originalManagedSections)
+		gin.SetMode(originalGinMode)
+		_ = sqlDB.Close()
+	})
+	if err := db.AutoMigrate(&model.Role{}, &model.RoleAssignment{}); err != nil {
+		t.Fatalf("migrate database: %v", err)
+	}
+	for _, name := range []string{"r1", "r2", "r3"} {
+		if err := db.Create(&model.Role{Name: name}).Error; err != nil {
+			t.Fatalf("creating role %s: %v", name, err)
+		}
+	}
+	router := gin.New()
+	router.GET("/roles", ListRoles)
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/roles?page=1&size=2", nil)
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Data  []model.Role `json:"data"`
+		Total int64        `json:"total"`
+		Page  int          `json:"page"`
+		Size  int          `json:"size"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if body.Total != 3 || body.Page != 1 || body.Size != 2 || len(body.Data) != 2 {
+		t.Fatalf("pagination response = %#v", body)
+	}
+
+	page2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/roles?page=2&size=2", nil)
+	router.ServeHTTP(page2, req2)
+	if err := json.Unmarshal(page2.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding page2: %v", err)
+	}
+	if body.Total != 3 || body.Page != 2 || len(body.Data) != 1 {
+		t.Fatalf("page2 response = %#v", body)
+	}
+}
+
+func TestListRolesRejectsInvalidQueryParameters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, query := range []string{"page=0", "size=abc"} {
+		recorder := httptest.NewRecorder()
+		ctx, _ := gin.CreateTestContext(recorder)
+		ctx.Request = httptest.NewRequest(http.MethodGet, "/roles?"+query, nil)
+		ListRoles(ctx)
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("query %q: status = %d, want %d", query, recorder.Code, http.StatusBadRequest)
+		}
+	}
 }

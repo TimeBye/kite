@@ -7,24 +7,35 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import {
+  ColumnDef,
+  getCoreRowModel,
+  PaginationState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Role } from '@/types/api'
+import { Role, RoleListResponse } from '@/types/api'
 import {
   assignRole,
   createRole,
   deleteRole,
   unassignRole,
   updateRole,
-  useRoleList,
+  useRoleListPaged,
 } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ResourceTableView } from '@/components/resource-table-view'
 
-import { Action, ActionTable } from '../action-table'
 import { Badge } from '../ui/badge'
 import { RBACAssignmentDialog } from './rbac-assignment-dialog'
 import { RBACDialog } from './rbac-dialog'
@@ -34,7 +45,15 @@ export function RBACManagement() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
-  const { data: roles = [], isLoading, error } = useRoleList()
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  })
+  const { data, isLoading, error } = useRoleListPaged(
+    pagination.pageIndex + 1,
+    pagination.pageSize
+  )
+  const roles = data?.data ?? []
 
   const [showDialog, setShowDialog] = useState(false)
   const [editingRole, setEditingRole] = useState<Role | null>(null)
@@ -185,53 +204,76 @@ export function RBACManagement() {
     [t]
   )
 
-  const actions = useMemo<Action<Role>[]>(
-    () => [
-      {
-        label: (
-          <>
-            <IconShieldCheck className="h-4 w-4" />
-            {t('common.actions.assign', 'Assign')}
-          </>
-        ),
-        onClick: (r) => {
-          setAssigningRole(r)
-          setShowAssignDialog(true)
-        },
-      },
-      {
-        label: (
-          <>
-            <IconEdit className="h-4 w-4" />
-            {t('common.actions.edit', 'Edit')}
-          </>
-        ),
-        shouldDisable: (role) => !!role.isSystem,
-        onClick: (role) => {
-          setEditingRole(role)
-          setShowDialog(true)
-        },
-      },
-      {
-        label: (
-          <div className="inline-flex items-center gap-2 text-destructive">
-            <IconTrash className="h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </div>
-        ),
-        shouldDisable: (role) => !!role.isSystem,
-        onClick: (role) => {
-          setDeletingRole(role)
-        },
-      },
-    ],
-    [t]
-  )
+  const tableColumns = useMemo<ColumnDef<Role>[]>(() => {
+    const actionColumn: ColumnDef<Role> = {
+      id: 'actions',
+      header: t('common.fields.actions', 'Actions'),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('common.fields.actions', 'Actions')}
+              >
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setAssigningRole(row.original)
+                  setShowAssignDialog(true)
+                }}
+                className="gap-2"
+              >
+                <IconShieldCheck className="h-4 w-4" />
+                {t('common.actions.assign', 'Assign')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!!row.original.isSystem}
+                onClick={() => {
+                  setEditingRole(row.original)
+                  setShowDialog(true)
+                }}
+                className="gap-2"
+              >
+                <IconEdit className="h-4 w-4" />
+                {t('common.actions.edit', 'Edit')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!!row.original.isSystem}
+                onClick={() => setDeletingRole(row.original)}
+                className="gap-2"
+              >
+                <div className="inline-flex items-center gap-2 text-destructive">
+                  <IconTrash className="h-4 w-4" />
+                  {t('common.actions.delete', 'Delete')}
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    }
+    return [...columns, actionColumn]
+  }, [columns, t])
+
+  const table = useReactTable({
+    data: roles,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: { pagination },
+    onPaginationChange: setPagination,
+    manualPagination: true,
+    pageCount: Math.ceil((data?.total ?? 0) / pagination.pageSize) || 0,
+  })
 
   const createMutation = useMutation({
     mutationFn: (data: Partial<Role>) => createRole(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      queryClient.invalidateQueries({ queryKey: ['role-list-paged'] })
       toast.success(
         t('common.messages.created', {
           resource: t('common.fields.role', 'Role'),
@@ -254,7 +296,7 @@ export function RBACManagement() {
     mutationFn: ({ id, data }: { id: number; data: Partial<Role> }) =>
       updateRole(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      queryClient.invalidateQueries({ queryKey: ['role-list-paged'] })
       toast.success(
         t('common.messages.updated', {
           resource: t('common.fields.role', 'Role'),
@@ -277,7 +319,7 @@ export function RBACManagement() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => deleteRole(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      queryClient.invalidateQueries({ queryKey: ['role-list-paged'] })
       toast.success(
         t('common.messages.deleted', {
           resource: t('common.fields.role', 'Role'),
@@ -319,12 +361,16 @@ export function RBACManagement() {
     setIsAssigning(true)
     try {
       await assignRole(roleId, { subjectType, subject })
-      await queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      await queryClient.invalidateQueries({ queryKey: ['role-list-paged'] })
 
       // Update assigningRole with fresh data to show the new assignment immediately
       if (assigningRole?.id === roleId) {
-        const updatedRoles = queryClient.getQueryData<Role[]>(['role-list'])
-        const updatedRole = updatedRoles?.find((r) => r.id === roleId)
+        const pagedData = queryClient.getQueryData<RoleListResponse>([
+          'role-list-paged',
+          pagination.pageIndex + 1,
+          pagination.pageSize,
+        ])
+        const updatedRole = pagedData?.data?.find((r) => r.id === roleId)
         if (updatedRole) {
           setAssigningRole(updatedRole)
         }
@@ -350,11 +396,15 @@ export function RBACManagement() {
     setIsUnassigning(true)
     try {
       await unassignRole(roleId, subjectType, subject)
-      await queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      await queryClient.invalidateQueries({ queryKey: ['role-list-paged'] })
 
       if (assigningRole?.id === roleId) {
-        const updatedRoles = queryClient.getQueryData<Role[]>(['role-list'])
-        const updatedRole = updatedRoles?.find((r) => r.id === roleId)
+        const pagedData = queryClient.getQueryData<RoleListResponse>([
+          'role-list-paged',
+          pagination.pageIndex + 1,
+          pagination.pageSize,
+        ])
+        const updatedRole = pagedData?.data?.find((r) => r.id === roleId)
         if (updatedRole) {
           setAssigningRole(updatedRole)
         }
@@ -381,29 +431,6 @@ export function RBACManagement() {
       )
     : undefined
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">
-          {t('common.messages.loading', 'Loading...')}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-destructive">
-          {t('common.messages.failedToLoad', {
-            resource: t('common.fields.roles', 'roles'),
-            defaultValue: 'Failed to load roles',
-          })}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <Card>
@@ -428,24 +455,54 @@ export function RBACManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable actions={actions} data={roles} columns={columns} />
-          {roles.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {t('common.messages.noItemsConfigured', {
-                  resource: t('common.fields.roles', 'roles'),
-                  defaultValue: 'No roles configured',
-                })}
-              </p>
-              <p className="text-sm mt-1">
-                {t('common.messages.createFirstItem', {
-                  resource: t('common.fields.role', 'role'),
-                  defaultValue: 'Create roles to grant permissions',
-                })}
-              </p>
-            </div>
-          )}
+          <ResourceTableView
+            table={table}
+            columnCount={tableColumns.length}
+            isLoading={isLoading}
+            data={roles}
+            allPageSize={data?.total ?? 0}
+            emptyState={
+              isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-muted-foreground">
+                    {t('common.messages.loading', 'Loading...')}
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-destructive">
+                    {t('common.messages.failedToLoad', {
+                      resource: t('common.fields.roles', 'roles'),
+                      defaultValue: 'Failed to load roles',
+                    })}
+                  </div>
+                </div>
+              ) : roles.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>
+                    {t('common.messages.noItemsConfigured', {
+                      resource: t('common.fields.roles', 'roles'),
+                      defaultValue: 'No roles configured',
+                    })}
+                  </p>
+                  <p className="text-sm mt-1">
+                    {t('common.messages.createFirstItem', {
+                      resource: t('common.fields.role', 'role'),
+                      defaultValue: 'Create roles to grant permissions',
+                    })}
+                  </p>
+                </div>
+              ) : null
+            }
+            hasActiveFilters={false}
+            filteredRowCount={roles.length}
+            totalRowCount={data?.total ?? 0}
+            searchQuery=""
+            pagination={pagination}
+            setPagination={setPagination}
+            maxBodyHeightClassName="max-h-[600px]"
+          />
         </CardContent>
       </Card>
 

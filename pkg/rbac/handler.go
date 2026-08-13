@@ -32,12 +32,43 @@ func (req roleReq) toRole() model.Role {
 
 // ListRoles returns all roles with assignments
 func ListRoles(c *gin.Context) {
+	page := 1
+	size := 20
+	if p := strings.TrimSpace(c.Query("page")); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page parameter"})
+			return
+		}
+	}
+	if s := strings.TrimSpace(c.Query("size")); s != "" {
+		if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 {
+			size = parsed
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid size parameter"})
+			return
+		}
+	}
+
+	query := model.DB.Model(&model.Role{})
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count roles: " + err.Error()})
+		return
+	}
+
 	var roles []model.Role
-	if err := model.DB.Preload("Assignments").Find(&roles).Error; err != nil {
+	if err := query.Preload("Assignments").Order("id desc").Offset((page - 1) * size).Limit(size).Find(&roles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list roles: " + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"roles": roles})
+	c.JSON(http.StatusOK, gin.H{
+		"data":  roles,
+		"total": total,
+		"page":  page,
+		"size":  size,
+	})
 }
 
 // GetRole returns a single role by id

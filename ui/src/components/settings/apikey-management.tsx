@@ -9,18 +9,29 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import {
+  ColumnDef,
+  getCoreRowModel,
+  PaginationState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { APIKey } from '@/types/api'
-import { createAPIKey, deleteAPIKey, useAPIKeyList } from '@/lib/api'
+import { createAPIKey, deleteAPIKey, useAPIKeyListPaged } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ResourceTableView } from '@/components/resource-table-view'
 
-import { Action, ActionTable } from '../action-table'
 import { APIKeyDialog } from './apikey-dialog'
 import UserRoleAssignment from './user-role-assignment'
 
@@ -28,7 +39,15 @@ export function APIKeyManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
-  const { data: apiKeys = [], isLoading, error } = useAPIKeyList()
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  })
+  const { data, isLoading, error } = useAPIKeyListPaged(
+    pagination.pageIndex + 1,
+    pagination.pageSize
+  )
+  const apiKeys = data?.data ?? []
 
   const [showDialog, setShowDialog] = useState(false)
   const [deletingKey, setDeletingKey] = useState<APIKey | null>(null)
@@ -148,35 +167,61 @@ export function APIKeyManagement() {
     [t, visibleKeys, toggleKeyVisibility, copyToClipboard]
   )
 
-  const actions = useMemo<Action<APIKey>[]>(
-    () => [
-      {
-        label: (
-          <>
-            <IconShieldCheck className="h-4 w-4" />
-            {t('common.actions.assign', 'Assign')}
-          </>
-        ),
-        onClick: (apiKey) => setAssigningKey(apiKey),
-        hidden: (apiKey) => !!apiKey.ownerUserId,
-      },
-      {
-        label: (
-          <div className="inline-flex items-center gap-2 text-destructive">
-            <IconTrash className="h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </div>
-        ),
-        onClick: (apiKey) => setDeletingKey(apiKey),
-      },
-    ],
-    [t]
-  )
+  const tableColumns = useMemo<ColumnDef<APIKey>[]>(() => {
+    const actionColumn: ColumnDef<APIKey> = {
+      id: 'actions',
+      header: t('common.fields.actions', 'Actions'),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('common.fields.actions', 'Actions')}
+              >
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {!row.original.ownerUserId && (
+                <DropdownMenuItem
+                  onClick={() => setAssigningKey(row.original)}
+                  className="gap-2"
+                >
+                  <IconShieldCheck className="h-4 w-4" />
+                  {t('common.actions.assign', 'Assign')}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={() => setDeletingKey(row.original)}
+                className="gap-2 text-destructive"
+              >
+                <IconTrash className="h-4 w-4" />
+                {t('common.actions.delete', 'Delete')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    }
+    return [...columns, actionColumn]
+  }, [columns, t])
+
+  const table = useReactTable({
+    data: apiKeys,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: { pagination },
+    onPaginationChange: setPagination,
+    manualPagination: true,
+    pageCount: Math.ceil((data?.total ?? 0) / pagination.pageSize) || 0,
+  })
 
   const createMutation = useMutation({
     mutationFn: createAPIKey,
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['apikey-list'] })
+      queryClient.invalidateQueries({ queryKey: ['apikey-list-paged'] })
       setShowDialog(false)
       setVisibleKeys(new Set([data.apiKey.id]))
       toast.success(
@@ -199,7 +244,7 @@ export function APIKeyManagement() {
   const deleteMutation = useMutation({
     mutationFn: deleteAPIKey,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['apikey-list'] })
+      queryClient.invalidateQueries({ queryKey: ['apikey-list-paged'] })
       setDeletingKey(null)
       toast.success(
         t('common.messages.deleted', {
@@ -231,21 +276,6 @@ export function APIKeyManagement() {
     }
   }, [deletingKey, deleteMutation])
 
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <p className="text-destructive">
-            {t('common.messages.failedToLoad', {
-              resource: t('common.fields.apiKeys', 'API Keys'),
-              defaultValue: 'Failed to load API Keys',
-            })}
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <>
       <Card>
@@ -270,26 +300,55 @@ export function APIKeyManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          {apiKeys.length === 0 && !isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconKey className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">
-                {t('common.messages.noItemsConfigured', {
-                  resource: t('common.fields.apiKeys', 'API keys'),
-                  defaultValue: 'No API keys configured',
-                })}
-              </p>
-              <p className="text-sm">
-                {t('common.messages.createFirstItem', {
-                  resource: t('common.fields.apiKey', 'API key'),
-                  defaultValue:
-                    'Create an API key to get started with programmatic access.',
-                })}
-              </p>
-            </div>
-          ) : (
-            <ActionTable columns={columns} data={apiKeys} actions={actions} />
-          )}
+          <ResourceTableView
+            table={table}
+            columnCount={tableColumns.length}
+            isLoading={isLoading}
+            data={apiKeys}
+            allPageSize={data?.total ?? 0}
+            emptyState={
+              isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-muted-foreground">
+                    {t('common.messages.loading', 'Loading...')}
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-destructive">
+                    {t('common.messages.failedToLoad', {
+                      resource: t('common.fields.apiKeys', 'API Keys'),
+                      defaultValue: 'Failed to load API Keys',
+                    })}
+                  </div>
+                </div>
+              ) : apiKeys.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconKey className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium">
+                    {t('common.messages.noItemsConfigured', {
+                      resource: t('common.fields.apiKeys', 'API keys'),
+                      defaultValue: 'No API keys configured',
+                    })}
+                  </p>
+                  <p className="text-sm">
+                    {t('common.messages.createFirstItem', {
+                      resource: t('common.fields.apiKey', 'API key'),
+                      defaultValue:
+                        'Create an API key to get started with programmatic access.',
+                    })}
+                  </p>
+                </div>
+              ) : null
+            }
+            hasActiveFilters={false}
+            filteredRowCount={apiKeys.length}
+            totalRowCount={data?.total ?? 0}
+            searchQuery=""
+            pagination={pagination}
+            setPagination={setPagination}
+            maxBodyHeightClassName="max-h-[600px]"
+          />
         </CardContent>
       </Card>
 

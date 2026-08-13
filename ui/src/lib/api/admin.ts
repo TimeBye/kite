@@ -2,11 +2,14 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 import {
   APIKey,
+  APIKeyListResponse,
   AuditLogResponse,
   Cluster,
+  ClusterListResponse,
   FetchUserListResponse,
   OAuthProvider,
   Role,
+  RoleListResponse,
   UserItem,
 } from '@/types/api'
 
@@ -28,8 +31,11 @@ export interface ClusterUpdateRequest extends ClusterCreateRequest {
 }
 
 // Get cluster list for management
-export const fetchClusterList = (): Promise<Cluster[]> => {
-  return fetchAPI<Cluster[]>('/admin/clusters/')
+export const fetchClusterList = async (): Promise<Cluster[]> => {
+  const resp = await fetchAPI<{ data: Cluster[]; total: number }>(
+    '/admin/clusters/?page=1&size=10000'
+  )
+  return resp.data
 }
 
 export const useClusterList = (options?: {
@@ -41,6 +47,30 @@ export const useClusterList = (options?: {
     queryFn: fetchClusterList,
     staleTime: options?.staleTime ?? 30000, // 30 seconds cache
     refetchInterval: options?.refetchInterval,
+  })
+}
+
+// Paginated cluster list for management page
+export const fetchClusterListPaged = async (
+  page: number,
+  size: number
+): Promise<ClusterListResponse> => {
+  return fetchAPI<ClusterListResponse>(
+    `/admin/clusters/?page=${page}&size=${size}`
+  )
+}
+
+export const useClusterListPaged = (
+  page: number,
+  size: number,
+  options?: { staleTime?: number; refetchInterval?: number | false }
+) => {
+  return useQuery<ClusterListResponse, Error>({
+    queryKey: ['cluster-list-paged', page, size],
+    queryFn: () => fetchClusterListPaged(page, size),
+    staleTime: options?.staleTime ?? 30000,
+    refetchInterval: options?.refetchInterval,
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -162,7 +192,10 @@ export const fetchOAuthProvider = async (
 
 // RBAC API
 export const fetchRoleList = async (): Promise<Role[]> => {
-  return fetchAPI<{ roles: Role[] }>(`/admin/roles/`).then((resp) => resp.roles)
+  const resp = await fetchAPI<{ data: Role[]; total: number }>(
+    `/admin/roles/?page=1&size=10000`
+  )
+  return resp.data
 }
 
 export const useRoleList = (options?: { staleTime?: number }) => {
@@ -170,6 +203,25 @@ export const useRoleList = (options?: { staleTime?: number }) => {
     queryKey: ['role-list'],
     queryFn: fetchRoleList,
     staleTime: options?.staleTime || 30000,
+  })
+}
+
+// Paginated role list for management page
+export const fetchRoleListPaged = async (
+  page: number,
+  size: number
+): Promise<RoleListResponse> => {
+  return fetchAPI<RoleListResponse>(
+    `/admin/roles/?page=${page}&size=${size}`
+  )
+}
+
+export const useRoleListPaged = (page: number, size: number) => {
+  return useQuery<RoleListResponse, Error>({
+    queryKey: ['role-list-paged', page, size],
+    queryFn: () => fetchRoleListPaged(page, size),
+    staleTime: 30000,
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -544,9 +596,10 @@ export const sendTestEmail = async (
 }
 
 export const fetchAPIKeyList = async (): Promise<APIKey[]> => {
-  return fetchAPI<{ apiKeys: APIKey[] }>('/admin/apikeys/').then(
-    (response) => response.apiKeys
+  const resp = await fetchAPI<{ data: APIKey[]; total: number }>(
+    '/admin/apikeys/?page=1&size=10000'
   )
+  return resp.data
 }
 
 export const useAPIKeyList = (options?: { staleTime?: number }) => {
@@ -554,6 +607,25 @@ export const useAPIKeyList = (options?: { staleTime?: number }) => {
     queryKey: ['apikey-list'],
     queryFn: fetchAPIKeyList,
     staleTime: options?.staleTime || 30000,
+  })
+}
+
+// Paginated API key list for management page
+export const fetchAPIKeyListPaged = async (
+  page: number,
+  size: number
+): Promise<APIKeyListResponse> => {
+  return fetchAPI<APIKeyListResponse>(
+    `/admin/apikeys/?page=${page}&size=${size}`
+  )
+}
+
+export const useAPIKeyListPaged = (page: number, size: number) => {
+  return useQuery<APIKeyListResponse, Error>({
+    queryKey: ['apikey-list-paged', page, size],
+    queryFn: () => fetchAPIKeyListPaged(page, size),
+    staleTime: 30000,
+    placeholderData: keepPreviousData,
   })
 }
 

@@ -178,11 +178,12 @@ test('backend APIs work end to end against the real test environment', async ({
       200
     )
     expect(clusters.map((cluster) => cluster.name)).toContain(clusterName)
-    const adminClusters = await expectJSON<Array<{ name: string }>>(
-      await request.get('/api/v1/admin/clusters/'),
-      200
+    const adminClustersResp = await expectJSON<{
+      data: Array<{ name: string }>
+    }>(await request.get('/api/v1/admin/clusters/'), 200)
+    expect(adminClustersResp.data.map((cluster) => cluster.name)).toContain(
+      clusterName
     )
-    expect(adminClusters.map((cluster) => cluster.name)).toContain(clusterName)
     const dummyCluster = await expectJSON<{ id: number }>(
       await request.post('/api/v1/admin/clusters/', {
         data: {
@@ -203,11 +204,13 @@ test('backend APIs work end to end against the real test environment', async ({
       }),
       200
     )
-    const clustersAfterUpdate = await expectJSON<
-      Array<{ id: number; description: string; enabled: boolean }>
-    >(await request.get('/api/v1/admin/clusters/'), 200)
+    const clustersAfterUpdateResp = await expectJSON<{
+      data: Array<{ id: number; description: string; enabled: boolean }>
+    }>(await request.get('/api/v1/admin/clusters/'), 200)
     expect(
-      clustersAfterUpdate.find((cluster) => cluster.id === dummyClusterId)
+      clustersAfterUpdateResp.data.find(
+        (cluster) => cluster.id === dummyClusterId
+      )
     ).toMatchObject({
       description: 'updated backend API E2E cluster',
       enabled: false,
@@ -456,10 +459,10 @@ test('backend APIs work end to end against the real test environment', async ({
     apiKeyId = apiKeyResponse.apiKey.id
     expect(apiKeyResponse.apiKey.username).toBe(apiKeyName)
     expect(apiKeyResponse.apiKey.apiKey).toBeTruthy()
-    const apiKeys = await expectJSON<{
-      apiKeys: Array<{ id: number; username: string; apiKey: string }>
+    const apiKeysResp = await expectJSON<{
+      data: Array<{ id: number; username: string; apiKey: string }>
     }>(await request.get('/api/v1/admin/apikeys/'), 200)
-    const listedAPIKey = apiKeys.apiKeys.find((item) => item.id === apiKeyId)
+    const listedAPIKey = apiKeysResp.data.find((item) => item.id === apiKeyId)
     expect(listedAPIKey?.username).toBe(apiKeyName)
     expect(listedAPIKey?.apiKey).toMatch(/^kite\d+-/)
     const apiKeyToken = listedAPIKey!.apiKey
@@ -521,10 +524,10 @@ test('backend APIs work end to end against the real test environment', async ({
       role: { id: number; name: string }
     }>(await request.get(`/api/v1/admin/roles/${roleId}`), 200)
     expect(fetchedRole.role.name).toBe(roleName)
-    const roles = await expectJSON<{
-      roles: Array<{ id: number; name: string }>
+    const rolesResp = await expectJSON<{
+      data: Array<{ id: number; name: string }>
     }>(await request.get('/api/v1/admin/roles/'), 200)
-    expect(roles.roles).toContainEqual(
+    expect(rolesResp.data).toContainEqual(
       expect.objectContaining({ id: roleId, name: roleName })
     )
     const updatedRole = await expectJSON<{

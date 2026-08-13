@@ -10,19 +10,26 @@ These endpoints require an authenticated admin user, or an API key with the `adm
 GET /api/v1/admin/roles/
 ```
 
+Query parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page`    | int  | 1       | Page number (1-based) |
+| `size`    | int  | 20      | Page size |
+
 Example:
 
 ```bash
 curl \
   -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/roles/
+  https://kite.example.com/api/v1/admin/roles/?page=1&size=20
 ```
 
 Response example:
 
 ```json
 {
-  "roles": [
+  "data": [
     {
       "id": 2,
       "name": "viewer",
@@ -34,7 +41,10 @@ Response example:
       "verbs": ["get", "log"],
       "assignments": []
     }
-  ]
+  ],
+  "total": 1,
+  "page": 1,
+  "size": 20
 }
 ```
 

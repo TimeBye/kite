@@ -644,6 +644,13 @@ export interface Cluster {
   error?: string
 }
 
+export interface ClusterListResponse {
+  data: Cluster[]
+  total: number
+  page: number
+  size: number
+}
+
 export interface OAuthProvider {
   id: number
   name: string
@@ -687,6 +694,13 @@ export interface Role {
   updatedAt: string
 }
 
+export interface RoleListResponse {
+  data: Role[]
+  total: number
+  page: number
+  size: number
+}
+
 export interface UserItem {
   id: number
   username: string
@@ -717,6 +731,13 @@ export interface APIKey {
   roles?: Role[]
   ownerUserId?: number
   owner?: { id: number; username: string; name?: string } | null
+}
+
+export interface APIKeyListResponse {
+  data: APIKey[]
+  total: number
+  page: number
+  size: number
 }
 
 // Resource History types

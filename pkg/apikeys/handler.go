@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/zxh326/kite/pkg/common"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/rbac"
 )
@@ -15,8 +17,34 @@ type CreateAPIKeyRequest struct {
 }
 
 func ListAPIKeys(c *gin.Context) {
-	apiKeys, err := model.ListAPIKeyUsers()
-	if err != nil {
+	page := 1
+	size := 20
+	if p := strings.TrimSpace(c.Query("page")); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page parameter"})
+			return
+		}
+	}
+	if s := strings.TrimSpace(c.Query("size")); s != "" {
+		if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 {
+			size = parsed
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid size parameter"})
+			return
+		}
+	}
+
+	query := model.DB.Model(&model.User{}).Where("provider = ?", common.APIKeyProvider)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count API keys"})
+		return
+	}
+
+	var apiKeys []model.User
+	if err := query.Preload("Owner").Order("id desc").Offset((page - 1) * size).Limit(size).Find(&apiKeys).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list API keys"})
 		return
 	}
@@ -29,7 +57,12 @@ func ListAPIKeys(c *gin.Context) {
 			apiKeys[i].Owner.Password = ""
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"apiKeys": apiKeys})
+	c.JSON(http.StatusOK, gin.H{
+		"data":  apiKeys,
+		"total": total,
+		"page":  page,
+		"size":  size,
+	})
 }
 
 // ListIndependentAPIKeys returns API keys without an owner (manually created).

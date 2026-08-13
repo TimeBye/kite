@@ -84,8 +84,33 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 }
 
 func (cm *ClusterManager) GetClusterList(c *gin.Context) {
-	clusters, err := model.ListClusters()
-	if err != nil {
+	page := 1
+	size := 20
+	if p := strings.TrimSpace(c.Query("page")); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page parameter"})
+			return
+		}
+	}
+	if s := strings.TrimSpace(c.Query("size")); s != "" {
+		if parsed, err := strconv.Atoi(s); err == nil && parsed > 0 {
+			size = parsed
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid size parameter"})
+			return
+		}
+	}
+
+	var total int64
+	if err := model.DB.Model(&model.Cluster{}).Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var clusters []model.Cluster
+	if err := model.DB.Order("id desc").Offset((page - 1) * size).Limit(size).Find(&clusters).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -121,7 +146,12 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 		result = append(result, clusterInfo)
 	}
 
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{
+		"data":  result,
+		"total": total,
+		"page":  page,
+		"size":  size,
+	})
 }
 
 func (cm *ClusterManager) CreateCluster(c *gin.Context) {

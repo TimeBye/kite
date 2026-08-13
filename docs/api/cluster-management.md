@@ -10,30 +10,42 @@ These endpoints require an authenticated admin user, or an API key with the `adm
 GET /api/v1/admin/clusters/
 ```
 
+Query parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `page`    | int  | 1       | Page number (1-based) |
+| `size`    | int  | 20      | Page size |
+
 Example:
 
 ```bash
 curl \
   -H "Authorization: kite1-adminsecret" \
-  https://kite.example.com/api/v1/admin/clusters/
+  https://kite.example.com/api/v1/admin/clusters/?page=1&size=20
 ```
 
 Response example:
 
 ```json
-[
-  {
-    "id": 1,
-    "name": "demo-cluster",
-    "description": "staging cluster",
-    "enabled": true,
-    "inCluster": false,
-    "isDefault": true,
-    "prometheusURL": "http://prometheus.monitoring.svc:9090",
-    "config": "",
-    "version": "v1.31.0"
-  }
-]
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "demo-cluster",
+      "description": "staging cluster",
+      "enabled": true,
+      "inCluster": false,
+      "isDefault": true,
+      "prometheusURL": "http://prometheus.monitoring.svc:9090",
+      "config": "",
+      "version": "v1.31.0"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "size": 20
+}
 ```
 
 ## Create a cluster
