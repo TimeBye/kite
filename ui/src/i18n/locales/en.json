@@ -737,7 +737,11 @@
   },
   "errors": {
     "crdNotInstalledTitle": "Resource Type Not Available",
-    "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature."
+    "crdNotInstalled": "The {{kind}} resource type ({{version}}) is not installed in this cluster. Install the required CRD to use this feature.",
+    "noPermission": {
+      "title": "Access Denied",
+      "adminRequired": "You do not have permission to access this page."
+    }
   },
   "rbac": {
     "noPermissionCluster": "User {{user}} does not have permission to {{verb}} {{resource}} on cluster {{cluster}}",
@@ -786,8 +790,42 @@
         "maxTokens": "Max Tokens"
       }
     },
+    "smtp": {
+      "title": "SMTP",
+      "description": "Configure email delivery for notifications.",
+      "form": {
+        "host": "Host",
+        "port": "Port",
+        "encryption": "Encryption",
+        "timeout": "Timeout (seconds)",
+        "username": "Username",
+        "password": "Password",
+        "passwordPlaceholder": "Leave empty to keep current password",
+        "fromEmail": "From Email",
+        "fromName": "From Name",
+        "skipTLSVerify": "Skip TLS certificate verification",
+        "testRecipient": "Test recipient"
+      },
+      "encryption": {
+        "none": "None"
+      },
+      "securityHint": "This configuration may transmit email credentials or content insecurely.",
+      "managed": "Managed by configuration file and cannot be modified here.",
+      "actions": {
+        "test": "Send test email"
+      },
+      "errors": {
+        "hostRequired": "SMTP host is required",
+        "fromEmailRequired": "From email is required",
+        "recipientRequired": "Recipient email is required"
+      },
+      "messages": {
+        "testSent": "Test email sent. Click Save at the bottom of the page to persist SMTP settings."
+      }
+    },
     "kubectl": {
       "title": "Kubectl",
+      "toggle": "Enable kubectl",
       "description": "Enable kubectl terminal and configure runtime image.",
       "form": {
         "image": "Image"

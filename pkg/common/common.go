@@ -75,7 +75,7 @@ var (
 	ConfigFilePath = ""
 
 	// ManagedSections tracks which configuration sections are managed by the config file.
-	// Keys: "clusters", "oauth", "ldap", "rbac", "superUser"
+	// Keys: "clusters", "oauth", "ldap", "smtp", "rbac", "superUser"
 	ManagedSections = map[string]bool{}
 	managedMu       sync.RWMutex
 )

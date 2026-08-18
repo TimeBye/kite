@@ -137,6 +137,7 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	generalSettingAPI := adminAPI.Group("/general-setting")
 	generalSettingAPI.GET("/", settings.HandleGetGeneralSetting)
 	generalSettingAPI.PUT("/", settings.HandleUpdateGeneralSetting)
+	generalSettingAPI.POST("/smtp/test", settings.HandleTestSMTP)
 
 	templateAPI := adminAPI.Group("/templates")
 	templateAPI.POST("/", templates.CreateTemplate)
