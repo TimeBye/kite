@@ -890,7 +890,9 @@
       "rbac": "RBAC",
       "users": "User",
       "apikeys": "API Keys",
-      "kubeconfigTokens": "Kubeconfig Tokens"
+      "kubeconfigTokens": "Kubeconfig Tokens",
+      "templates": "Templates",
+      "audit": "Audit"
     }
   },
   "generalManagement": {

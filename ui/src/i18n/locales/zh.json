@@ -874,7 +874,9 @@
       "rbac": "RBAC",
       "users": "用户",
       "apikeys": "API 密钥",
-      "kubeconfigTokens": "Kubeconfig 令牌"
+      "kubeconfigTokens": "Kubeconfig 令牌",
+      "templates": "模板",
+      "audit": "审计"
     }
   },
   "generalManagement": {

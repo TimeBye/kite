@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { IconAlertCircle, IconEye } from '@tabler/icons-react'
+import { IconAlertCircle, IconEye, IconHistory } from '@tabler/icons-react'
 import {
   ColumnDef,
   getCoreRowModel,
@@ -300,7 +300,10 @@ export function AuditLog() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>{t('common.fields.auditLogs', 'Audit Logs')}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <IconHistory className="h-5 w-5" />
+              {t('common.fields.auditLogs', 'Audit Logs')}
+            </CardTitle>
             <p className="text-muted-foreground text-sm">
               {t(
                 'common.messages.auditLogsDescription',
