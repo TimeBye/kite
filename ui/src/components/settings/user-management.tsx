@@ -621,24 +621,11 @@ export function UserManagement() {
             </div>
             <div>
               <label className="block text-sm">
-                {t('common.fields.avatarUrl', 'Avatar URL')}
-              </label>
-              <Input
-                value={editingUser?.avatar_url || ''}
-                onChange={(e) =>
-                  setEditingUser({
-                    ...(editingUser as UserItem),
-                    avatar_url: e.target.value,
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-sm">
                 {t('common.fields.name', 'Name')}
               </label>
               <Input
                 value={editingUser?.name || ''}
+                disabled={!!editingUser?.nameSource}
                 onChange={(e) =>
                   setEditingUser({
                     ...(editingUser as UserItem),
@@ -646,6 +633,52 @@ export function UserManagement() {
                   })
                 }
               />
+              {editingUser?.nameSource && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('userManagement.managedByProvider', 'Managed by authentication provider')}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('common.fields.email', 'Email')}
+              </label>
+              <Input
+                type="email"
+                value={editingUser?.email || ''}
+                disabled={!!editingUser?.emailSource}
+                onChange={(e) =>
+                  setEditingUser({
+                    ...(editingUser as UserItem),
+                    email: e.target.value,
+                  })
+                }
+              />
+              {editingUser?.emailSource && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('userManagement.managedByProvider', 'Managed by authentication provider')}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm">
+                {t('common.fields.avatarUrl', 'Avatar URL')}
+              </label>
+              <Input
+                value={editingUser?.avatar_url || ''}
+                disabled={!!editingUser?.avatarUrlSource}
+                onChange={(e) =>
+                  setEditingUser({
+                    ...(editingUser as UserItem),
+                    avatar_url: e.target.value,
+                  })
+                }
+              />
+              {editingUser?.avatarUrlSource && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('userManagement.managedByProvider', 'Managed by authentication provider')}
+                </p>
+              )}
             </div>
             <DialogFooter>
               <Button type="submit">{t('common.actions.save', 'Save')}</Button>

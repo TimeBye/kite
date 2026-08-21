@@ -1153,6 +1153,7 @@
   },
   "userManagement": {
     "title": "用户管理",
+    "managedByProvider": "由身份认证提供方管理",
     "actions": {
       "add": "添加用户"
     },

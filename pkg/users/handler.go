@@ -104,6 +104,7 @@ func UpdateUser(c *gin.Context) {
 
 	var req struct {
 		Name      string `json:"name"`
+		Email     string `json:"email"`
 		AvatarURL string `json:"avatar_url,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -116,11 +117,14 @@ func UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found", "code": "user_not_found"})
 		return
 	}
-	if req.Name != "" {
+	if req.Name != "" && user.NameSource == "" {
 		user.Name = req.Name
 	}
-	if req.AvatarURL != "" {
+	if req.AvatarURL != "" && user.AvatarURLSource == "" {
 		user.AvatarURL = req.AvatarURL
+	}
+	if req.Email != "" && user.EmailSource == "" {
+		user.Email = req.Email
 	}
 
 	if err := model.UpdateUser(user); err != nil {

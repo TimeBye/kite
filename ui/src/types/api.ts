@@ -693,11 +693,16 @@ export interface UserItem {
   username: string
   sub?: string
   provider: string
+  email?: string
+  emailVerified?: boolean
+  emailSource?: string
   createdAt: string
   lastLoginAt?: string
   enabled?: boolean
   avatar_url?: string
+  avatarUrlSource?: string
   name?: string
+  nameSource?: string
   roles?: Role[]
 }
 

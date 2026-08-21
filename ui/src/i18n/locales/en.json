@@ -379,8 +379,6 @@
     "layout.default": "Default",
     "layout.compact": "Compact",
     "layout.minimal": "Minimal",
-    "customize": "Customize Sidebar",
-    "customizeTitle": "Customize Sidebar",
     "expand": "Expand",
     "collapse": "Collapse",
     "pinnedItems": "Pinned Items",
@@ -831,6 +829,22 @@
       "failed_to_update_sidebar_preference": "Failed to update sidebar preference.",
       "failed_to_update_global_sidebar_preference": "Failed to update global sidebar preference.",
       "failed_to_clear_global_sidebar_preference": "Failed to clear global sidebar preference."
+    }
+  },
+  "userManagement": {
+    "title": "User Management",
+    "managedByProvider": "Managed by authentication provider",
+    "actions": {
+      "add": "Add User"
+    },
+    "dialog": {
+      "editTitle": "Edit User",
+      "resetPassword": "Reset Password",
+      "assignRoles": "Assign Roles"
+    },
+    "empty": {
+      "title": "No users yet",
+      "description": "Add your first user to get started"
     }
   },
   "rbac": {
