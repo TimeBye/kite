@@ -99,7 +99,9 @@ func TestPasskeySessionIsSingleUse(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "http://kite.example.com/passkeys", nil)
-	saveSession(ctx, session{Ceremony: "registration", Name: "Laptop"})
+	if err := saveSession(ctx, session{Ceremony: "registration", Name: "Laptop"}); err != nil {
+		t.Fatalf("saveSession() error: %v", err)
+	}
 
 	cookies := recorder.Result().Cookies()
 	if len(cookies) != 1 {

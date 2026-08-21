@@ -79,7 +79,7 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
             </div>
             {provider.scopes && (
               <div className="text-sm text-muted-foreground">
-                Scopes: {provider.scopes}
+                {t('oauthManagement.dialog.scopes')}: {provider.scopes}
               </div>
             )}
           </div>
