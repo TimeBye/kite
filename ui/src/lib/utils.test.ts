@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PodMetrics } from '@/types/api'
 
+import { ApiError } from './api-error'
 import {
   debounce,
   enrichNodeConditionsWithHealth,
@@ -236,6 +237,45 @@ describe('RBAC helpers', () => {
         tf
       )
     ).toBe('crd:Gateway:gateway.networking.k8s.io/v1')
+  })
+
+  it('translates ApiError with a known backend code', () => {
+    const t = vi.fn((key: string) => {
+      if (key === 'errors.backend.smtp_not_configured') {
+        return 'SMTP is not configured. Please contact the administrator.'
+      }
+      return key
+    })
+    const tf = t as unknown as TFunction
+
+    expect(
+      translateError(
+        new ApiError(
+          'SMTP is not configured. Please contact the administrator.',
+          'smtp_not_configured'
+        ),
+        tf
+      )
+    ).toBe('SMTP is not configured. Please contact the administrator.')
+  })
+
+  it('falls back to error.message when ApiError code has no i18n key', () => {
+    const t = vi.fn((key: string) => key)
+    const tf = t as unknown as TFunction
+
+    expect(
+      translateError(
+        new ApiError('something unexpected', 'unknown_code'),
+        tf
+      )
+    ).toBe('something unexpected')
+  })
+
+  it('falls back to error.message for plain Error without code', () => {
+    const t = vi.fn((key: string) => key)
+    const tf = t as unknown as TFunction
+
+    expect(translateError(new Error('plain error'), tf)).toBe('plain error')
   })
 })
 

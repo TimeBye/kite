@@ -21,6 +21,7 @@ import {
   type MFASetupResponse,
   type PasskeyCredential,
 } from '@/lib/api'
+import { translateError } from '@/lib/utils'
 import { createPasskeyCredential } from '@/lib/webauthn'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -135,14 +136,7 @@ export function AccountSettingsDialog({
       })
       .catch((error) => {
         if (cancelled) return
-        setPasskeyError(
-          error instanceof Error
-            ? error.message
-            : t(
-                'accountSettings.security.passkeys.loadError',
-                'Failed to load passkeys'
-              )
-        )
+        setPasskeyError(translateError(error, t))
       })
 
     return () => {
@@ -186,11 +180,7 @@ export function AccountSettingsDialog({
       await checkAuth()
       toast.success(t('accountSettings.profile.saved', 'Account updated'))
     } catch (error) {
-      setProfileError(
-        error instanceof Error
-          ? error.message
-          : t('accountSettings.profile.error', 'Failed to update account')
-      )
+      setProfileError(translateError(error, t))
     } finally {
       setSavingProfile(false)
     }
@@ -210,11 +200,7 @@ export function AccountSettingsDialog({
       setEmailDialogOpen(false)
       toast.success(t('accountSettings.profile.saved', 'Account updated'))
     } catch (error) {
-      setProfileError(
-        error instanceof Error
-          ? error.message
-          : t('accountSettings.profile.error', 'Failed to update account')
-      )
+      setProfileError(translateError(error, t))
       throw error
     } finally {
       setSavingProfile(false)
@@ -242,11 +228,7 @@ export function AccountSettingsDialog({
       setConfirmPassword('')
       toast.success(t('accountSettings.password.changed', 'Password changed'))
     } catch (error) {
-      setPasswordError(
-        error instanceof Error
-          ? error.message
-          : t('accountSettings.password.error', 'Failed to change password')
-      )
+      setPasswordError(translateError(error, t))
     } finally {
       setSavingPassword(false)
     }
@@ -273,8 +255,7 @@ export function AccountSettingsDialog({
         t('accountSettings.security.emailCodeSent', 'Verification code sent')
       )
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t('accountSettings.security.sendCodeError', 'Failed to send verification code')
+      const message = translateError(error, t)
       if (action.startsWith('mfa')) setMFAError(message)
       else setPasskeyError(message)
     }
@@ -324,8 +305,7 @@ export function AccountSettingsDialog({
       }
       setSecurityAction(null)
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t('accountSettings.security.changeFailed', 'Security change failed')
+      const message = translateError(error, t)
       if (isMFAAction) setMFAError(message)
       else setPasskeyError(message)
       throw error

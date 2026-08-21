@@ -2,6 +2,7 @@
 import { appendCurrentClusterHeader } from './current-cluster'
 import { withSubPath } from './subpath'
 
+import { ApiError } from '@/lib/api-error'
 import i18n from '@/i18n'
 
 export interface ApiRequestOptions extends RequestInit {
@@ -92,8 +93,9 @@ class ApiClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      throw new Error(
-        errorData.error || `HTTP error! status: ${response.status}`
+      throw new ApiError(
+        errorData.error || `HTTP error! status: ${response.status}`,
+        errorData.code
       )
     }
 

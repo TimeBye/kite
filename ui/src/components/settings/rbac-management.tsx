@@ -392,17 +392,19 @@ export function RBACManagement() {
     if (isAssigning) return
     setIsAssigning(true)
     try {
-      await assignRole(roleId, { subjectType, subject })
+      const resp = await assignRole(roleId, { subjectType, subject })
       await queryClient.invalidateQueries({ queryKey: ['role-list'] })
       await queryClient.invalidateQueries({ queryKey: ['role-list-paginated'] })
 
-      // Update assigningRole with fresh data to show the new assignment immediately
-      if (assigningRole?.id === roleId) {
-        const updatedRoles = queryClient.getQueryData<Role[]>(['role-list'])
-        const updatedRole = updatedRoles?.find((r) => r.id === roleId)
-        if (updatedRole) {
-          setAssigningRole(updatedRole)
-        }
+      // Update assigningRole optimistically so the dialog shows the new assignment immediately
+      if (assigningRole?.id === roleId && resp?.assignment) {
+        setAssigningRole({
+          ...assigningRole,
+          assignments: [
+            ...(assigningRole.assignments || []),
+            resp.assignment,
+          ],
+        })
       }
 
       toast.success(t('common.messages.assigned', 'Assigned'))
@@ -428,12 +430,18 @@ export function RBACManagement() {
       await queryClient.invalidateQueries({ queryKey: ['role-list'] })
       await queryClient.invalidateQueries({ queryKey: ['role-list-paginated'] })
 
+      // Update assigningRole optimistically so the dialog reflects the removal immediately
       if (assigningRole?.id === roleId) {
-        const updatedRoles = queryClient.getQueryData<Role[]>(['role-list'])
-        const updatedRole = updatedRoles?.find((r) => r.id === roleId)
-        if (updatedRole) {
-          setAssigningRole(updatedRole)
-        }
+        setAssigningRole({
+          ...assigningRole,
+          assignments: (assigningRole.assignments || []).filter(
+            (a) =>
+              !(
+                a.subjectType === subjectType &&
+                a.subject === subject
+              )
+          ),
+        })
       }
 
       toast.success(t('common.messages.unassigned', 'Unassigned'))

@@ -39,12 +39,12 @@ func CreatePasswordUser(c *gin.Context) {
 
 	_, err := model.GetUserByUsername(user.Username)
 	if err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "user already exists"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user already exists", "code": "user_already_exists"})
 		return
 	}
 
 	if err := model.AddUser(user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user", "code": "failed_to_create_user"})
 		return
 	}
 	c.JSON(http.StatusCreated, user)
@@ -86,7 +86,7 @@ func ListUsers(c *gin.Context) {
 		role,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users", "code": "failed_to_list_users"})
 		return
 	}
 	for i := range users {
@@ -98,7 +98,7 @@ func ListUsers(c *gin.Context) {
 func UpdateUser(c *gin.Context) {
 	var id uint64
 	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id", "code": "invalid_id"})
 		return
 	}
 
@@ -113,7 +113,7 @@ func UpdateUser(c *gin.Context) {
 
 	user, err := model.GetUserByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found", "code": "user_not_found"})
 		return
 	}
 	if req.Name != "" {
@@ -124,7 +124,7 @@ func UpdateUser(c *gin.Context) {
 	}
 
 	if err := model.UpdateUser(user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user", "code": "failed_to_update_user"})
 		return
 	}
 	c.JSON(http.StatusOK, user)
@@ -147,27 +147,27 @@ func UpdateCurrentUser(c *gin.Context) {
 	email := strings.TrimSpace(req.Email)
 	avatarURL := strings.TrimSpace(req.AvatarURL)
 	if (user.NameSource != "" && name != user.Name) || (user.EmailSource != "" && email != user.Email) || (user.AvatarURLSource != "" && avatarURL != user.AvatarURL) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "profile field is managed by the authentication provider"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "profile field is managed by the authentication provider", "code": "profile_managed_by_provider"})
 		return
 	}
 	if email != user.Email {
 		verified, err := model.ConsumeEmailOTP(user.ID, email, model.EmailOTPEmailChange, strings.TrimSpace(req.EmailOTP), time.Now())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email verification code"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email verification code", "code": "failed_to_verify_email_otp"})
 			return
 		}
 		if !verified {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired email verification code"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired email verification code", "code": "invalid_or_expired_otp"})
 			return
 		}
 		if err := model.UpdateUserEmail(user.ID, email); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update email"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update email", "code": "failed_to_update_email"})
 			return
 		}
 		user.Email = email
 	}
 	if err := model.UpdateUserProfile(user.ID, name, user.Email, avatarURL); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user", "code": "failed_to_update_user"})
 		return
 	}
 	user.Name = name
@@ -178,7 +178,7 @@ func UpdateCurrentUser(c *gin.Context) {
 func RequestCurrentUserEmailUpdate(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	if user.EmailSource != "" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "email is managed by the authentication provider"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "email is managed by the authentication provider", "code": "email_managed_by_provider"})
 		return
 	}
 	var req struct {
@@ -192,30 +192,30 @@ func RequestCurrentUserEmailUpdate(c *gin.Context) {
 	email := strings.TrimSpace(req.Email)
 	parsed, err := mail.ParseAddress(email)
 	if err != nil || parsed.Address != email {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "email must be a valid email address"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email must be a valid email address", "code": "invalid_email"})
 		return
 	}
 	if user.Provider == "" || user.Provider == model.AuthProviderPassword {
 		if !model.CheckPassword(user.Password, req.CurrentPassword) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect", "code": "current_password_incorrect"})
 			return
 		}
 	}
 	code, err := model.CreateEmailOTP(user.ID, email, model.EmailOTPEmailChange, time.Now().Add(10*time.Minute))
 	if errors.Is(err, model.ErrEmailOTPTooFrequent) {
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "please wait before requesting another email verification code"})
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "please wait before requesting another email verification code", "code": "email_otp_too_frequent"})
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification code"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification code", "code": "failed_to_create_email_otp"})
 		return
 	}
 	if err := settings.SendEmailOTP(c.Request.Context(), email, code); err != nil {
 		_ = model.DeleteEmailOTP(user.ID, email, model.EmailOTPEmailChange)
 		if errors.Is(err, settings.ErrSMTPNotEnabled) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "SMTP is not configured. Please contact the administrator."})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SMTP is not configured. Please contact the administrator.", "code": "smtp_not_configured"})
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to send email verification code"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to send email verification code", "code": "failed_to_send_email_otp"})
 		}
 		return
 	}
@@ -225,7 +225,7 @@ func RequestCurrentUserEmailUpdate(c *gin.Context) {
 func ChangeCurrentUserPassword(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "password can only be changed for password users"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "password can only be changed for password users", "code": "password_not_password_user"})
 		return
 	}
 
@@ -238,11 +238,11 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 		return
 	}
 	if !model.CheckPassword(user.Password, req.CurrentPassword) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect", "code": "current_password_incorrect"})
 		return
 	}
 	if err := model.ResetPasswordByID(user.ID, req.NewPassword); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change password", "code": "failed_to_change_password"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -251,29 +251,29 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 func RequestCurrentUserSecurityOTP(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
 	if strings.TrimSpace(user.Email) == "" || !user.EmailVerified {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "a verified email is required for security changes"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a verified email is required for security changes", "code": "verified_email_required"})
 		return
 	}
 	purpose := strings.TrimSpace(c.Query("purpose"))
 	if !isSecurityOTPPurpose(purpose) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email verification purpose"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email verification purpose", "code": "invalid_otp_purpose"})
 		return
 	}
 	code, err := model.CreateEmailOTP(user.ID, user.Email, purpose, time.Now().Add(10*time.Minute))
 	if errors.Is(err, model.ErrEmailOTPTooFrequent) {
-		c.JSON(http.StatusTooManyRequests, gin.H{"error": "please wait before requesting another email verification code"})
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "please wait before requesting another email verification code", "code": "email_otp_too_frequent"})
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification code"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification code", "code": "failed_to_create_email_otp"})
 		return
 	}
 	if err := settings.SendEmailOTP(c.Request.Context(), user.Email, code); err != nil {
 		_ = model.DeleteEmailOTP(user.ID, user.Email, purpose)
 		if errors.Is(err, settings.ErrSMTPNotEnabled) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "SMTP is not configured. Please contact the administrator."})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SMTP is not configured. Please contact the administrator.", "code": "smtp_not_configured"})
 		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to send email verification code"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to send email verification code", "code": "failed_to_send_email_otp"})
 		}
 		return
 	}
@@ -282,16 +282,16 @@ func RequestCurrentUserSecurityOTP(c *gin.Context) {
 
 func consumeCurrentUserSecurityOTP(c *gin.Context, user model.User, purpose, code string) bool {
 	if strings.TrimSpace(user.Email) == "" || !user.EmailVerified {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "a verified email is required for security changes"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a verified email is required for security changes", "code": "verified_email_required"})
 		return false
 	}
 	verified, err := model.ConsumeEmailOTP(user.ID, user.Email, purpose, strings.TrimSpace(code), time.Now())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email verification code"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email verification code", "code": "failed_to_verify_email_otp"})
 		return false
 	}
 	if !verified {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired email verification code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired email verification code", "code": "invalid_or_expired_otp"})
 		return false
 	}
 	return true
@@ -319,7 +319,7 @@ func SetupCurrentUserMFA(c *gin.Context) {
 		return
 	}
 	if user.MFAEnabled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is already enabled"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is already enabled", "code": "mfa_already_enabled"})
 		return
 	}
 	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPSetupMFA, req.EmailOTP) {
@@ -328,18 +328,18 @@ func SetupCurrentUserMFA(c *gin.Context) {
 
 	secret, err := mfa.GenerateSecret()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate mfa secret"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate mfa secret", "code": "failed_to_generate_mfa_secret"})
 		return
 	}
 	if err := model.StoreMFASecret(user.ID, secret); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save mfa secret"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save mfa secret", "code": "failed_to_save_mfa_secret"})
 		return
 	}
 
 	otpURL := mfa.URL(user.Username, secret)
 	qrCode, err := mfa.QRCodeDataURL(otpURL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate mfa qr code"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate mfa qr code", "code": "failed_to_generate_mfa_qr_code"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -364,19 +364,19 @@ func EnableCurrentUserMFA(c *gin.Context) {
 		return
 	}
 	if strings.TrimSpace(string(user.MFASecret)) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa setup is not started"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa setup is not started", "code": "mfa_setup_not_started"})
 		return
 	}
 	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPEnableMFA, req.EmailOTP) {
 		return
 	}
 	if !mfa.Verify(string(user.MFASecret), req.Code) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code", "code": "invalid_mfa_code"})
 		return
 	}
 
 	if err := model.EnableUserMFA(user.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enable mfa"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enable mfa", "code": "failed_to_enable_mfa"})
 		return
 	}
 	user.MFAEnabled = true
@@ -398,19 +398,19 @@ func DisableCurrentUserMFA(c *gin.Context) {
 		return
 	}
 	if !user.MFAEnabled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is not enabled"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is not enabled", "code": "mfa_not_enabled"})
 		return
 	}
 	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPDisableMFA, req.EmailOTP) {
 		return
 	}
 	if !mfa.Verify(string(user.MFASecret), req.Code) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code", "code": "invalid_mfa_code"})
 		return
 	}
 
 	if err := model.DisableUserMFA(user.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable mfa"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable mfa", "code": "failed_to_disable_mfa"})
 		return
 	}
 	user.MFAEnabled = false
@@ -425,7 +425,7 @@ func ListCurrentUserPasskeys(c *gin.Context) {
 	}
 	credentials, err := passkey.CredentialsForUser(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list passkeys"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list passkeys", "code": "failed_to_list_passkeys"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"passkeys": credentials})
@@ -451,7 +451,7 @@ func BeginCurrentUserPasskeyRegistration(c *gin.Context) {
 
 	creation, err := passkey.BeginRegistration(c, user, req.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start passkey registration"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start passkey registration", "code": "failed_to_start_passkey_registration"})
 		return
 	}
 	c.JSON(http.StatusOK, creation)
@@ -465,7 +465,7 @@ func FinishCurrentUserPasskeyRegistration(c *gin.Context) {
 
 	credential, err := passkey.FinishRegistration(c, user)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to finish passkey registration"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to finish passkey registration", "code": "failed_to_finish_passkey_registration"})
 		return
 	}
 	c.JSON(http.StatusOK, credential)
@@ -487,7 +487,7 @@ func DeleteCurrentUserPasskey(c *gin.Context) {
 
 	var id uint
 	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id", "code": "invalid_id"})
 		return
 	}
 
@@ -496,7 +496,7 @@ func DeleteCurrentUserPasskey(c *gin.Context) {
 	}
 
 	if err := passkey.DeleteCredential(user.ID, id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete passkey"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete passkey", "code": "failed_to_delete_passkey"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -505,11 +505,11 @@ func DeleteCurrentUserPasskey(c *gin.Context) {
 func ensurePasskeyLoginEnabled(c *gin.Context) bool {
 	enabled, err := passkey.Enabled()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting", "code": "failed_to_load_setting"})
 		return false
 	}
 	if !enabled {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkey login is disabled"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "passkey login is disabled", "code": "passkey_login_disabled"})
 		return false
 	}
 	return true
@@ -518,11 +518,11 @@ func ensurePasskeyLoginEnabled(c *gin.Context) bool {
 func ensureMFAEnabled(c *gin.Context) bool {
 	setting, err := model.GetGeneralSetting()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting", "code": "failed_to_load_setting"})
 		return false
 	}
 	if !setting.EnableMFA {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is disabled"})
+		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is disabled", "code": "mfa_disabled"})
 		return false
 	}
 	return true
@@ -531,12 +531,12 @@ func ensureMFAEnabled(c *gin.Context) bool {
 func DeleteUser(c *gin.Context) {
 	var id uint
 	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id", "code": "invalid_id"})
 		return
 	}
 
 	if err := model.DeleteUserByID(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user", "code": "failed_to_delete_user"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -545,7 +545,7 @@ func DeleteUser(c *gin.Context) {
 func ResetPassword(c *gin.Context) {
 	var id uint
 	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id", "code": "invalid_id"})
 		return
 	}
 	var req struct {
@@ -556,7 +556,7 @@ func ResetPassword(c *gin.Context) {
 		return
 	}
 	if err := model.ResetPasswordByID(id, req.Password); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password", "code": "failed_to_reset_password"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -565,7 +565,7 @@ func ResetPassword(c *gin.Context) {
 func SetUserEnabled(c *gin.Context) {
 	var id uint
 	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil || id == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id", "code": "invalid_id"})
 		return
 	}
 	var req struct {
@@ -576,7 +576,7 @@ func SetUserEnabled(c *gin.Context) {
 		return
 	}
 	if err := model.SetUserEnabled(id, req.Enabled); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set enabled"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set enabled", "code": "failed_to_set_enabled"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -588,11 +588,11 @@ func UpdateSidebarPreference(c *gin.Context) {
 	if !isAdmin {
 		setting, err := model.GetGeneralSetting()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load general setting", "code": "failed_to_load_setting"})
 			return
 		}
 		if strings.TrimSpace(setting.GlobalSidebarPreference) != "" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "sidebar customization is disabled by global sidebar"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "sidebar customization is disabled by global sidebar", "code": "sidebar_customization_disabled"})
 			return
 		}
 	}
@@ -606,7 +606,7 @@ func UpdateSidebarPreference(c *gin.Context) {
 	user.SidebarPreference = req.SidebarPreference
 	if err := model.UpdateUser(&user); err != nil {
 		klog.Errorf("failed to update sidebar preference for user %s: %v", user.Username, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update sidebar preference"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update sidebar preference", "code": "failed_to_update_sidebar_preference"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -624,7 +624,7 @@ func UpdateGlobalSidebarPreference(c *gin.Context) {
 		"global_sidebar_preference": req.SidebarPreference,
 	}); err != nil {
 		klog.Errorf("failed to update global sidebar preference: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update global sidebar preference"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update global sidebar preference", "code": "failed_to_update_global_sidebar_preference"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
@@ -635,7 +635,7 @@ func ClearGlobalSidebarPreference(c *gin.Context) {
 		"global_sidebar_preference": "",
 	}); err != nil {
 		klog.Errorf("failed to clear global sidebar preference: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear global sidebar preference"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear global sidebar preference", "code": "failed_to_clear_global_sidebar_preference"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})

@@ -133,6 +133,7 @@ async function configureLDAPViaUI(page: Page) {
 }
 
 async function configureOAuthViaUI(page: Page) {
+  await waitForOAuthTableReady(page)
   const providerRow = page.getByRole('row').filter({ hasText: 'dex' })
   if (await providerRow.count()) {
     return
@@ -155,9 +156,20 @@ async function configureOAuthViaUI(page: Page) {
   await expect(providerRow).toBeVisible()
 }
 
+// Wait for the OAuth provider table to finish loading so that
+// providerRow.count() returns an accurate result.
+async function waitForOAuthTableReady(page: Page) {
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await expect(
+    page
+      .getByRole('row')
+      .or(page.getByText('No OAuth providers configured'))
+  ).toBeVisible({ timeout: 10000 })
+}
+
 async function configureUsernameClaimOAuthViaUI(page: Page) {
   await page.goto('/settings?tab=oauth')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await waitForOAuthTableReady(page)
 
   const providerRow = page
     .getByRole('row')
@@ -208,7 +220,7 @@ async function configureUsernameClaimOAuthViaUI(page: Page) {
 
 async function configureRestrictedOAuthViaUI(page: Page) {
   await page.goto('/settings?tab=oauth')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await waitForOAuthTableReady(page)
 
   const providerRow = page
     .getByRole('row')
@@ -254,7 +266,7 @@ async function configureRestrictedOAuthViaUI(page: Page) {
 
 async function configureCustomGroupClaimOAuthViaUI(page: Page) {
   await page.goto('/settings?tab=oauth')
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+  await waitForOAuthTableReady(page)
 
   const providerRow = page
     .getByRole('row')

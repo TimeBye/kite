@@ -4,6 +4,7 @@ import { TFunction } from 'i18next'
 import { NodeCondition } from 'kubernetes-types/core/v1'
 import { twMerge } from 'tailwind-merge'
 
+import { ApiError } from '@/lib/api-error'
 import { PodMetrics } from '@/types/api'
 import { NodeConditionType } from '@/types/k8s'
 
@@ -250,6 +251,13 @@ export function translateError(error: Error | unknown, t: TFunction): string {
     return t('common.messages.error', {
       error: String(error),
     })
+  }
+
+  // If the backend provided an error code, use it for i18n lookup
+  if (error instanceof ApiError && error.code) {
+    const key = `errors.backend.${error.code}`
+    const translated = t(key)
+    if (translated !== key) return translated
   }
 
   const crdMatch = CRD_NOT_INSTALLED_RE.exec(error.message)

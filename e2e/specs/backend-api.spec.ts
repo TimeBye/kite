@@ -443,11 +443,10 @@ test('backend APIs work end to end against the real test environment', async ({
       200
     )
     expect(updatedTemplate.description).toBe('updated through backend API e2e')
-    const templates = await expectJSON<Array<{ id: number; name: string }>>(
-      await request.get(`${clusterPath}/templates`),
-      200
-    )
-    expect(templates.some((item) => item.id === templateId)).toBe(true)
+    const templates = await expectJSON<{
+      data: Array<{ id: number; name: string }>
+    }>(await request.get(`${clusterPath}/templates`), 200)
+    expect(templates.data.some((item) => item.id === templateId)).toBe(true)
 
     const apiKeyResponse = await expectJSON<{
       apiKey: { id: number; username: string; apiKey: string }

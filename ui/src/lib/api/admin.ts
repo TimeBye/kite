@@ -7,6 +7,7 @@ import {
   FetchUserListResponse,
   OAuthProvider,
   Role,
+  RoleAssignment,
   UserItem,
 } from '@/types/api'
 
@@ -261,8 +262,11 @@ export const deleteRole = async (id: number) => {
 export const assignRole = async (
   id: number,
   data: { subjectType: 'user' | 'group' | 'apikey'; subject: string }
-) => {
-  return await apiClient.post(`/admin/roles/${id}/assign`, data)
+): Promise<{ assignment: RoleAssignment }> => {
+  return await apiClient.post<{ assignment: RoleAssignment }>(
+    `/admin/roles/${id}/assign`,
+    data
+  )
 }
 
 export const unassignRole = async (

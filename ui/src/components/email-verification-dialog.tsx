@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { requestCurrentUserEmailUpdate } from '@/lib/api'
+import { translateError } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -63,11 +64,7 @@ export function EmailVerificationDialog({
         t('accountSettings.profile.emailCodeSent', 'Verification code sent')
       )
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t('accountSettings.profile.error', 'Failed to update account')
-      )
+      setError(translateError(err, t))
     } finally {
       setSending(false)
     }
