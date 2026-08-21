@@ -1,9 +1,11 @@
 package cluster
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -21,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/proxy"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 )
 
 var discoveryPaths = map[string]bool{"/api": true, "/apis": true, "/version": true, "/openapi": true}
@@ -98,6 +101,11 @@ func (cm *ClusterManager) HandleK8sProxy(c *gin.Context) {
 			c.Request.Header.Del(name)
 		}
 	}
+
+	// Capture audit info for write operations before proxying.
+	auditInfo := cm.collectProxyAuditInfo(c, user, cluster.Name, proxyPath)
+
+	recorder := &statusRecorder{ResponseWriter: c.Writer, status: http.StatusOK}
 	handler := proxy.NewUpgradeAwareHandler(target, transport, false, false, &k8sProxyResponder{})
 	// Preserve Cluster Agent WrapTransport (authorizationRoundTripper) outside
 	// MirrorRequest so captured Upgrade requests contain target credentials.
@@ -117,7 +125,145 @@ func (cm *ClusterManager) HandleK8sProxy(c *gin.Context) {
 	}
 	handler.UpgradeTransport = proxy.NewUpgradeRequestRoundTripper(transport, authTransport)
 	handler.FlushInterval = 200 * time.Millisecond
-	handler.ServeHTTP(c.Writer, c.Request)
+	handler.ServeHTTP(recorder, c.Request)
+
+	if auditInfo != nil {
+		auditInfo.success = recorder.status < 400
+		if !auditInfo.success {
+			auditInfo.errorMessage = fmt.Sprintf("HTTP %d", recorder.status)
+		}
+		cm.recordProxyAudit(auditInfo)
+	}
+}
+
+// proxyAuditInfo collects the information needed to write an audit log entry
+// for a kubeconfig proxy request.
+type proxyAuditInfo struct {
+	user         model.User
+	clusterName  string
+	resource     string
+	namespace    string
+	name         string
+	verb         string
+	success      bool
+	errorMessage string
+}
+
+// collectProxyAuditInfo extracts audit metadata from the request. Only write
+// operations (POST/PUT/PATCH/DELETE) on non-discovery paths are audited.
+func (cm *ClusterManager) collectProxyAuditInfo(c *gin.Context, user model.User, clusterName, proxyPath string) *proxyAuditInfo {
+	if isDiscoveryPath(proxyPath) {
+		return nil
+	}
+	method := c.Request.Method
+	if method != http.MethodPost && method != http.MethodPut && method != http.MethodPatch && method != http.MethodDelete {
+		return nil
+	}
+	resource, namespace, verb, subresource := parseK8sAPIPath(proxyPath, method)
+	if resource == "" {
+		return nil
+	}
+	if mapped, ok := subResourceVerbs[subresource]; ok {
+		verb = mapped
+	}
+	if namespace == "" {
+		namespace = common.AllNamespaces
+	}
+	// Extract resource name from the path if present.
+	name := extractResourceName(proxyPath)
+	return &proxyAuditInfo{
+		user:        user,
+		clusterName: clusterName,
+		resource:    resource,
+		namespace:   namespace,
+		name:        name,
+		verb:        verb,
+	}
+}
+
+// extractResourceName tries to extract the resource instance name from a K8s
+// API path like /api/v1/namespaces/default/pods/my-pod.
+func extractResourceName(proxyPath string) string {
+	parts := strings.Split(strings.TrimPrefix(strings.TrimSuffix(proxyPath, "/"), "/"), "/")
+	var idx int
+	switch {
+	case len(parts) >= 2 && parts[0] == "api":
+		idx = 2
+	case len(parts) >= 3 && parts[0] == "apis":
+		idx = 3
+	default:
+		return ""
+	}
+	if idx >= len(parts) {
+		return ""
+	}
+	if parts[idx] == "namespaces" {
+		// /api/v1/namespaces/{ns}/{resource}/{name}
+		if idx+3 < len(parts) {
+			return parts[idx+3]
+		}
+		return ""
+	}
+	// Cluster-scoped resource: /api/v1/{resource}/{name} or /apis/{group}/{version}/{resource}/{name}
+	if idx+1 < len(parts) {
+		return parts[idx+1]
+	}
+	return ""
+}
+
+// recordProxyAudit asynchronously writes a ResourceHistory record for a
+// kubeconfig proxy request.
+func (cm *ClusterManager) recordProxyAudit(info *proxyAuditInfo) {
+	go func() {
+		history := &model.ResourceHistory{
+			ClusterName:     info.clusterName,
+			ResourceType:    info.resource,
+			ResourceName:    info.name,
+			Namespace:       info.namespace,
+			OperationType:   info.verb,
+			OperationSource: "kubeconfig",
+			Success:         info.success,
+			ErrorMessage:    info.errorMessage,
+			OperatorID:      info.user.ID,
+		}
+		if err := model.DB.Create(history).Error; err != nil {
+			klog.Errorf("Failed to record kubeconfig proxy audit: %v", err)
+		}
+	}()
+}
+
+// statusRecorder wraps http.ResponseWriter to capture the final status code.
+// It transparently delegates Hijacker, Flusher, and Pusher so that SPDY
+// upgrade requests (kubectl exec/attach/portforward) continue to work.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := r.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("ResponseWriter does not implement http.Hijacker")
+	}
+	return h.Hijack()
+}
+
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *statusRecorder) Push(target string, opts *http.PushOptions) error {
+	if p, ok := r.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return http.ErrNotSupported
 }
 
 func (cm *ClusterManager) authenticateKubeconfigToken(c *gin.Context) (model.User, bool) {

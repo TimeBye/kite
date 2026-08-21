@@ -112,6 +112,74 @@ func TestListAuditLogsRejectsInvalidQueryParameters(t *testing.T) {
 	}
 }
 
+func TestListAuditLogsFiltersBySource(t *testing.T) {
+	db := setupAuditTestDB(t)
+	alice := model.User{Username: "alice", Provider: model.AuthProviderPassword}
+	if err := db.Create(&alice).Error; err != nil {
+		t.Fatalf("creating alice: %v", err)
+	}
+
+	baseTime := time.Date(2026, 7, 23, 10, 0, 0, 0, time.UTC)
+	history := []model.ResourceHistory{
+		{
+			CreatedAt: baseTime, ClusterName: "prod", ResourceType: "pods", ResourceName: "web-1", Namespace: "default",
+			OperationType: "create", OperationSource: "manual", OperatorID: alice.ID, Success: true,
+		},
+		{
+			CreatedAt: baseTime.Add(time.Hour), ClusterName: "prod", ResourceType: "pods", ResourceName: "web-2", Namespace: "default",
+			OperationType: "create", OperationSource: "kubeconfig", OperatorID: alice.ID, Success: true,
+		},
+		{
+			CreatedAt: baseTime.Add(2 * time.Hour), ClusterName: "prod", ResourceType: "pods", ResourceName: "web-3", Namespace: "default",
+			OperationType: "create", OperationSource: "ai", OperatorID: alice.ID, Success: true,
+		},
+	}
+	if err := db.Create(&history).Error; err != nil {
+		t.Fatalf("creating audit history: %v", err)
+	}
+
+	tests := []struct {
+		source    string
+		wantTotal int64
+		wantName  string
+	}{
+		{"kubeconfig", 1, "web-2"},
+		{"ai", 1, "web-3"},
+		{"manual", 1, "web-1"},
+		{"", 3, "web-3"},
+	}
+	for _, tt := range tests {
+		t.Run("source="+tt.source, func(t *testing.T) {
+			url := "/audit?page=1&size=10"
+			if tt.source != "" {
+				url += "&source=" + tt.source
+			}
+			recorder := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(recorder)
+			ctx.Request = httptest.NewRequest(http.MethodGet, url, nil)
+
+			ListAuditLogs(ctx)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d: %s", recorder.Code, recorder.Body.String())
+			}
+			var response struct {
+				Data  []model.ResourceHistory `json:"data"`
+				Total int64                   `json:"total"`
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+				t.Fatalf("decoding response: %v", err)
+			}
+			if response.Total != tt.wantTotal {
+				t.Fatalf("total = %d, want %d", response.Total, tt.wantTotal)
+			}
+			if len(response.Data) > 0 && response.Data[0].ResourceName != tt.wantName {
+				t.Fatalf("first resource = %q, want %q", response.Data[0].ResourceName, tt.wantName)
+			}
+		})
+	}
+}
+
 func setupAuditTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	originalDB := model.DB

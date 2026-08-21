@@ -316,6 +316,7 @@
       "allClusters": "所有集群",
       "allOperations": "所有操作",
       "allRoles": "所有角色",
+      "allSources": "所有来源",
       "allUsers": "所有用户",
       "all": "全部",
       "emptyTemplate": "空模板",
@@ -1638,7 +1639,9 @@
   },
   "auditLog": {
     "apikey": "API Key",
-    "ai": "AI"
+    "ai": "AI",
+    "kubeconfig": "kubectl",
+    "manual": "手动"
   },
   "helm": {
     "actions": {

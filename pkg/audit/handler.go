@@ -47,6 +47,7 @@ func ListAuditLogs(c *gin.Context) {
 	resourceType := strings.TrimSpace(c.Query("resourceType"))
 	resourceName := strings.TrimSpace(c.Query("resourceName"))
 	namespace := strings.TrimSpace(c.Query("namespace"))
+	source := strings.TrimSpace(c.Query("source"))
 
 	query := model.DB.Model(&model.ResourceHistory{})
 	if operatorID > 0 {
@@ -70,6 +71,9 @@ func ListAuditLogs(c *gin.Context) {
 	}
 	if operation != "" {
 		query = query.Where("operation_type = ?", operation)
+	}
+	if source != "" {
+		query = query.Where("operation_source = ?", source)
 	}
 
 	var total int64

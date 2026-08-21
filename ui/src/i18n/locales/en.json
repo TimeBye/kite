@@ -316,6 +316,7 @@
       "allClusters": "All clusters",
       "allOperations": "All operations",
       "allRoles": "All roles",
+      "allSources": "All sources",
       "allUsers": "All users",
       "all": "All",
       "emptyTemplate": "Empty Template",
@@ -1593,7 +1594,9 @@
   },
   "auditLog": {
     "apikey": "apikey",
-    "ai": "AI"
+    "ai": "AI",
+    "kubeconfig": "kubectl",
+    "manual": "Manual"
   },
   "cloneResource": {
     "title": "Clone {{resource}}",

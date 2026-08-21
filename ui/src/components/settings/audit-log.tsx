@@ -41,6 +41,7 @@ export function AuditLog() {
   const [searchQuery, setSearchQuery] = useState('')
   const [operationFilter, setOperationFilter] = useState('')
   const [clusterFilter, setClusterFilter] = useState('')
+  const [sourceFilter, setSourceFilter] = useState('')
   const [selectedHistory, setSelectedHistory] =
     useState<ResourceHistory | null>(null)
   const [isDiffOpen, setIsDiffOpen] = useState(false)
@@ -59,7 +60,11 @@ export function AuditLog() {
     operatorId,
     searchQuery,
     operationFilter || undefined,
-    showCluster ? clusterFilter || undefined : undefined
+    showCluster ? clusterFilter || undefined : undefined,
+    undefined,
+    undefined,
+    undefined,
+    sourceFilter || undefined
   )
 
   useEffect(() => {
@@ -91,6 +96,11 @@ export function AuditLog() {
   const handleClusterChange = useCallback((value: string) => {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }))
     setClusterFilter(value === 'all' ? '' : value)
+  }, [])
+
+  const handleSourceChange = useCallback((value: string) => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    setSourceFilter(value === 'all' ? '' : value)
   }, [])
 
   const getOperationTypeColor = (operationType: string) => {
@@ -151,6 +161,11 @@ export function AuditLog() {
             {row.original.operationSource === 'ai' && (
               <span className="ml-2 text-xs text-muted-foreground italic">
                 {t('auditLog.ai', 'AI')}
+              </span>
+            )}
+            {row.original.operationSource === 'kubeconfig' && (
+              <span className="ml-2 text-xs text-muted-foreground italic">
+                {t('auditLog.kubeconfig', 'kubectl')}
               </span>
             )}
           </div>
@@ -396,6 +411,33 @@ export function AuditLog() {
                 ))}
               </SelectContent>
             </Select>
+            <Select
+              value={sourceFilter || 'all'}
+              onValueChange={handleSourceChange}
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue
+                  placeholder={t(
+                    'common.values.allSources',
+                    'All sources'
+                  )}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t('common.values.allSources', 'All sources')}
+                </SelectItem>
+                <SelectItem value="manual">
+                  {t('auditLog.manual', 'Manual')}
+                </SelectItem>
+                <SelectItem value="ai">
+                  {t('auditLog.ai', 'AI')}
+                </SelectItem>
+                <SelectItem value="kubeconfig">
+                  {t('auditLog.kubeconfig', 'kubectl')}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -411,7 +453,8 @@ export function AuditLog() {
             Boolean(operatorId) ||
             Boolean(searchQuery) ||
             Boolean(operationFilter) ||
-            (showCluster && Boolean(clusterFilter))
+            (showCluster && Boolean(clusterFilter)) ||
+            Boolean(sourceFilter)
           }
           filteredRowCount={filteredRowCount}
           totalRowCount={totalRowCount}

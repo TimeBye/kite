@@ -360,7 +360,8 @@ export const fetchAuditLogs = async (
   cluster?: string,
   resourceType?: string,
   resourceName?: string,
-  namespace?: string
+  namespace?: string,
+  source?: string
 ): Promise<AuditLogResponse> => {
   const params = new URLSearchParams({
     page: String(page),
@@ -387,6 +388,9 @@ export const fetchAuditLogs = async (
   if (namespace) {
     params.set('namespace', namespace)
   }
+  if (source) {
+    params.set('source', source)
+  }
   return fetchAPI<AuditLogResponse>(`/admin/audit-logs?${params.toString()}`)
 }
 
@@ -399,7 +403,8 @@ export const useAuditLogs = (
   cluster?: string,
   resourceType?: string,
   resourceName?: string,
-  namespace?: string
+  namespace?: string,
+  source?: string
 ) => {
   return useQuery<AuditLogResponse, Error>({
     queryKey: [
@@ -413,6 +418,7 @@ export const useAuditLogs = (
       resourceType,
       resourceName,
       namespace,
+      source,
     ],
     queryFn: () =>
       fetchAuditLogs(
@@ -424,7 +430,8 @@ export const useAuditLogs = (
         cluster,
         resourceType,
         resourceName,
-        namespace
+        namespace,
+        source
       ),
     staleTime: 20000,
   })
