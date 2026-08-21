@@ -12,7 +12,13 @@ export interface AuthUser {
   id: string
   username: string
   name: string
+  nameSource?: string
+  email: string
+  emailSource?: string
+  emailVerified: boolean
+  emailVerifiedAt?: string
   avatar_url: string
+  avatarUrlSource?: string
   provider: string
   mfa_enabled?: boolean
   roles?: { name: string }[]
@@ -52,6 +58,14 @@ export const loginWithCredentials = async (
   )
 }
 
+export const completeMFALogin = async (code: string): Promise<void> => {
+  await authApiClient.post<void>(
+    '/auth/mfa/complete',
+    { code },
+    { retryOnUnauthorized: false }
+  )
+}
+
 export const refreshAuthToken = async (): Promise<void> => {
   await authApiClient.post<void>('/auth/refresh', undefined, {
     retryOnUnauthorized: false,
@@ -66,8 +80,21 @@ export const logout = async (): Promise<void> => {
 
 export const updateCurrentUser = async (data: {
   name: string
+  email: string
+  avatar_url: string
+  email_otp?: string
 }): Promise<AuthUser> => {
   return authApiClient.put<AuthUser>('/users/me', data)
+}
+
+export const requestCurrentUserEmailUpdate = async (
+  email: string,
+  currentPassword?: string
+): Promise<void> => {
+  await authApiClient.post<void>('/users/me/email/request', {
+    email,
+    ...(currentPassword ? { current_password: currentPassword } : {}),
+  })
 }
 
 export const changeCurrentUserPassword = async (
@@ -78,6 +105,17 @@ export const changeCurrentUserPassword = async (
     current_password: currentPassword,
     new_password: newPassword,
   })
+}
+
+export type SecurityOTPPurpose =
+  'setup_mfa' | 'enable_mfa' | 'disable_mfa' | 'add_passkey' | 'delete_passkey'
+
+export const requestCurrentUserSecurityOTP = async (
+  purpose: SecurityOTPPurpose
+): Promise<void> => {
+  await authApiClient.post<void>(
+    `/users/me/security-otp/request?purpose=${encodeURIComponent(purpose)}`
+  )
 }
 
 export interface MFASetupResponse {
@@ -95,21 +133,31 @@ export interface PasskeyCredential {
 }
 
 export const setupCurrentUserMFA = async (
-  currentPassword: string
+  emailOTP: string
 ): Promise<MFASetupResponse> => {
   return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', {
-    current_password: currentPassword,
+    email_otp: emailOTP,
   })
 }
 
-export const enableCurrentUserMFA = async (code: string): Promise<AuthUser> => {
-  return authApiClient.post<AuthUser>('/users/me/mfa/enable', { code })
+export const enableCurrentUserMFA = async (
+  code: string,
+  emailOTP: string
+): Promise<AuthUser> => {
+  return authApiClient.post<AuthUser>('/users/me/mfa/enable', {
+    code,
+    email_otp: emailOTP,
+  })
 }
 
 export const disableCurrentUserMFA = async (
-  code: string
+  code: string,
+  emailOTP: string
 ): Promise<AuthUser> => {
-  return authApiClient.post<AuthUser>('/users/me/mfa/disable', { code })
+  return authApiClient.post<AuthUser>('/users/me/mfa/disable', {
+    code,
+    email_otp: emailOTP,
+  })
 }
 
 export const listCurrentUserPasskeys = async (): Promise<
@@ -123,16 +171,11 @@ export const listCurrentUserPasskeys = async (): Promise<
 
 export const beginCurrentUserPasskeyRegistration = async (
   name: string,
-  currentPassword: string,
-  mfaCode?: string
+  emailOTP: string
 ): Promise<WebAuthnCreationOptionsJSON> => {
   return authApiClient.post<WebAuthnCreationOptionsJSON>(
     '/users/me/passkeys/begin',
-    {
-      name,
-      current_password: currentPassword,
-      ...(mfaCode ? { mfa_code: mfaCode } : {}),
-    }
+    { name, email_otp: emailOTP }
   )
 }
 
@@ -145,8 +188,14 @@ export const finishCurrentUserPasskeyRegistration = async (
   )
 }
 
-export const deleteCurrentUserPasskey = async (id: number): Promise<void> => {
-  await authApiClient.delete<void>(`/users/me/passkeys/${id}`)
+export const deleteCurrentUserPasskey = async (
+  id: number,
+  emailOTP: string
+): Promise<void> => {
+  await authApiClient.request(`/users/me/passkeys/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ email_otp: emailOTP }),
+  })
 }
 
 export const beginPasskeyLogin =

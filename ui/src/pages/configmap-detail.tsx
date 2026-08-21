@@ -28,7 +28,7 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
 
   const handleSaveYaml = async (content: ConfigMap) => {
     await updateResource('configmaps', name, namespace, content)
-    toast.success('YAML saved successfully')
+    toast.success(t('common.messages.yamlSaved'))
     await refetch()
   }
 
@@ -38,7 +38,7 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
         value: 'data',
         label: (
           <>
-            Data
+            {t('common.fields.data')}
             {totalCount > 0 ? (
               <Badge variant="secondary">{totalCount}</Badge>
             ) : null}
@@ -49,13 +49,13 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
             {dataCount > 0 && (
               <KeyValueDataViewer
                 entries={data.data!}
-                emptyMessage="No data entries"
+                emptyMessage={t('common.messages.noData')}
               />
             )}
             {binaryDataCount > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Binary Data
+                  {t('common.fields.binaryData')}
                 </p>
                 <KeyValueDataViewer
                   entries={Object.fromEntries(
@@ -63,7 +63,7 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
                       ([key, value]) => [key, atob(value)]
                     )
                   )}
-                  emptyMessage="No binary data entries"
+                  emptyMessage={t('common.messages.noData')}
                 />
               </div>
             )}
@@ -71,13 +71,13 @@ export function ConfigMapDetail(props: { namespace: string; name: string }) {
         ) : null,
       },
     ],
-    [binaryDataCount, data, dataCount, totalCount]
+    [binaryDataCount, data, dataCount, t, totalCount]
   )
 
   return (
     <ResourceDetailShell
       resourceType="configmaps"
-      resourceLabel="ConfigMap"
+      resourceLabel={t('common.fields.configMap', 'ConfigMap')}
       name={name}
       namespace={namespace}
       data={data}

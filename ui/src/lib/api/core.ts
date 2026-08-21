@@ -27,6 +27,7 @@ import {
 } from '@/types/api'
 import { getResourceQueryKey } from '@/lib/resource-metadata'
 import { useCluster } from '@/hooks/use-cluster'
+import i18n from '@/i18n'
 
 import { API_BASE_URL, apiClient } from '../api-client'
 import {
@@ -800,9 +801,9 @@ export function useResourcesWatch<T extends ResourceType>(
       es.addEventListener('error', (e: MessageEvent) => {
         try {
           const payload = JSON.parse(e.data)
-          setError(new Error(payload?.error || 'SSE error'))
+          setError(new Error(payload?.error || i18n.t('errors.sseError', 'SSE error')))
         } catch {
-          setError(new Error('SSE error'))
+          setError(new Error(i18n.t('errors.sseError', 'SSE error')))
         }
         setIsLoading(false)
         setIsConnected(false)
@@ -975,7 +976,9 @@ export const podUploadFile = async (
 }
 
 export const fetchTemplates = async (): Promise<ResourceTemplate[]> => {
-  return fetchAPI<ResourceTemplate[]>('/templates/')
+  return fetchAPI<{ data: ResourceTemplate[]; total: number; page: number; size: number }>(
+    '/templates/?page=1&size=200'
+  ).then((response) => response.data)
 }
 
 export const createTemplate = async (
@@ -1000,6 +1003,24 @@ export const useTemplates = (options?: { staleTime?: number }) => {
     queryKey: ['templates'],
     queryFn: fetchTemplates,
     staleTime: options?.staleTime || 30000,
+  })
+}
+
+// Paginated template list for management table
+export const fetchTemplatesPaginated = async (
+  page: number,
+  size: number
+): Promise<{ data: ResourceTemplate[]; total: number; page: number; size: number }> => {
+  return fetchAPI<{ data: ResourceTemplate[]; total: number; page: number; size: number }>(
+    `/templates/?page=${page}&size=${size}`
+  )
+}
+
+export const useTemplatesPaginated = (page: number, size: number) => {
+  return useQuery({
+    queryKey: ['templates-paginated', page, size],
+    queryFn: () => fetchTemplatesPaginated(page, size),
+    staleTime: 30000,
   })
 }
 export async function getImageTags(image: string): Promise<ImageTagInfo[]> {

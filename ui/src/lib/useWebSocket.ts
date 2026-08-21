@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import i18n from '@/i18n'
+
 export interface WebSocketOptions {
   enabled?: boolean
   speedUpdateInterval?: number
@@ -264,7 +266,7 @@ export function useWebSocket(
         if (!isMountedRef.current) return
 
         console.error('WebSocket error:', event)
-        const wsError = new Error('WebSocket connection error')
+        const wsError = new Error(i18n.t('errors.websocketConnection', 'WebSocket connection error'))
         setError(wsError)
         setIsConnecting(false)
         callbacksRef.current.onError?.(event)

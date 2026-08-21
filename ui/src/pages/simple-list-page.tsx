@@ -72,7 +72,7 @@ export function SimpleListPage<T extends keyof ResourceTypeMap>({
   }, [])
 
   if (!resourceType) {
-    return <div>Resource type "{resourceType}" not found</div>
+    return <div>{t('common.messages.resourceNotFound', { resource: resourceType })}</div>
   }
 
   return (

@@ -79,7 +79,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
 
   const handleSaveYaml = async (content: DaemonSet) => {
     await updateResource('daemonsets', name, namespace, content)
-    toast.success('DaemonSet YAML saved successfully')
+    toast.success(t('common.messages.yamlSaved'))
     setRefreshInterval(1000)
     await refetch()
   }
@@ -95,7 +95,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
         'kite.kubernetes.io/restartedAt'
       ] = new Date().toISOString()
       await updateResource('daemonsets', name, namespace, updated)
-      toast.success('DaemonSet restart initiated')
+      toast.success(t('detail.status.restartInitiated', { resource: t('common.fields.daemonSet', 'DaemonSet') }))
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
@@ -316,7 +316,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
   return (
     <ResourceDetailShell
       resourceType="daemonsets"
-      resourceLabel="DaemonSet"
+      resourceLabel={t('common.fields.daemonSet', 'DaemonSet')}
       name={name}
       namespace={namespace}
       data={daemonset}
@@ -345,16 +345,15 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm">
               <IconReload className="w-4 h-4" />
-              Restart
+              {t('common.actions.restart')}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80" align="end">
             <div className="space-y-4">
               <div className="space-y-2">
-                <h4 className="font-medium">Restart DaemonSet</h4>
+                <h4 className="font-medium">{t('detail.dialogs.restartDaemonSet.title')}</h4>
                 <p className="text-sm text-muted-foreground">
-                  This will restart all pods managed by this DaemonSet. This
-                  action cannot be undone.
+                  {t('detail.dialogs.restartDaemonSet.description')}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -363,7 +362,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
                   onClick={() => setIsRestartPopoverOpen(false)}
                   className="flex-1"
                 >
-                  Cancel
+                  {t('common.actions.cancel')}
                 </Button>
                 <Button
                   onClick={() => {
@@ -373,7 +372,7 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
                   className="flex-1"
                 >
                   <IconReload className="w-4 h-4 mr-2" />
-                  Restart
+                  {t('common.actions.restart')}
                 </Button>
               </div>
             </div>

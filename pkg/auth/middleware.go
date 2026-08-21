@@ -101,6 +101,11 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 				return
 			}
 		}
+		if claims.MFAPending {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_required"})
+			c.Abort()
+			return
+		}
 		user, err := model.GetUserByIDCached(uint64(claims.UserID))
 		if err != nil || !user.Enabled {
 			c.JSON(http.StatusUnauthorized, gin.H{

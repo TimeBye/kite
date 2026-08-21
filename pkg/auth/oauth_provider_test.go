@@ -49,6 +49,9 @@ func TestNewGenericProviderAndAuthURL(t *testing.T) {
 	if provider.Config.Scopes != "openid profile email" {
 		t.Fatalf("provider.Config.Scopes = %q, want %q", provider.Config.Scopes, "openid profile email")
 	}
+	if provider.UsernameClaim != nil || provider.NameClaim != nil || provider.EmailClaim != nil || provider.AvatarURLClaim != nil || provider.GroupsClaim != nil {
+		t.Fatalf("empty claims should disable synchronization, got %#v", provider)
+	}
 
 	authURL := provider.GetAuthURL("state-value")
 	parsed, err := url.Parse(authURL)

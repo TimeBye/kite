@@ -111,7 +111,7 @@ export function ServiceDetail(props: { name: string; namespace?: string }) {
   return (
     <ResourceDetailShell
       resourceType="services"
-      resourceLabel="Service"
+      resourceLabel={t('common.fields.service', 'Service')}
       name={name}
       namespace={namespace}
       data={data}

@@ -766,7 +766,7 @@ export function UserManagement() {
         onOpenChange={() => setDeletingUser(null)}
         onConfirm={handleDelete}
         resourceName={deletingUser?.username || ''}
-        resourceType="user"
+        resourceType={t('common.fields.user')}
       />
     </div>
   )

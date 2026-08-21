@@ -1,15 +1,19 @@
 package users
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"net/mail"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/mfa"
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/passkey"
 	"github.com/zxh326/kite/pkg/rbac"
+	"github.com/zxh326/kite/pkg/settings"
 	"k8s.io/klog/v2"
 )
 
@@ -66,6 +70,9 @@ func ListUsers(c *gin.Context) {
 		_, _ = fmt.Sscanf(s, "%d", &size)
 		if size <= 0 {
 			size = 20
+		}
+		if size > 200 {
+			size = 200
 		}
 	}
 	offset := (page - 1) * size
@@ -125,13 +132,11 @@ func UpdateUser(c *gin.Context) {
 
 func UpdateCurrentUser(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "account settings are only available for password users"})
-		return
-	}
-
 	var req struct {
-		Name string `json:"name"`
+		Name      string `json:"name"`
+		Email     string `json:"email"`
+		AvatarURL string `json:"avatar_url"`
+		EmailOTP  string `json:"email_otp"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -139,12 +144,82 @@ func UpdateCurrentUser(c *gin.Context) {
 	}
 
 	name := strings.TrimSpace(req.Name)
-	if err := model.UpdateUserName(user.ID, name); err != nil {
+	email := strings.TrimSpace(req.Email)
+	avatarURL := strings.TrimSpace(req.AvatarURL)
+	if (user.NameSource != "" && name != user.Name) || (user.EmailSource != "" && email != user.Email) || (user.AvatarURLSource != "" && avatarURL != user.AvatarURL) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "profile field is managed by the authentication provider"})
+		return
+	}
+	if email != user.Email {
+		verified, err := model.ConsumeEmailOTP(user.ID, email, model.EmailOTPEmailChange, strings.TrimSpace(req.EmailOTP), time.Now())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email verification code"})
+			return
+		}
+		if !verified {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired email verification code"})
+			return
+		}
+		if err := model.UpdateUserEmail(user.ID, email); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update email"})
+			return
+		}
+		user.Email = email
+	}
+	if err := model.UpdateUserProfile(user.ID, name, user.Email, avatarURL); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user"})
 		return
 	}
 	user.Name = name
+	user.AvatarURL = avatarURL
 	c.JSON(http.StatusOK, user)
+}
+
+func RequestCurrentUserEmailUpdate(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
+	if user.EmailSource != "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "email is managed by the authentication provider"})
+		return
+	}
+	var req struct {
+		Email           string `json:"email" binding:"required"`
+		CurrentPassword string `json:"current_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	email := strings.TrimSpace(req.Email)
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Address != email {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email must be a valid email address"})
+		return
+	}
+	if user.Provider == "" || user.Provider == model.AuthProviderPassword {
+		if !model.CheckPassword(user.Password, req.CurrentPassword) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			return
+		}
+	}
+	code, err := model.CreateEmailOTP(user.ID, email, model.EmailOTPEmailChange, time.Now().Add(10*time.Minute))
+	if errors.Is(err, model.ErrEmailOTPTooFrequent) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "please wait before requesting another email verification code"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification code"})
+		return
+	}
+	if err := settings.SendEmailOTP(c.Request.Context(), email, code); err != nil {
+		_ = model.DeleteEmailOTP(user.ID, email, model.EmailOTPEmailChange)
+		if errors.Is(err, settings.ErrSMTPNotEnabled) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SMTP is not configured. Please contact the administrator."})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to send email verification code"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
 func ChangeCurrentUserPassword(c *gin.Context) {
@@ -173,28 +248,81 @@ func ChangeCurrentUserPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-func SetupCurrentUserMFA(c *gin.Context) {
+func RequestCurrentUserSecurityOTP(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
+	if strings.TrimSpace(user.Email) == "" || !user.EmailVerified {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a verified email is required for security changes"})
 		return
 	}
+	purpose := strings.TrimSpace(c.Query("purpose"))
+	if !isSecurityOTPPurpose(purpose) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email verification purpose"})
+		return
+	}
+	code, err := model.CreateEmailOTP(user.ID, user.Email, purpose, time.Now().Add(10*time.Minute))
+	if errors.Is(err, model.ErrEmailOTPTooFrequent) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "please wait before requesting another email verification code"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create email verification code"})
+		return
+	}
+	if err := settings.SendEmailOTP(c.Request.Context(), user.Email, code); err != nil {
+		_ = model.DeleteEmailOTP(user.ID, user.Email, purpose)
+		if errors.Is(err, settings.ErrSMTPNotEnabled) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "SMTP is not configured. Please contact the administrator."})
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to send email verification code"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func consumeCurrentUserSecurityOTP(c *gin.Context, user model.User, purpose, code string) bool {
+	if strings.TrimSpace(user.Email) == "" || !user.EmailVerified {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a verified email is required for security changes"})
+		return false
+	}
+	verified, err := model.ConsumeEmailOTP(user.ID, user.Email, purpose, strings.TrimSpace(code), time.Now())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify email verification code"})
+		return false
+	}
+	if !verified {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired email verification code"})
+		return false
+	}
+	return true
+}
+
+func isSecurityOTPPurpose(purpose string) bool {
+	switch purpose {
+	case model.EmailOTPSetupMFA, model.EmailOTPEnableMFA, model.EmailOTPDisableMFA, model.EmailOTPAddPasskey, model.EmailOTPDeletePasskey:
+		return true
+	default:
+		return false
+	}
+}
+
+func SetupCurrentUserMFA(c *gin.Context) {
+	user := c.MustGet("user").(model.User)
 	if !ensureMFAEnabled(c) {
 		return
 	}
 	var req struct {
-		CurrentPassword string `json:"current_password" binding:"required"`
+		EmailOTP string `json:"email_otp" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !model.CheckPassword(user.Password, req.CurrentPassword) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
-		return
-	}
 	if user.MFAEnabled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is already enabled"})
+		return
+	}
+	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPSetupMFA, req.EmailOTP) {
 		return
 	}
 
@@ -223,16 +351,13 @@ func SetupCurrentUserMFA(c *gin.Context) {
 
 func EnableCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
-		return
-	}
 	if !ensureMFAEnabled(c) {
 		return
 	}
 
 	var req struct {
-		Code string `json:"code" binding:"required"`
+		Code     string `json:"code" binding:"required"`
+		EmailOTP string `json:"email_otp" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -240,6 +365,9 @@ func EnableCurrentUserMFA(c *gin.Context) {
 	}
 	if strings.TrimSpace(string(user.MFASecret)) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa setup is not started"})
+		return
+	}
+	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPEnableMFA, req.EmailOTP) {
 		return
 	}
 	if !mfa.Verify(string(user.MFASecret), req.Code) {
@@ -257,16 +385,13 @@ func EnableCurrentUserMFA(c *gin.Context) {
 
 func DisableCurrentUserMFA(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "mfa is only available for password users"})
-		return
-	}
 	if !ensureMFAEnabled(c) {
 		return
 	}
 
 	var req struct {
-		Code string `json:"code" binding:"required"`
+		Code     string `json:"code" binding:"required"`
+		EmailOTP string `json:"email_otp" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -274,6 +399,9 @@ func DisableCurrentUserMFA(c *gin.Context) {
 	}
 	if !user.MFAEnabled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "mfa is not enabled"})
+		return
+	}
+	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPDisableMFA, req.EmailOTP) {
 		return
 	}
 	if !mfa.Verify(string(user.MFASecret), req.Code) {
@@ -292,10 +420,6 @@ func DisableCurrentUserMFA(c *gin.Context) {
 
 func ListCurrentUserPasskeys(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
 	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
@@ -309,29 +433,19 @@ func ListCurrentUserPasskeys(c *gin.Context) {
 
 func BeginCurrentUserPasskeyRegistration(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
 	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
 
 	var req struct {
-		Name            string `json:"name"`
-		CurrentPassword string `json:"current_password" binding:"required"`
-		MFACode         string `json:"mfa_code"`
+		Name     string `json:"name"`
+		EmailOTP string `json:"email_otp" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !model.CheckPassword(user.Password, req.CurrentPassword) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
-		return
-	}
-	if user.MFAEnabled && !mfa.Verify(string(user.MFASecret), req.MFACode) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mfa code"})
+	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPAddPasskey, req.EmailOTP) {
 		return
 	}
 
@@ -345,10 +459,6 @@ func BeginCurrentUserPasskeyRegistration(c *gin.Context) {
 
 func FinishCurrentUserPasskeyRegistration(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
-		return
-	}
 	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
@@ -363,17 +473,25 @@ func FinishCurrentUserPasskeyRegistration(c *gin.Context) {
 
 func DeleteCurrentUserPasskey(c *gin.Context) {
 	user := c.MustGet("user").(model.User)
-	if user.Provider != "" && user.Provider != model.AuthProviderPassword {
-		c.JSON(http.StatusForbidden, gin.H{"error": "passkeys are only available for password users"})
+	if !ensurePasskeyLoginEnabled(c) {
 		return
 	}
-	if !ensurePasskeyLoginEnabled(c) {
+
+	var req struct {
+		EmailOTP string `json:"email_otp" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	var id uint
 	if _, err := fmt.Sscanf(c.Param("id"), "%d", &id); err != nil || id == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	if !consumeCurrentUserSecurityOTP(c, user, model.EmailOTPDeletePasskey, req.EmailOTP) {
 		return
 	}
 

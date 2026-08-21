@@ -2,6 +2,8 @@
 import { appendCurrentClusterHeader } from './current-cluster'
 import { withSubPath } from './subpath'
 
+import i18n from '@/i18n'
+
 export interface ApiRequestOptions extends RequestInit {
   retryOnUnauthorized?: boolean
 }
@@ -71,7 +73,7 @@ class ApiClient {
         } catch (refreshError) {
           console.error('Token refresh failed:', refreshError)
           window.location.href = withSubPath('/login')
-          throw new Error('Authentication failed', { cause: refreshError })
+          throw new Error(i18n.t('errors.authenticationFailed', 'Authentication failed'), { cause: refreshError })
         }
       }
 

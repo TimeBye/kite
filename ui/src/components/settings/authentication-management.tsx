@@ -9,6 +9,7 @@ import {
   LDAPSettingUpdateRequest,
   updateGeneralSetting,
   updateLDAPSetting,
+  useBootstrap,
   useGeneralSetting,
   useLDAPSetting,
 } from '@/lib/api'
@@ -35,6 +36,8 @@ function createDefaultSettings(): AuthenticationFormData {
     userFilter: '',
     usernameAttribute: '',
     displayNameAttribute: '',
+    emailAttribute: '',
+    avatarUrlAttribute: '',
     groupBaseDn: '',
     groupFilter: '',
     groupNameAttribute: '',
@@ -57,6 +60,8 @@ function toFormData(data?: LDAPSetting): AuthenticationFormData {
     userFilter: data.userFilter || '',
     usernameAttribute: data.usernameAttribute || '',
     displayNameAttribute: data.displayNameAttribute || '',
+    emailAttribute: data.emailAttribute || '',
+    avatarUrlAttribute: data.avatarUrlAttribute || '',
     groupBaseDn: data.groupBaseDn || '',
     groupFilter: data.groupFilter || '',
     groupNameAttribute: data.groupNameAttribute || '',
@@ -67,7 +72,10 @@ export function AuthenticationManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { data, error, isError, isLoading, refetch } = useLDAPSetting()
+  const { data: bootstrap } = useBootstrap()
   const { data: generalSetting } = useGeneralSetting()
+  const oauthManaged = bootstrap?.managedSections?.oauth ?? false
+  const ldapManaged = bootstrap?.managedSections?.ldap ?? false
   const [formData, setFormData] = useState<AuthenticationFormData>(
     createDefaultSettings
   )
@@ -144,6 +152,8 @@ export function AuthenticationManagement() {
       userFilter: formData.userFilter.trim(),
       usernameAttribute: formData.usernameAttribute.trim(),
       displayNameAttribute: formData.displayNameAttribute.trim(),
+      emailAttribute: formData.emailAttribute.trim(),
+      avatarUrlAttribute: formData.avatarUrlAttribute.trim(),
       groupBaseDn: formData.groupBaseDn.trim(),
       groupFilter: formData.groupFilter.trim(),
       groupNameAttribute: formData.groupNameAttribute.trim(),
@@ -298,7 +308,17 @@ export function AuthenticationManagement() {
         </CardContent>
       </Card>
 
-      <OAuthProviderManagement />
+      <div className="space-y-3">
+        {oauthManaged && (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'authenticationManagement.managed',
+              'Managed by configuration file and cannot be modified here.'
+            )}
+          </p>
+        )}
+        <OAuthProviderManagement readOnly={oauthManaged} />
+      </div>
 
       <Card>
         <CardHeader>
@@ -309,11 +329,20 @@ export function AuthenticationManagement() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="rounded-lg border">
-            <div className="flex items-center justify-between p-3">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">
-                  {t('authenticationManagement.ldap.title', 'LDAP')}
+          {ldapManaged && (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'authenticationManagement.managed',
+                'Managed by configuration file and cannot be modified here.'
+              )}
+            </p>
+          )}
+          <fieldset disabled={ldapManaged} className="min-w-0">
+            <div className="rounded-lg border">
+              <div className="flex items-center justify-between p-3">
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">
+                    {t('authenticationManagement.ldap.title', 'LDAP')}
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   {t(
@@ -323,6 +352,7 @@ export function AuthenticationManagement() {
                 </p>
               </div>
               <Switch
+                disabled={ldapManaged}
                 checked={formData.enabled}
                 onCheckedChange={(checked) =>
                   setFormData((prev) => ({ ...prev, enabled: checked }))
@@ -508,6 +538,44 @@ export function AuthenticationManagement() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="ldap-email-attribute">
+                      {t(
+                        'authenticationManagement.ldap.form.emailAttribute',
+                        'Email Attribute'
+                      )}
+                    </Label>
+                    <Input
+                      id="ldap-email-attribute"
+                      value={formData.emailAttribute}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          emailAttribute: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="ldap-avatar-url-attribute">
+                      {t(
+                        'authenticationManagement.ldap.form.avatarUrlAttribute',
+                        'Avatar URL Attribute'
+                      )}
+                    </Label>
+                    <Input
+                      id="ldap-avatar-url-attribute"
+                      value={formData.avatarUrlAttribute}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          avatarUrlAttribute: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="ldap-group-base-dn">
                       {t(
                         'authenticationManagement.ldap.form.groupBaseDn',
@@ -567,12 +635,13 @@ export function AuthenticationManagement() {
                 </div>
               </div>
             )}
-          </div>
+            </div>
+          </fieldset>
 
           <div className="flex justify-end">
             <Button
               onClick={handleSave}
-              disabled={mutation.isPending || !generalSetting}
+              disabled={ldapManaged || mutation.isPending || !generalSetting}
             >
               {t('common.actions.save', 'Save')}
             </Button>

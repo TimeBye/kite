@@ -145,12 +145,12 @@ export function AuditLog() {
             {row.original.operator?.username || '-'}
             {row.original.operator?.provider === 'api_key' && (
               <span className="ml-2 text-xs text-muted-foreground italic">
-                apikey
+                {t('auditLog.apikey', 'apikey')}
               </span>
             )}
             {row.original.operationSource === 'ai' && (
               <span className="ml-2 text-xs text-muted-foreground italic">
-                AI
+                {t('auditLog.ai', 'AI')}
               </span>
             )}
           </div>

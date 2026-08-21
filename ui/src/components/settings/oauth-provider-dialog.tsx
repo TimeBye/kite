@@ -23,6 +23,7 @@ interface OAuthProviderDialogProps {
   onOpenChange: (open: boolean) => void
   provider?: OAuthProvider | null
   onSubmit: (providerData: OAuthProviderCreateRequest) => void
+  loading?: boolean
 }
 
 function createOAuthProviderFormData(provider?: OAuthProvider | null) {
@@ -35,8 +36,11 @@ function createOAuthProviderFormData(provider?: OAuthProvider | null) {
     userInfoUrl: provider?.userInfoUrl || '',
     scopes: provider?.scopes || 'openid,profile,email',
     issuer: provider?.issuer || '',
-    usernameClaim: provider?.usernameClaim || '',
-    groupsClaim: provider?.groupsClaim || '',
+    usernameClaim: provider?.usernameClaim ?? '',
+    nameClaim: provider?.nameClaim ?? '',
+    emailClaim: provider?.emailClaim ?? '',
+    avatarUrlClaim: provider?.avatarUrlClaim ?? '',
+    groupsClaim: provider?.groupsClaim ?? '',
     allowedGroups: provider?.allowedGroups || '',
     enabled: provider?.enabled ?? true,
   }
@@ -47,6 +51,7 @@ export function OAuthProviderDialog({
   onOpenChange,
   provider,
   onSubmit,
+  loading,
 }: OAuthProviderDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -56,6 +61,7 @@ export function OAuthProviderDialog({
           provider={provider}
           onOpenChange={onOpenChange}
           onSubmit={onSubmit}
+          loading={loading}
         />
       ) : null}
     </Dialog>
@@ -66,6 +72,7 @@ function OAuthProviderDialogContent({
   provider,
   onOpenChange,
   onSubmit,
+  loading,
 }: Omit<OAuthProviderDialogProps, 'open'>) {
   const { t } = useTranslation()
   const isEditMode = !!provider
@@ -116,11 +123,12 @@ function OAuthProviderDialogContent({
     if (formData.userInfoUrl) submitData.userInfoUrl = formData.userInfoUrl
     if (formData.scopes) submitData.scopes = formData.scopes
     if (formData.issuer) submitData.issuer = formData.issuer
-    if (formData.usernameClaim)
-      submitData.usernameClaim = formData.usernameClaim
-    if (formData.groupsClaim) submitData.groupsClaim = formData.groupsClaim
-    if (formData.allowedGroups)
-      submitData.allowedGroups = formData.allowedGroups
+    submitData.usernameClaim = formData.usernameClaim
+    submitData.nameClaim = formData.nameClaim
+    submitData.emailClaim = formData.emailClaim
+    submitData.avatarUrlClaim = formData.avatarUrlClaim
+    submitData.groupsClaim = formData.groupsClaim
+    submitData.allowedGroups = formData.allowedGroups
 
     onSubmit(submitData)
   }
@@ -135,6 +143,22 @@ function OAuthProviderDialogContent({
       if (validationError) {
         setValidationError('')
       }
+    }
+
+  const handleClaimChange =
+    (
+      field:
+        | 'usernameClaim'
+        | 'nameClaim'
+        | 'emailClaim'
+        | 'avatarUrlClaim'
+        | 'groupsClaim'
+    ) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setFormData((prev) => ({
+        ...prev,
+        [field]: e.target.value,
+      }))
     }
 
   const handleSwitchChange =
@@ -326,11 +350,41 @@ function OAuthProviderDialogContent({
               <Input
                 id="usernameClaim"
                 value={formData.usernameClaim}
-                onChange={handleInputChange('usernameClaim')}
+                onChange={handleClaimChange('usernameClaim')}
                 placeholder={t(
                   'common.placeholders.usernameClaim',
                   'e.g., preferred_username'
                 )}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="nameClaim">
+                {t('common.fields.nameClaim', 'Name Claim')}
+              </Label>
+              <Input
+                id="nameClaim"
+                value={formData.nameClaim}
+                onChange={handleClaimChange('nameClaim')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="emailClaim">
+                {t('common.fields.emailClaim', 'Email Claim')}
+              </Label>
+              <Input
+                id="emailClaim"
+                value={formData.emailClaim}
+                onChange={handleClaimChange('emailClaim')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="avatarUrlClaim">
+                {t('common.fields.avatarUrlClaim', 'Avatar URL Claim')}
+              </Label>
+              <Input
+                id="avatarUrlClaim"
+                value={formData.avatarUrlClaim}
+                onChange={handleClaimChange('avatarUrlClaim')}
               />
             </div>
             <div className="space-y-2">
@@ -340,7 +394,7 @@ function OAuthProviderDialogContent({
               <Input
                 id="groupsClaim"
                 value={formData.groupsClaim}
-                onChange={handleInputChange('groupsClaim')}
+                onChange={handleClaimChange('groupsClaim')}
                 placeholder={t(
                   'common.placeholders.groupsClaim',
                   'e.g., memberOf'
@@ -393,10 +447,12 @@ function OAuthProviderDialogContent({
           >
             {t('common.actions.cancel', 'Cancel')}
           </Button>
-          <Button type="submit">
-            {isEditMode
-              ? t('common.actions.update', 'Update')
-              : t('common.actions.create', 'Create')}
+          <Button type="submit" disabled={loading}>
+            {loading
+              ? t('common.actions.saving', 'Saving...')
+              : isEditMode
+                ? t('common.actions.update', 'Update')
+                : t('common.actions.create', 'Create')}
           </Button>
         </DialogFooter>
       </form>

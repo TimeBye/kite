@@ -48,15 +48,15 @@ func TestAPIKeyLifecycleControlsAuthentication(t *testing.T) {
 		t.Fatalf("list status = %d, want %d: %s", listResponse.Code, http.StatusOK, listResponse.Body.String())
 	}
 	var listed struct {
-		APIKeys []model.User `json:"apiKeys"`
+		Data []model.User `json:"data"`
 	}
 	if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decoding list response: %v", err)
 	}
-	if len(listed.APIKeys) != 1 || listed.APIKeys[0].ID != created.APIKey.ID {
-		t.Fatalf("listed API keys = %#v", listed.APIKeys)
+	if len(listed.Data) != 1 || listed.Data[0].ID != created.APIKey.ID {
+		t.Fatalf("listed API keys = %#v", listed.Data)
 	}
-	fullKey := string(listed.APIKeys[0].APIKey)
+	fullKey := string(listed.Data[0].APIKey)
 	wantPrefix := fmt.Sprintf("kite%d-", created.APIKey.ID)
 	if !strings.HasPrefix(fullKey, wantPrefix) || !strings.HasSuffix(fullKey, string(created.APIKey.APIKey)) {
 		t.Fatalf("listed API key = %q, want prefix %q and created secret", fullKey, wantPrefix)

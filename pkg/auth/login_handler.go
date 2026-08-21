@@ -131,8 +131,12 @@ func (h *AuthHandler) PasskeyLoginFinish(c *gin.Context) {
 		return
 	}
 	user, err := passkey.FinishLogin(c)
-	if err != nil {
+	if err != nil || user == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid passkey"})
+		return
+	}
+	if user.MFAEnabled {
+		h.completeMFAPendingLogin(c, user, "")
 		return
 	}
 	h.completePasswordLikeLogin(c, user)
@@ -171,7 +175,7 @@ func (h *AuthHandler) handleCredentialLogin(c *gin.Context, provider string, aut
 		return
 	}
 
-	if provider == model.AuthProviderPassword && user.MFAEnabled {
+	if user.MFAEnabled {
 		if strings.TrimSpace(req.MFACode) == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_required"})
 			return
@@ -200,7 +204,58 @@ func shouldRecordCredentialLoginFailure(provider string, err error) bool {
 	}
 }
 
-func (h *AuthHandler) completePasswordLikeLogin(c *gin.Context, user *model.User) {
+func (h *AuthHandler) completeMFAPendingLogin(c *gin.Context, user *model.User, refreshToken string) {
+	jwtToken, err := h.manager.GenerateMFAPendingJWT(user, refreshToken)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate MFA session"})
+		return
+	}
+	setCookieSecure(c, "auth_token", jwtToken, common.CookieExpirationSeconds)
+	c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_required"})
+}
+
+func (h *AuthHandler) CompleteMFALogin(c *gin.Context) {
+	tokenString, _ := c.Cookie("auth_token")
+	claims, err := h.manager.ValidateJWT(tokenString)
+	if err != nil || !claims.MFAPending {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "mfa_required"})
+		return
+	}
+	user, err := model.GetUserByID(uint64(claims.UserID))
+	if err != nil || !user.Enabled {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+		return
+	}
+
+	clientIP := c.ClientIP()
+	if credentialLoginAttempts.isBlocked(clientIP) {
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error": tooManyCredentialLoginAttemptsError,
+		})
+		return
+	}
+
+	var req struct {
+		Code string `json:"code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+	if !mfa.Verify(string(user.MFASecret), req.Code) {
+		if credentialLoginAttempts.recordFailure(clientIP) {
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error": tooManyCredentialLoginAttemptsError,
+			})
+			return
+		}
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_mfa_code"})
+		return
+	}
+	h.completePasswordLikeLogin(c, user, claims.RefreshToken)
+}
+
+func (h *AuthHandler) completePasswordLikeLogin(c *gin.Context, user *model.User, refreshTokens ...string) {
 	if !user.Enabled {
 		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 		return
@@ -217,7 +272,11 @@ func (h *AuthHandler) completePasswordLikeLogin(c *gin.Context, user *model.User
 		return
 	}
 
-	jwtToken, err := h.manager.GenerateJWT(user, "")
+	refreshToken := ""
+	if len(refreshTokens) > 0 {
+		refreshToken = refreshTokens[0]
+	}
+	jwtToken, err := h.manager.GenerateJWT(user, refreshToken)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate JWT"})
 		return
@@ -337,7 +396,7 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 		return
 	}
 	klog.V(1).Infof("OAuth Callback - User details: Username=%s, Name=%s, Sub=%s, Email=%s, OIDCGroups=%v",
-		user.Username, user.Name, user.Sub, user.Username, user.OIDCGroups)
+		user.Username, user.Name, user.Sub, user.Email, user.OIDCGroups)
 	role := rbac.GetUserRoles(*user)
 	if len(role) == 0 {
 		klog.Warningf("OAuth Callback - Access denied for user: %s (provider: %s), Username: %s, Name: %s, Sub: %s, OIDCGroups: %v",
@@ -347,6 +406,17 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 	}
 	if !user.Enabled {
 		c.Redirect(http.StatusFound, base+"/login?error=user_disabled&reason=user_disabled")
+		return
+	}
+
+	if user.MFAEnabled {
+		jwtToken, err := h.manager.GenerateMFAPendingJWT(user, tokenResp.RefreshToken)
+		if err != nil {
+			c.Redirect(http.StatusFound, base+"/login?error=jwt_generation_failed&reason=jwt_generation_failed&user="+user.Key()+"&provider="+provider)
+			return
+		}
+		setCookieSecure(c, "auth_token", jwtToken, common.CookieExpirationSeconds)
+		c.Redirect(http.StatusFound, base+"/login?mfa_required=1")
 		return
 	}
 

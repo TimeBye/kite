@@ -29,7 +29,9 @@ export interface ClusterUpdateRequest extends ClusterCreateRequest {
 
 // Get cluster list for management
 export const fetchClusterList = (): Promise<Cluster[]> => {
-  return fetchAPI<Cluster[]>('/admin/clusters/')
+  return fetchAPI<{ data: Cluster[]; total: number; page: number; size: number }>(
+    '/admin/clusters/?page=1&size=200'
+  ).then((response) => response.data)
 }
 
 export const useClusterList = (options?: {
@@ -40,6 +42,29 @@ export const useClusterList = (options?: {
     queryKey: ['cluster-list'],
     queryFn: fetchClusterList,
     staleTime: options?.staleTime ?? 30000, // 30 seconds cache
+    refetchInterval: options?.refetchInterval,
+  })
+}
+
+// Paginated cluster list for management table
+export const fetchClusterListPaginated = async (
+  page: number,
+  size: number
+): Promise<{ data: Cluster[]; total: number; page: number; size: number }> => {
+  return fetchAPI<{ data: Cluster[]; total: number; page: number; size: number }>(
+    `/admin/clusters/?page=${page}&size=${size}`
+  )
+}
+
+export const useClusterListPaginated = (
+  page: number,
+  size: number,
+  options?: { refetchInterval?: number | false }
+) => {
+  return useQuery({
+    queryKey: ['cluster-list-paginated', page, size],
+    queryFn: () => fetchClusterListPaginated(page, size),
+    staleTime: 30000,
     refetchInterval: options?.refetchInterval,
   })
 }
@@ -93,8 +118,11 @@ export interface OAuthProviderCreateRequest {
   userInfoUrl?: string
   scopes?: string
   issuer?: string
-  usernameClaim?: string
-  groupsClaim?: string
+  usernameClaim?: string | null
+  nameClaim?: string | null
+  emailClaim?: string | null
+  avatarUrlClaim?: string | null
+  groupsClaim?: string | null
   allowedGroups?: string
   enabled?: boolean
 }
@@ -108,9 +136,9 @@ export interface OAuthProviderUpdateRequest extends Omit<
 
 // Get OAuth provider list for management
 export const fetchOAuthProviderList = (): Promise<OAuthProvider[]> => {
-  return fetchAPI<{ providers: OAuthProvider[] }>(
-    '/admin/oauth-providers/'
-  ).then((response) => response.providers)
+  return fetchAPI<{ data: OAuthProvider[]; total: number; page: number; size: number }>(
+    '/admin/oauth-providers/?page=1&size=200'
+  ).then((response) => response.data)
 }
 
 export const useOAuthProviderList = (options?: { staleTime?: number }) => {
@@ -118,6 +146,31 @@ export const useOAuthProviderList = (options?: { staleTime?: number }) => {
     queryKey: ['oauth-provider-list'],
     queryFn: fetchOAuthProviderList,
     staleTime: options?.staleTime || 30000, // 30 seconds cache
+  })
+}
+
+// Paginated OAuth provider list for management table
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  size: number
+}
+
+export const fetchOAuthProviderListPaginated = async (
+  page: number,
+  size: number
+): Promise<PaginatedResponse<OAuthProvider>> => {
+  return fetchAPI<PaginatedResponse<OAuthProvider>>(
+    `/admin/oauth-providers/?page=${page}&size=${size}`
+  )
+}
+
+export const useOAuthProviderListPaginated = (page: number, size: number) => {
+  return useQuery({
+    queryKey: ['oauth-provider-list-paginated', page, size],
+    queryFn: () => fetchOAuthProviderListPaginated(page, size),
+    staleTime: 30000,
   })
 }
 
@@ -162,7 +215,9 @@ export const fetchOAuthProvider = async (
 
 // RBAC API
 export const fetchRoleList = async (): Promise<Role[]> => {
-  return fetchAPI<{ roles: Role[] }>(`/admin/roles/`).then((resp) => resp.roles)
+  return fetchAPI<{ data: Role[]; total: number; page: number; size: number }>(
+    `/admin/roles/?page=1&size=200`
+  ).then((resp) => resp.data)
 }
 
 export const useRoleList = (options?: { staleTime?: number }) => {
@@ -170,6 +225,24 @@ export const useRoleList = (options?: { staleTime?: number }) => {
     queryKey: ['role-list'],
     queryFn: fetchRoleList,
     staleTime: options?.staleTime || 30000,
+  })
+}
+
+// Paginated role list for management table
+export const fetchRoleListPaginated = async (
+  page: number,
+  size: number
+): Promise<PaginatedResponse<Role>> => {
+  return fetchAPI<PaginatedResponse<Role>>(
+    `/admin/roles/?page=${page}&size=${size}`
+  )
+}
+
+export const useRoleListPaginated = (page: number, size: number) => {
+  return useQuery({
+    queryKey: ['role-list-paginated', page, size],
+    queryFn: () => fetchRoleListPaginated(page, size),
+    staleTime: 30000,
   })
 }
 
@@ -428,6 +501,8 @@ export interface LDAPSetting {
   userFilter: string
   usernameAttribute: string
   displayNameAttribute: string
+  emailAttribute: string
+  avatarUrlAttribute: string
   groupBaseDn: string
   groupFilter: string
   groupNameAttribute: string
@@ -443,6 +518,8 @@ export interface LDAPSettingUpdateRequest {
   userFilter: string
   usernameAttribute: string
   displayNameAttribute: string
+  emailAttribute: string
+  avatarUrlAttribute: string
   groupBaseDn: string
   groupFilter: string
   groupNameAttribute: string
@@ -529,9 +606,9 @@ export const updateLDAPSetting = async (
 }
 
 export const fetchAPIKeyList = async (): Promise<APIKey[]> => {
-  return fetchAPI<{ apiKeys: APIKey[] }>('/admin/apikeys/').then(
-    (response) => response.apiKeys
-  )
+  return fetchAPI<{ data: APIKey[]; total: number; page: number; size: number }>(
+    '/admin/apikeys/?page=1&size=200'
+  ).then((response) => response.data)
 }
 
 export const useAPIKeyList = (options?: { staleTime?: number }) => {
@@ -539,6 +616,24 @@ export const useAPIKeyList = (options?: { staleTime?: number }) => {
     queryKey: ['apikey-list'],
     queryFn: fetchAPIKeyList,
     staleTime: options?.staleTime || 30000,
+  })
+}
+
+// Paginated API key list for management table
+export const fetchAPIKeyListPaginated = async (
+  page: number,
+  size: number
+): Promise<PaginatedResponse<APIKey>> => {
+  return fetchAPI<PaginatedResponse<APIKey>>(
+    `/admin/apikeys/?page=${page}&size=${size}`
+  )
+}
+
+export const useAPIKeyListPaginated = (page: number, size: number) => {
+  return useQuery({
+    queryKey: ['apikey-list-paginated', page, size],
+    queryFn: () => fetchAPIKeyListPaginated(page, size),
+    staleTime: 30000,
   })
 }
 

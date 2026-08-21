@@ -156,13 +156,13 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
 
   const handleSaveYaml = async (content: CronJob) => {
     await updateResource('cronjobs', name, namespace, content)
-    toast.success('CronJob YAML saved successfully')
+    toast.success(t('common.messages.yamlSaved'))
     await refetchCronJob()
   }
 
   const handleToggleSuspend = async () => {
     if (!cronjob || !cronjob.spec) {
-      toast.error('CronJob spec is missing, unable to update suspend state')
+      toast.error(t('cronjobs.errors.suspendSpecMissing', 'CronJob spec is missing, unable to update suspend state'))
       return
     }
     setIsTogglingSuspend(true)
@@ -171,7 +171,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       updated.spec!.suspend = !(cronjob.spec?.suspend ?? false)
       await updateResource('cronjobs', name, namespace, updated)
       toast.success(
-        updated.spec?.suspend ? 'CronJob suspended' : 'CronJob resumed'
+        updated.spec?.suspend ? t('cronjobs.suspended', 'CronJob suspended') : t('cronjobs.resumed', 'CronJob resumed')
       )
       await Promise.all([refetchCronJob(), refetchJobs()])
     } catch (err) {
@@ -183,7 +183,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
 
   const handleRunNow = async () => {
     if (!cronjob?.spec?.jobTemplate?.spec || !namespace) {
-      toast.error('CronJob template is incomplete, unable to run now')
+      toast.error(t('cronjobs.errors.templateIncomplete', 'CronJob template is incomplete, unable to run now'))
       return
     }
     setIsRunningNow(true)
@@ -223,7 +223,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       }
 
       await createResource('jobs', namespace, manualJob)
-      toast.success('Job created successfully')
+      toast.success(t('cronjobs.jobCreated', 'Job created successfully'))
       await refetchJobs()
     } catch (err) {
       toast.error(translateError(err, t))
@@ -380,7 +380,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
   return (
     <ResourceDetailShell
       resourceType="cronjobs"
-      resourceLabel="CronJob"
+      resourceLabel={t('common.fields.cronJob', 'CronJob')}
       name={name}
       namespace={namespace}
       data={cronjob}

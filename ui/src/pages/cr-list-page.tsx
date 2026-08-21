@@ -112,11 +112,11 @@ export function CRListPage() {
   }, [crd, crdData?.spec.versions])
 
   if (isLoadingCRD) {
-    return <div>Loading...</div>
+    return <div>{t('common.messages.loading')}</div>
   }
 
   if (!crdData) {
-    return <div>Error: CRD name is required</div>
+    return <div>{t('errors.crdNameRequired', 'Error: CRD name is required')}</div>
   }
 
   return (

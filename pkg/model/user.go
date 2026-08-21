@@ -14,17 +14,23 @@ import (
 
 type User struct {
 	Model
-	Username    string       `json:"username" gorm:"type:varchar(50);uniqueIndex;not null"`
-	Password    string       `json:"-" gorm:"type:varchar(255)"`
-	Name        string       `json:"name,omitempty" gorm:"type:varchar(100);index"`
-	AvatarURL   string       `json:"avatar_url,omitempty" gorm:"type:text"`
-	Provider    string       `json:"provider,omitempty" gorm:"type:varchar(50);default:password;index"`
-	OIDCGroups  SliceString  `json:"oidc_groups,omitempty" gorm:"type:text"`
-	LastLoginAt *time.Time   `json:"lastLoginAt,omitempty" gorm:"type:timestamp;index"`
-	Enabled     bool         `json:"enabled" gorm:"type:boolean;default:true"`
-	Sub         string       `json:"sub,omitempty" gorm:"type:varchar(255);index"`
-	MFAEnabled  bool         `json:"mfa_enabled" gorm:"column:mfa_enabled;type:boolean;not null;default:false"`
-	MFASecret   SecretString `json:"-" gorm:"column:mfa_secret;type:text"`
+	Username        string       `json:"username" gorm:"type:varchar(50);uniqueIndex;not null"`
+	Password        string       `json:"-" gorm:"type:varchar(255)"`
+	Name            string       `json:"name,omitempty" gorm:"type:varchar(100);index"`
+	NameSource      string       `json:"nameSource,omitempty" gorm:"type:varchar(50)"`
+	Email           string       `json:"email,omitempty" gorm:"type:varchar(255);index"`
+	EmailSource     string       `json:"emailSource,omitempty" gorm:"type:varchar(50)"`
+	EmailVerified   bool         `json:"emailVerified" gorm:"type:boolean;not null;default:false"`
+	EmailVerifiedAt *time.Time   `json:"emailVerifiedAt,omitempty" gorm:"type:timestamp"`
+	AvatarURL       string       `json:"avatar_url,omitempty" gorm:"type:text"`
+	AvatarURLSource string       `json:"avatarUrlSource,omitempty" gorm:"type:varchar(50)"`
+	Provider        string       `json:"provider,omitempty" gorm:"type:varchar(50);default:password;index"`
+	OIDCGroups      SliceString  `json:"oidc_groups,omitempty" gorm:"type:text"`
+	LastLoginAt     *time.Time   `json:"lastLoginAt,omitempty" gorm:"type:timestamp;index"`
+	Enabled         bool         `json:"enabled" gorm:"type:boolean;default:true"`
+	Sub             string       `json:"sub,omitempty" gorm:"type:varchar(255);index"`
+	MFAEnabled      bool         `json:"mfa_enabled" gorm:"column:mfa_enabled;type:boolean;not null;default:false"`
+	MFASecret       SecretString `json:"-" gorm:"column:mfa_secret;type:text"`
 
 	APIKey SecretString  `json:"apiKey,omitempty" gorm:"type:text"`
 	Roles  []common.Role `json:"roles,omitempty" gorm:"-"`
@@ -124,10 +130,24 @@ func FindWithSubOrUpsertUser(user *User) error {
 		return err
 	}
 	user.Enabled = existingUser.Enabled
+	if user.NameSource == "" {
+		user.Name = existingUser.Name
+	}
+	if user.EmailSource == "" {
+		user.Email = existingUser.Email
+		user.EmailVerified = existingUser.EmailVerified
+		user.EmailVerifiedAt = existingUser.EmailVerifiedAt
+	}
+	if user.AvatarURLSource == "" {
+		user.AvatarURL = existingUser.AvatarURL
+	}
 
 	user.ID = existingUser.ID
 	user.CreatedAt = existingUser.CreatedAt
 	user.SidebarPreference = existingUser.SidebarPreference
+	user.MFAEnabled = existingUser.MFAEnabled
+	user.MFASecret = existingUser.MFASecret
+	user.APIKey = existingUser.APIKey
 	err := DB.Save(user).Error
 	InvalidateUserCache(uint64(user.ID))
 	return err
@@ -258,9 +278,13 @@ func SetUserEnabled(id uint, enabled bool) error {
 	return err
 }
 
-// UpdateUserName updates only the display name of a user.
-func UpdateUserName(id uint, name string) error {
-	err := DB.Model(&User{}).Where("id = ?", id).Update("name", name).Error
+// UpdateUserProfile updates the editable profile fields of a user.
+func UpdateUserProfile(id uint, name, email, avatarURL string) error {
+	err := DB.Model(&User{}).Where("id = ?", id).Updates(map[string]any{
+		"name":       name,
+		"email":      email,
+		"avatar_url": avatarURL,
+	}).Error
 	InvalidateUserCache(uint64(id))
 	return err
 }
@@ -343,10 +367,18 @@ func UpsertLDAPUser(user *User) (*User, error) {
 	user.Enabled = existingUser.Enabled
 	user.SidebarPreference = existingUser.SidebarPreference
 	user.Sub = existingUser.Sub
-	if strings.TrimSpace(user.Name) == "" {
+	user.MFAEnabled = existingUser.MFAEnabled
+	user.MFASecret = existingUser.MFASecret
+	user.APIKey = existingUser.APIKey
+	if user.NameSource == "" {
 		user.Name = existingUser.Name
 	}
-	if strings.TrimSpace(user.AvatarURL) == "" {
+	if user.EmailSource == "" {
+		user.Email = existingUser.Email
+		user.EmailVerified = existingUser.EmailVerified
+		user.EmailVerifiedAt = existingUser.EmailVerifiedAt
+	}
+	if user.AvatarURLSource == "" {
 		user.AvatarURL = existingUser.AvatarURL
 	}
 
@@ -396,6 +428,18 @@ func NewAPIKeyUser(name string) (*User, error) {
 func ListAPIKeyUsers() (users []User, err error) {
 	err = DB.Order("id desc").Where("provider = ?", common.APIKeyProvider).Find(&users).Error
 	return users, err
+}
+
+func ListAPIKeyUsersWithPagination(page, size int) ([]User, int64, error) {
+	var users []User
+	var total int64
+	if err := DB.Model(&User{}).Where("provider = ?", common.APIKeyProvider).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := DB.Order("id desc").Where("provider = ?", common.APIKeyProvider).Offset((page - 1) * size).Limit(size).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
 }
 
 var (

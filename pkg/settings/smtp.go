@@ -16,6 +16,8 @@ import (
 
 const defaultSMTPTimeoutSeconds = 30
 
+var ErrSMTPNotEnabled = fmt.Errorf("SMTP is not enabled")
+
 func normalizeSMTPEncryption(encryption string) string {
 	return strings.ToLower(strings.TrimSpace(encryption))
 }
@@ -53,9 +55,21 @@ func validateSMTPSetting(setting *model.GeneralSetting) error {
 	return nil
 }
 
+func SendEmailOTP(ctx context.Context, recipient, code string) error {
+	setting, err := model.GetGeneralSetting()
+	if err != nil {
+		return err
+	}
+	return sendSMTPEmail(ctx, setting, recipient, "Kite verification code", "Your Kite verification code is: "+code+"\r\n")
+}
+
 func sendSMTPTestEmail(ctx context.Context, setting *model.GeneralSetting, recipient string) error {
+	return sendSMTPEmail(ctx, setting, recipient, "Kite SMTP test email", "This is a test email from Kite.\r\n")
+}
+
+func sendSMTPEmail(ctx context.Context, setting *model.GeneralSetting, recipient, subject, body string) error {
 	if !setting.SMTPEnabled {
-		return fmt.Errorf("SMTP is not enabled")
+		return ErrSMTPNotEnabled
 	}
 	if err := validateSMTPSetting(setting); err != nil {
 		return err
@@ -124,9 +138,9 @@ func sendSMTPTestEmail(ctx context.Context, setting *model.GeneralSetting, recip
 	from := (&mail.Address{Name: setting.SMTPFromName, Address: setting.SMTPFromEmail}).String()
 	message := "From: " + from + "\r\n" +
 		"To: " + recipient + "\r\n" +
-		"Subject: Kite SMTP test email\r\n" +
+		"Subject: " + subject + "\r\n" +
 		"\r\n" +
-		"This is a test email from Kite.\r\n"
+		body
 	if _, err := writer.Write([]byte(message)); err != nil {
 		return fmt.Errorf("write SMTP message: %w", err)
 	}

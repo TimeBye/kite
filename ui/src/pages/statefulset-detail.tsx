@@ -90,7 +90,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
 
   const handleSaveYaml = async (content: StatefulSet) => {
     await updateResource('statefulsets', name, namespace, content)
-    toast.success('StatefulSet YAML saved successfully')
+    toast.success(t('common.messages.yamlSaved'))
     setRefreshInterval(1000)
   }
 
@@ -107,7 +107,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       }
       updated.spec.replicas = scaleReplicas
       await updateResource('statefulsets', name, namespace, updated)
-      toast.success(`StatefulSet scaled to ${scaleReplicas} replicas`)
+      toast.success(t('detail.status.scaledTo', { resource: t('common.fields.statefulSet', 'StatefulSet'), replicas: scaleReplicas }))
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
@@ -139,7 +139,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
         'kite.kubernetes.io/restartedAt'
       ] = new Date().toISOString()
       await updateResource('statefulsets', name, namespace, updated)
-      toast.success('StatefulSet restart initiated')
+      toast.success(t('detail.status.restartInitiated', { resource: t('common.fields.statefulSet', 'StatefulSet') }))
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
@@ -359,7 +359,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
   return (
     <ResourceDetailShell
       resourceType="statefulsets"
-      resourceLabel="StatefulSet"
+      resourceLabel={t('common.fields.statefulSet', 'StatefulSet')}
       name={name}
       namespace={namespace}
       data={statefulset}
@@ -389,19 +389,19 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
                 <IconScale className="w-4 h-4" />
-                Scale
+                {t('common.actions.scale')}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80" align="end">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <h4 className="font-medium">Scale StatefulSet</h4>
+                  <h4 className="font-medium">{t('detail.dialogs.scaleStatefulSet.title', 'Scale StatefulSet')}</h4>
                   <p className="text-sm text-muted-foreground">
-                    Adjust the number of replicas for this StatefulSet.
+                    {t('detail.dialogs.scaleStatefulSet.description', 'Adjust the number of replicas for this StatefulSet.')}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="replicas">Replicas</Label>
+                  <Label htmlFor="replicas">{t('common.fields.replicas')}</Label>
                   <div className="flex items-center gap-1">
                     <Button
                       variant="outline"
@@ -435,7 +435,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
                   </div>
                 </div>
                 <Button onClick={handleScale} className="w-full">
-                  Scale StatefulSet
+                  {t('detail.dialogs.scaleStatefulSet.title', 'Scale StatefulSet')}
                 </Button>
               </div>
             </PopoverContent>
@@ -447,20 +447,20 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
                 <IconReload className="w-4 h-4" />
-                Restart
+                {t('common.actions.restart')}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80">
               <div className="space-y-2">
                 <p className="text-sm">
-                  This will restart all pods managed by this StatefulSet.
+                  {t('detail.dialogs.restartStatefulSet.description', 'This will restart all pods managed by this StatefulSet.')}
                 </p>
                 <Button
                   onClick={handleRestart}
                   className="w-full"
                   variant="outline"
                 >
-                  Confirm Restart
+                  {t('detail.dialogs.confirmRestart', 'Confirm Restart')}
                 </Button>
               </div>
             </PopoverContent>

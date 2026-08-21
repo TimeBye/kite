@@ -42,18 +42,21 @@ type ClusterConfig struct {
 }
 
 type OAuthConfig struct {
-	Name          string `yaml:"name"`
-	ClientID      string `yaml:"clientId"`
-	ClientSecret  string `yaml:"clientSecret"`
-	AuthURL       string `yaml:"authUrl"`
-	TokenURL      string `yaml:"tokenUrl"`
-	UserInfoURL   string `yaml:"userInfoUrl"`
-	Scopes        string `yaml:"scopes"`
-	Issuer        string `yaml:"issuer"`
-	Enabled       *bool  `yaml:"enabled"`
-	UsernameClaim string `yaml:"usernameClaim"`
-	GroupsClaim   string `yaml:"groupsClaim"`
-	AllowedGroups string `yaml:"allowedGroups"`
+	Name           string `yaml:"name"`
+	ClientID       string `yaml:"clientId"`
+	ClientSecret   string `yaml:"clientSecret"`
+	AuthURL        string `yaml:"authUrl"`
+	TokenURL       string `yaml:"tokenUrl"`
+	UserInfoURL    string `yaml:"userInfoUrl"`
+	Scopes         string `yaml:"scopes"`
+	Issuer         string `yaml:"issuer"`
+	Enabled        *bool  `yaml:"enabled"`
+	UsernameClaim  string `yaml:"usernameClaim"`
+	NameClaim      string `yaml:"nameClaim"`
+	EmailClaim     string `yaml:"emailClaim"`
+	AvatarURLClaim string `yaml:"avatarUrlClaim"`
+	GroupsClaim    string `yaml:"groupsClaim"`
+	AllowedGroups  string `yaml:"allowedGroups"`
 }
 
 type LDAPConfig struct {
@@ -66,6 +69,8 @@ type LDAPConfig struct {
 	UserFilter           string `yaml:"userFilter"`
 	UsernameAttribute    string `yaml:"usernameAttribute"`
 	DisplayNameAttribute string `yaml:"displayNameAttribute"`
+	EmailAttribute       string `yaml:"emailAttribute"`
+	AvatarURLAttribute   string `yaml:"avatarUrlAttribute"`
 	GroupBaseDN          string `yaml:"groupBaseDn"`
 	GroupFilter          string `yaml:"groupFilter"`
 	GroupNameAttribute   string `yaml:"groupNameAttribute"`
@@ -294,18 +299,21 @@ func applyOAuth(providers []OAuthConfig) error {
 			}
 			scopes := p.Scopes
 			provider := &model.OAuthProvider{
-				Name:          model.LowerCaseString(strings.TrimSpace(p.Name)),
-				ClientID:      p.ClientID,
-				ClientSecret:  model.SecretString(p.ClientSecret),
-				AuthURL:       p.AuthURL,
-				TokenURL:      p.TokenURL,
-				UserInfoURL:   p.UserInfoURL,
-				Scopes:        scopes,
-				Issuer:        p.Issuer,
-				Enabled:       enabled,
-				UsernameClaim: p.UsernameClaim,
-				GroupsClaim:   p.GroupsClaim,
-				AllowedGroups: p.AllowedGroups,
+				Name:           model.LowerCaseString(strings.TrimSpace(p.Name)),
+				ClientID:       p.ClientID,
+				ClientSecret:   model.SecretString(p.ClientSecret),
+				AuthURL:        p.AuthURL,
+				TokenURL:       p.TokenURL,
+				UserInfoURL:    p.UserInfoURL,
+				Scopes:         scopes,
+				Issuer:         p.Issuer,
+				Enabled:        enabled,
+				UsernameClaim:  p.UsernameClaim,
+				NameClaim:      p.NameClaim,
+				EmailClaim:     p.EmailClaim,
+				AvatarURLClaim: p.AvatarURLClaim,
+				GroupsClaim:    p.GroupsClaim,
+				AllowedGroups:  p.AllowedGroups,
 			}
 			if err := tx.Create(provider).Error; err != nil {
 				return err
@@ -326,6 +334,8 @@ func applyLDAP(cfg *LDAPConfig) error {
 		UserFilter:           cfg.UserFilter,
 		UsernameAttribute:    cfg.UsernameAttribute,
 		DisplayNameAttribute: cfg.DisplayNameAttribute,
+		EmailAttribute:       cfg.EmailAttribute,
+		AvatarURLAttribute:   cfg.AvatarURLAttribute,
 		GroupBaseDN:          cfg.GroupBaseDN,
 		GroupFilter:          cfg.GroupFilter,
 		GroupNameAttribute:   cfg.GroupNameAttribute,

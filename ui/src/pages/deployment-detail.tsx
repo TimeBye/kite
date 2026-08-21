@@ -469,7 +469,7 @@ export function DeploymentDetail(props: { namespace: string; name: string }) {
   return (
     <ResourceDetailShell
       resourceType="deployments"
-      resourceLabel="Deployment"
+      resourceLabel={t('common.fields.deployment', 'Deployment')}
       name={name}
       namespace={namespace}
       data={deployment}

@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { IconEdit, IconKey, IconPlus, IconTrash } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import {
+  ColumnDef,
+  getCoreRowModel,
+  PaginationState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -12,22 +17,37 @@ import {
   OAuthProviderCreateRequest,
   OAuthProviderUpdateRequest,
   updateOAuthProvider,
-  useOAuthProviderList,
+  useOAuthProviderListPaginated,
 } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ResourceTableView } from '@/components/resource-table-view'
 
-import { Action, ActionTable } from '../action-table'
+import { Action } from '../action-table'
 import { OAuthProviderDialog } from './oauth-provider-dialog'
 
-export function OAuthProviderManagement() {
+export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boolean }) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  })
 
   // Use real API to fetch OAuth providers
-  const { data: providers = [], isLoading, error } = useOAuthProviderList()
+  const { data: providerData, isLoading, error } = useOAuthProviderListPaginated(
+    pagination.pageIndex + 1,
+    pagination.pageSize
+  )
+  const providers = providerData?.data ?? []
 
   const [showProviderDialog, setShowProviderDialog] = useState(false)
   const [editingProvider, setEditingProvider] = useState<OAuthProvider | null>(
@@ -97,39 +117,94 @@ export function OAuthProviderManagement() {
   )
 
   const actions = useMemo<Action<OAuthProvider>[]>(
-    () => [
-      {
-        label: (
-          <>
-            <IconEdit className="h-4 w-4" />
-            {t('common.actions.edit', 'Edit')}
-          </>
-        ),
-        onClick: (provider) => {
-          setEditingProvider(provider)
-          setShowProviderDialog(true)
+    () => {
+      if (readOnly) return []
+      return [
+        {
+          label: (
+            <>
+              <IconEdit className="h-4 w-4" />
+              {t('common.actions.edit', 'Edit')}
+            </>
+          ),
+          onClick: (provider) => {
+            setEditingProvider(provider)
+            setShowProviderDialog(true)
+          },
         },
-      },
-      {
-        label: (
-          <div className="inline-flex items-center gap-2 text-destructive">
-            <IconTrash className="h-4 w-4" />
-            {t('common.actions.delete', 'Delete')}
-          </div>
-        ),
-        onClick: (provider) => {
-          setDeletingProvider(provider)
+        {
+          label: (
+            <div className="inline-flex items-center gap-2 text-destructive">
+              <IconTrash className="h-4 w-4" />
+              {t('common.actions.delete', 'Delete')}
+            </div>
+          ),
+          onClick: (provider) => {
+            setDeletingProvider(provider)
+          },
         },
-      },
-    ],
-    [t]
+      ]
+    },
+    [readOnly, t]
   )
+
+  const tableColumns = useMemo<ColumnDef<OAuthProvider>[]>(() => {
+    if (readOnly) return columns
+    const actionColumn: ColumnDef<OAuthProvider> = {
+      id: 'actions',
+      header: t('common.fields.actions', 'Actions'),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('common.fields.actions', 'Actions')}
+              >
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {actions.map((action, index) => (
+                <DropdownMenuItem
+                  key={index}
+                  disabled={action.shouldDisable?.(row.original)}
+                  onClick={() => action.onClick(row.original)}
+                  className="gap-2"
+                >
+                  {action.dynamicLabel
+                    ? action.dynamicLabel(row.original)
+                    : action.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    }
+    return [...columns, actionColumn]
+  }, [actions, columns, readOnly, t])
+
+  const table = useReactTable({
+    data: providers,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: { pagination },
+    onPaginationChange: setPagination,
+    manualPagination: true,
+    pageCount:
+      Math.ceil((providerData?.total ?? 0) / pagination.pageSize) || 0,
+  })
 
   // Create provider mutation
   const createMutation = useMutation({
     mutationFn: createOAuthProvider,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oauth-provider-list'] })
+      queryClient.invalidateQueries({
+        queryKey: ['oauth-provider-list-paginated'],
+      })
       queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
       toast.success(
         t(
@@ -161,6 +236,9 @@ export function OAuthProviderManagement() {
     }) => updateOAuthProvider(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oauth-provider-list'] })
+      queryClient.invalidateQueries({
+        queryKey: ['oauth-provider-list-paginated'],
+      })
       queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
       toast.success(
         t(
@@ -187,6 +265,9 @@ export function OAuthProviderManagement() {
     mutationFn: deleteOAuthProvider,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oauth-provider-list'] })
+      queryClient.invalidateQueries({
+        queryKey: ['oauth-provider-list-paginated'],
+      })
       queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
       toast.success(
         t(
@@ -232,28 +313,52 @@ export function OAuthProviderManagement() {
     deleteMutation.mutate(deletingProvider.id)
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">
-          {t('common.messages.loading', 'Loading...')}
+  const emptyState = (() => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-muted-foreground">
+            {t('common.messages.loading', 'Loading...')}
+          </div>
         </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-destructive">
-          {t(
-            'oauthManagement.errors.loadFailed',
-            'Failed to load OAuth providers'
-          )}
+      )
+    }
+    if (error) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-destructive">
+            {t(
+              'oauthManagement.errors.loadFailed',
+              'Failed to load OAuth providers'
+            )}
+          </div>
         </div>
-      </div>
-    )
-  }
+      )
+    }
+    if (providers.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <IconKey className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>
+            {t('common.messages.noItemsConfigured', {
+              resource: t(
+                'common.fields.oauthProviders',
+                'OAuth providers'
+              ),
+              defaultValue: 'No OAuth providers configured',
+            })}
+          </p>
+          <p className="text-sm mt-1">
+            {t('common.messages.createFirstItem', {
+              resource: t('common.fields.oauthProvider', 'OAuth provider'),
+              defaultValue: 'Add your first OAuth provider',
+            })}
+          </p>
+        </div>
+      )
+    }
+    return null
+  })()
 
   return (
     <div className="space-y-6">
@@ -267,6 +372,7 @@ export function OAuthProviderManagement() {
               </CardTitle>
             </div>
             <Button
+              disabled={readOnly}
               onClick={() => {
                 setEditingProvider(null)
                 setShowProviderDialog(true)
@@ -279,28 +385,19 @@ export function OAuthProviderManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable actions={actions} data={providers} columns={columns} />
-
-          {providers.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconKey className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {t('common.messages.noItemsConfigured', {
-                  resource: t(
-                    'common.fields.oauthProviders',
-                    'OAuth providers'
-                  ),
-                  defaultValue: 'No OAuth providers configured',
-                })}
-              </p>
-              <p className="text-sm mt-1">
-                {t('common.messages.createFirstItem', {
-                  resource: t('common.fields.oauthProvider', 'OAuth provider'),
-                  defaultValue: 'Add your first OAuth provider',
-                })}
-              </p>
-            </div>
-          )}
+          <ResourceTableView
+            table={table}
+            columnCount={tableColumns.length}
+            isLoading={isLoading}
+            data={providerData?.data}
+            emptyState={emptyState}
+            hasActiveFilters={false}
+            filteredRowCount={providers.length}
+            totalRowCount={providerData?.total ?? 0}
+            searchQuery=""
+            pagination={pagination}
+            setPagination={setPagination}
+          />
         </CardContent>
       </Card>
 
@@ -315,6 +412,7 @@ export function OAuthProviderManagement() {
         }}
         provider={editingProvider}
         onSubmit={handleSubmitProvider}
+        loading={createMutation.isPending || updateMutation.isPending}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -323,7 +421,7 @@ export function OAuthProviderManagement() {
         onOpenChange={() => setDeletingProvider(null)}
         onConfirm={handleDeleteProvider}
         resourceName={deletingProvider?.name || ''}
-        resourceType="OAuth provider"
+        resourceType={t('common.fields.oauthProvider')}
         additionalNote={t(
           'oauthManagement.deleteConfirmation',
           'This action will remove the OAuth provider configuration. Users will no longer be able to login using this provider.'

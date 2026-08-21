@@ -664,13 +664,13 @@ export function HelmChartListPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    aria-label="Toggle columns"
+                    aria-label={t('helmCharts.actions.toggleColumns', 'Toggle columns')}
                   >
                     <Settings2 className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t('helmCharts.actions.toggleColumns', 'Toggle columns')}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {table
                     .getAllLeafColumns()

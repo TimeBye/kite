@@ -163,6 +163,10 @@ func (h *AuthHandler) bootstrapUser(c *gin.Context, setting *model.GeneralSettin
 		}
 	}
 
+	if claims.MFAPending {
+		return nil
+	}
+
 	user, err := model.GetUserByIDCached(uint64(claims.UserID))
 	if err != nil || !user.Enabled {
 		return nil

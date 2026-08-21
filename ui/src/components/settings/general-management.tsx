@@ -374,9 +374,11 @@ export function GeneralManagement() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="openai">OpenAI Compatible</SelectItem>
+                    <SelectItem value="openai">
+                      {t('generalManagement.aiAgent.openaiCompatible', 'OpenAI Compatible')}
+                    </SelectItem>
                     <SelectItem value="anthropic">
-                      Anthropic Compatible
+                      {t('generalManagement.aiAgent.anthropicCompatible', 'Anthropic Compatible')}
                     </SelectItem>
                   </SelectContent>
                 </Select>

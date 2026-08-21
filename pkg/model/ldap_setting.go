@@ -10,7 +10,9 @@ import (
 
 const DefaultLDAPUserFilter = "(uid=%s)"
 const DefaultLDAPUsernameAttribute = "uid"
-const DefaultLDAPDisplayNameAttribute = "cn"
+const DefaultLDAPDisplayNameAttribute = "displayName"
+const DefaultLDAPEmailAttribute = "mail"
+const DefaultLDAPAvatarURLAttribute = ""
 const DefaultLDAPGroupFilter = "(member=%s)"
 const DefaultLDAPGroupNameAttribute = "cn"
 
@@ -24,7 +26,9 @@ type LDAPSetting struct {
 	UserBaseDN           string       `json:"userBaseDn" gorm:"column:user_base_dn;type:varchar(500)"`
 	UserFilter           string       `json:"userFilter" gorm:"column:user_filter;type:varchar(500);default:'(uid=%s)'"`
 	UsernameAttribute    string       `json:"usernameAttribute" gorm:"column:username_attribute;type:varchar(100);default:'uid'"`
-	DisplayNameAttribute string       `json:"displayNameAttribute" gorm:"column:display_name_attribute;type:varchar(100);default:'cn'"`
+	DisplayNameAttribute string       `json:"displayNameAttribute" gorm:"column:display_name_attribute;type:varchar(100);default:'displayName'"`
+	EmailAttribute       string       `json:"emailAttribute" gorm:"column:email_attribute;type:varchar(100);default:'mail'"`
+	AvatarURLAttribute   string       `json:"avatarUrlAttribute" gorm:"column:avatar_url_attribute;type:varchar(100)"`
 	GroupBaseDN          string       `json:"groupBaseDn" gorm:"column:group_base_dn;type:varchar(500)"`
 	GroupFilter          string       `json:"groupFilter" gorm:"column:group_filter;type:varchar(500);default:'(member=%s)'"`
 	GroupNameAttribute   string       `json:"groupNameAttribute" gorm:"column:group_name_attribute;type:varchar(100);default:'cn'"`
@@ -38,6 +42,8 @@ func DefaultLDAPSetting() LDAPSetting {
 		UserFilter:           DefaultLDAPUserFilter,
 		UsernameAttribute:    DefaultLDAPUsernameAttribute,
 		DisplayNameAttribute: DefaultLDAPDisplayNameAttribute,
+		EmailAttribute:       DefaultLDAPEmailAttribute,
+		AvatarURLAttribute:   DefaultLDAPAvatarURLAttribute,
 		GroupFilter:          DefaultLDAPGroupFilter,
 		GroupNameAttribute:   DefaultLDAPGroupNameAttribute,
 	}
@@ -58,7 +64,9 @@ func (s LDAPSetting) Normalized() LDAPSetting {
 	normalized.UserBaseDN = strings.TrimSpace(s.UserBaseDN)
 	normalized.UserFilter = normalizeLDAPTextWithDefault(s.UserFilter, DefaultLDAPUserFilter)
 	normalized.UsernameAttribute = normalizeLDAPTextWithDefault(s.UsernameAttribute, DefaultLDAPUsernameAttribute)
-	normalized.DisplayNameAttribute = normalizeLDAPTextWithDefault(s.DisplayNameAttribute, DefaultLDAPDisplayNameAttribute)
+	normalized.DisplayNameAttribute = strings.TrimSpace(s.DisplayNameAttribute)
+	normalized.EmailAttribute = strings.TrimSpace(s.EmailAttribute)
+	normalized.AvatarURLAttribute = strings.TrimSpace(s.AvatarURLAttribute)
 	normalized.GroupBaseDN = strings.TrimSpace(s.GroupBaseDN)
 	normalized.GroupFilter = normalizeLDAPTextWithDefault(s.GroupFilter, DefaultLDAPGroupFilter)
 	normalized.GroupNameAttribute = normalizeLDAPTextWithDefault(s.GroupNameAttribute, DefaultLDAPGroupNameAttribute)
@@ -124,6 +132,8 @@ func UpdateLDAPSetting(setting *LDAPSetting) (*LDAPSetting, error) {
 	current.UserFilter = normalized.UserFilter
 	current.UsernameAttribute = normalized.UsernameAttribute
 	current.DisplayNameAttribute = normalized.DisplayNameAttribute
+	current.EmailAttribute = normalized.EmailAttribute
+	current.AvatarURLAttribute = normalized.AvatarURLAttribute
 	current.GroupBaseDN = normalized.GroupBaseDN
 	current.GroupFilter = normalized.GroupFilter
 	current.GroupNameAttribute = normalized.GroupNameAttribute

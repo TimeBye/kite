@@ -84,6 +84,9 @@ oauth:
     issuer: "https://accounts.google.com"
     scopes: "openid,profile,email"
     usernameClaim: "email"
+    nameClaim: "display_name"
+    emailClaim: "mail_address"
+    avatarUrlClaim: "avatar"
     enabled: true
 
 ldap:
@@ -232,8 +235,8 @@ func TestLoadConfigFromFile_EndToEnd(t *testing.T) { //nolint:gocyclo // end-to-
 		if p.Issuer != "https://accounts.google.com" {
 			t.Errorf("issuer = %q", p.Issuer)
 		}
-		if p.UsernameClaim != "email" {
-			t.Errorf("usernameClaim = %q", p.UsernameClaim)
+		if p.UsernameClaim != "email" || p.NameClaim != "display_name" || p.EmailClaim != "mail_address" || p.AvatarURLClaim != "avatar" {
+			t.Errorf("OAuth claim mappings = %#v", p)
 		}
 	})
 

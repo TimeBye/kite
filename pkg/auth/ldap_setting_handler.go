@@ -20,6 +20,8 @@ type UpdateLDAPSettingRequest struct {
 	UserFilter           *string `json:"userFilter"`
 	UsernameAttribute    *string `json:"usernameAttribute"`
 	DisplayNameAttribute *string `json:"displayNameAttribute"`
+	EmailAttribute       *string `json:"emailAttribute"`
+	AvatarURLAttribute   *string `json:"avatarUrlAttribute"`
 	GroupBaseDN          *string `json:"groupBaseDn"`
 	GroupFilter          *string `json:"groupFilter"`
 	GroupNameAttribute   *string `json:"groupNameAttribute"`
@@ -80,6 +82,8 @@ func ldapSettingResponse(setting *model.LDAPSetting) gin.H {
 		"userFilter":             setting.UserFilter,
 		"usernameAttribute":      setting.UsernameAttribute,
 		"displayNameAttribute":   setting.DisplayNameAttribute,
+		"emailAttribute":         setting.EmailAttribute,
+		"avatarUrlAttribute":     setting.AvatarURLAttribute,
 		"groupBaseDn":            setting.GroupBaseDN,
 		"groupFilter":            setting.GroupFilter,
 		"groupNameAttribute":     setting.GroupNameAttribute,
@@ -114,6 +118,12 @@ func mergeLDAPSetting(current *model.LDAPSetting, req UpdateLDAPSettingRequest) 
 	}
 	if req.DisplayNameAttribute != nil {
 		merged.DisplayNameAttribute = strings.TrimSpace(*req.DisplayNameAttribute)
+	}
+	if req.EmailAttribute != nil {
+		merged.EmailAttribute = strings.TrimSpace(*req.EmailAttribute)
+	}
+	if req.AvatarURLAttribute != nil {
+		merged.AvatarURLAttribute = strings.TrimSpace(*req.AvatarURLAttribute)
 	}
 	if req.GroupBaseDN != nil {
 		merged.GroupBaseDN = strings.TrimSpace(*req.GroupBaseDN)

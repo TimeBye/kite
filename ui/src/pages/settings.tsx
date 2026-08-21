@@ -12,7 +12,7 @@ export function SettingsPage() {
   const { user } = useAuth()
   const tabs = useMemo(() => createSettingsTabs(t), [t])
 
-  usePageTitle('Settings')
+  usePageTitle(t('settings.title'))
 
   if (!user?.isAdmin()) {
     return (

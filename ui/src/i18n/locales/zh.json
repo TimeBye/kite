@@ -9,6 +9,7 @@
       "close": "关闭",
       "clone": "克隆",
       "confirm": "确认",
+      "continue": "继续",
       "copy": "复制",
       "collapse": "收起",
       "cordon": "停止调度",
@@ -70,6 +71,7 @@
       "availableReplicas": "可用副本",
       "avatar": "头像",
       "avatarUrl": "头像 URL",
+      "avatarUrlClaim": "头像 URL Claim",
       "basicInformation": "基本信息",
       "binaryData": "二进制数据",
       "bytes": "字节",
@@ -97,9 +99,13 @@
       "desired": "期望",
       "desiredScheduled": "期望调度",
       "details": "详情",
+      "disabled": "已禁用",
       "effect": "Effect",
+      "email": "邮箱",
+      "enabled": "已启用",
       "env": "环境变量",
       "envFrom": "环境变量来源",
+      "emailClaim": "邮箱 Claim",
       "errorDetails": "错误详情",
       "externalIP": "外部 IP",
       "failed": "失败",
@@ -110,6 +116,7 @@
       "hostname": "主机名",
       "image": "镜像",
       "images": "镜像",
+      "id": "ID",
       "information": "信息",
       "internalIP": "内部 IP",
       "issuer": "Issuer",
@@ -133,6 +140,7 @@
       "minReadySeconds": "最短就绪时间",
       "mounts": "挂载",
       "name": "名称",
+      "nameClaim": "姓名 Claim",
       "namespace": "Namespace",
       "namespaces": "Namespaces",
       "node": "节点",
@@ -159,6 +167,10 @@
       "podIP": "Pod IP",
       "podManagementPolicy": "Pod 管理策略",
       "pods": "Pods",
+      "pod": "Pod",
+      "configMap": "ConfigMap",
+      "secret": "Secret",
+      "daemonSet": "DaemonSet",
       "ports": "端口",
       "progressDeadline": "进度截止时间",
       "prometheus": "Prometheus",
@@ -279,7 +291,8 @@
       "unassigned": "已取消分配",
       "updated": "{{resource}}更新成功",
       "updateExistingItem": "更新已有{{resource}}",
-      "yamlSaved": "YAML 保存成功"
+      "yamlSaved": "YAML 保存成功",
+      "containerUpdated": "容器更新成功"
     },
     "tabs": {
       "containers": "容器",
@@ -310,7 +323,9 @@
       "none": "无",
       "or": "或",
       "required": "必填",
-      "yes": "是"
+      "yes": "是",
+      "default": "默认",
+      "system": "System"
     },
     "placeholders": {
       "allowedGroups": "例如：admin, developers（逗号分隔）",
@@ -565,6 +580,13 @@
       "started": "启动时间",
       "completed": "完成时间",
       "age": "运行时间"
+    },
+    "suspended": "CronJob 已暂停",
+    "resumed": "CronJob 已恢复",
+    "jobCreated": "Job 创建成功",
+    "errors": {
+      "suspendSpecMissing": "CronJob spec 缺失，无法更新暂停状态",
+      "templateIncomplete": "CronJob 模板不完整，无法立即执行"
     }
   },
   "services": {
@@ -658,9 +680,14 @@
     "enterUsername": "请输入用户名",
     "enterPassword": "请输入密码",
     "signingIn": "登录中...",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码",
     "signInWithPassword": "密码登录",
     "signInWithLdap": "LDAP 登录",
     "signInWithPasskey": "使用 Passkey 登录",
+    "mfaCode": "MFA 验证码",
+    "mfaCodePlaceholder": "输入 6 位验证码",
+    "verifyMfa": "验证 MFA",
     "tabs": {
       "ldap": "LDAP"
     },
@@ -699,7 +726,8 @@
       "userDisabled": "账号已禁用",
       "userDisabledMessage": "你的账号已被禁用，请联系管理员。",
       "notInAllowedGroups": "认证成功，但账号不属于 {{provider}} 的允许群组。",
-      "notInAllowedGroupsDetails": "请联系管理员将你加入允许的群组。"
+      "notInAllowedGroupsDetails": "请联系管理员将你加入允许的群组。",
+      "passkeyFailed": "Passkey 登录失败"
     }
   },
   "cluster": {
@@ -746,7 +774,16 @@
     "noPermission": {
       "title": "访问被拒绝",
       "adminRequired": "你没有权限访问此页面。"
-    }
+    },
+    "authenticationFailed": "认证失败",
+    "tokenRefreshFailed": "Token 刷新失败",
+    "websocketConnection": "WebSocket 连接错误",
+    "websocketCreateFailed": "创建 WebSocket 失败",
+    "sseConnection": "SSE 连接错误",
+    "sseError": "SSE 错误",
+    "invalidParamsNameRequired": "参数无效，name 为必填项。",
+    "resourceTypeNotFound": "未找到资源类型 \"{{resourceType}}\"",
+    "crdNameRequired": "错误：CRD 名称不能为空"
   },
   "rbac": {
     "title": "RBAC 管理",
@@ -772,6 +809,13 @@
       "delete": "删除",
       "log": "查看日志",
       "exec": "执行"
+    },
+    "group": "用户组",
+    "placeholders": {
+      "cluster": "* 或 cluster-name",
+      "namespace": "* 或 namespace",
+      "resources": "* 或 pods,deployments,namespaces",
+      "verbs": "* 或 get,create,update,delete,log,exec"
     }
   },
   "settings": {
@@ -798,7 +842,9 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "留空则保持当前 API Key 不变",
         "baseUrl": "Base URL",
-        "maxTokens": "最大 Token 数"
+        "maxTokens": "最大 Token 数",
+        "openaiCompatible": "OpenAI 兼容",
+        "anthropicCompatible": "Anthropic 兼容"
       }
     },
     "smtp": {
@@ -822,6 +868,7 @@
       },
       "securityHint": "此配置可能会不安全地传输邮件凭据或内容。",
       "managed": "由配置文件管理，不能在此修改。",
+      "toggle": "启用 SMTP",
       "actions": {
         "test": "发送测试邮件"
       },
@@ -884,6 +931,7 @@
   },
   "authenticationManagement": {
     "title": "认证设置",
+    "managed": "由配置文件管理，无法在此处修改。",
     "mfa": {
       "title": "MFA",
       "description": "允许用户配置认证器 App MFA。"
@@ -906,6 +954,8 @@
         "userFilter": "用户过滤器",
         "usernameAttribute": "用户名属性",
         "displayNameAttribute": "显示名属性",
+        "emailAttribute": "邮箱属性",
+        "avatarUrlAttribute": "头像 URL 属性",
         "groupBaseDn": "用户组 Base DN",
         "groupFilter": "用户组过滤器",
         "groupNameAttribute": "用户组名称属性"
@@ -946,7 +996,13 @@
       "importing": "导入中..."
     },
     "table": {
-      "prometheus": "Prometheus"
+      "prometheus": "Prometheus",
+      "agentVersion": "Agent 版本"
+    },
+    "agentVersion": {
+      "unknown": "未知",
+      "upToDate": "已是最新",
+      "upgradeRequired": "需要升级"
     },
     "type": {
       "inCluster": "集群内",
@@ -1213,12 +1269,83 @@
   },
   "accountSettings": {
     "title": "账户设置",
+    "profile": {
+      "managedNotice": "以上不可修改的信息由身份提供商管理。",
+      "nickname": "昵称",
+      "sendEmailCode": "发送验证码",
+      "emailVerificationCode": "验证码",
+      "emailCodeSent": "验证码已发送",
+      "saveButton": "保存资料",
+      "saved": "账户资料已更新",
+      "error": "更新账户资料失败"
+    },
+    "password": {
+      "currentPassword": "当前密码",
+      "newPassword": "新密码",
+      "confirmNewPassword": "确认新密码",
+      "changeButton": "修改密码",
+      "mismatch": "两次输入的密码不一致",
+      "changed": "密码已修改",
+      "error": "修改密码失败"
+    },
+    "security": {
+      "emailCodeSent": "验证码已发送",
+      "sendCodeError": "发送验证码失败",
+      "changeFailed": "安全操作失败",
+      "mfa": {
+        "qrCodeAlt": "MFA 二维码",
+        "otpauthUrl": "otpauth URL",
+        "authCode": "验证码",
+        "setupButton": "设置 MFA",
+        "enableButton": "启用 MFA",
+        "disableButton": "禁用 MFA",
+        "enabled": "MFA 已启用",
+        "disabled": "MFA 已禁用"
+      },
+      "passkeys": {
+        "title": "Passkey",
+        "namePlaceholder": "Passkey 名称",
+        "addButton": "添加 Passkey",
+        "empty": "暂无 Passkey。",
+        "lastUsed": "上次使用 {{date}}",
+        "addedOn": "添加于 {{date}}",
+        "deleteAriaLabel": "删除 {{name}}",
+        "added": "Passkey 已添加",
+        "deleted": "Passkey 已删除",
+        "loadError": "加载 Passkey 失败"
+      },
+      "emailVerification": {
+        "title": "验证邮箱",
+        "description": "输入发送到你邮箱的验证码以继续。"
+      }
+    },
     "tabs": {
       "profile": "资料",
       "password": "密码",
       "security": "安全",
       "kubeconfigTokens": "Kubeconfig 令牌"
     }
+  },
+  "webauthn": {
+    "registrationCancelled": "Passkey 注册已取消",
+    "signInCancelled": "Passkey 登录已取消",
+    "notAvailable": "此浏览器不支持 Passkey"
+  },
+  "userMenu": {
+    "title": "用户菜单",
+    "via": "via {{provider}}",
+    "role": "角色：{{roles}}",
+    "accountSettings": "账户设置",
+    "colorTheme": "颜色主题",
+    "font": "字体",
+    "system": "System",
+    "fontMaple": "Maple",
+    "fontJetBrainsMono": "JetBrains Mono",
+    "displayScale": "显示缩放",
+    "decreaseScale": "缩小显示",
+    "increaseScale": "放大显示",
+    "displayScalePercent": "显示缩放百分比",
+    "logout": "退出登录"
   },
   "deleteConfirmation": {
     "title": "删除 {{type}}",
@@ -1275,6 +1402,26 @@
         "workloadIssues": "列出异常工作负载及可能根因",
         "runbook": "给出按优先级排序的排障清单"
       }
+    },
+    "toolStatus": {
+      "error": "错误：{{message}}",
+      "calling": "正在调用 {{name}}...",
+      "cancelled": "{{name}} 已取消",
+      "failed": "{{name}} 失败",
+      "completed": "{{name}} 已完成",
+      "missingSession": "缺少 pending action 的 session id：{{name}}",
+      "missingSessionInput": "缺少 input request 的 session id：{{name}}",
+      "requiresConfirmation": "{{name}} 需要确认",
+      "requiresInput": "{{name}} 需要输入",
+      "unsupportedInput": "不支持的输入请求类型 {{kind}}",
+      "userDenied": "用户拒绝了请求的操作",
+      "inputRequest": "输入请求",
+      "statusText": "{{name}} {{status}}",
+      "pendingExpired": "此待处理操作已过期。请让 AI 重新生成操作。",
+      "inputExpired": "此输入请求已过期。请重新向 AI 提问。",
+      "executing": "执行中",
+      "submitting": "提交中",
+      "cancelling": "取消中"
     }
   },
   "templateManagement": {
@@ -1302,6 +1449,10 @@
     },
     "hints": {
       "nameImmutable": "创建后名称不可修改"
+    },
+    "placeholders": {
+      "name": "例如：Pod",
+      "description": "例如：一个包含单个容器的基础 Pod"
     }
   },
   "detail": {
@@ -1354,7 +1505,15 @@
       "restartDaemonSet": {
         "title": "重启 DaemonSet",
         "description": "重启此 DaemonSet 管理的所有 Pod。此操作不可撤销。"
-      }
+      },
+      "scaleStatefulSet": {
+        "title": "扩缩容 StatefulSet",
+        "description": "调整此 StatefulSet 的副本数。"
+      },
+      "restartStatefulSet": {
+        "description": "重启此 StatefulSet 管理的所有 Pod。"
+      },
+      "confirmRestart": "确认重启"
     },
     "sections": {
       "statusOverview": "状态概览",
@@ -1377,7 +1536,8 @@
     "actions": {
       "addRepository": "添加 Helm Repository",
       "deleteRepository": "删除 Helm Repository",
-      "install": "安装"
+      "install": "安装",
+      "toggleColumns": "切换列"
     },
     "fields": {
       "repository": "Repository",
@@ -1387,7 +1547,9 @@
       "versions": "版本",
       "defaultValues": "默认 Values",
       "customValues": "自定义 Values",
-      "updatedAt": "更新时间"
+      "updatedAt": "更新时间",
+      "home": "主页",
+      "readme": "README"
     },
     "filters": {
       "allRepositories": "全部 Repository",
@@ -1424,6 +1586,10 @@
     "namespaceRequired": "metadata.namespace 为必填项。",
     "targetExists": "目标 Namespace 中已存在同名资源。",
     "targetMustChange": "创建副本前，请修改 metadata.name 或 metadata.namespace。"
+  },
+  "auditLog": {
+    "apikey": "API Key",
+    "ai": "AI"
   },
   "helm": {
     "actions": {

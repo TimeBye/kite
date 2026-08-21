@@ -90,13 +90,13 @@ func TestRoleHandlers(t *testing.T) { //nolint:gocyclo // handler lifecycle test
 			t.Fatalf("list returned %d, want %d; body=%s", response.Code, http.StatusOK, response.Body.String())
 		}
 		var listed struct {
-			Roles []model.Role `json:"roles"`
+			Data []model.Role `json:"data"`
 		}
 		if err := json.Unmarshal(response.Body.Bytes(), &listed); err != nil {
 			t.Fatalf("decode list response: %v", err)
 		}
-		if len(listed.Roles) != 1 || listed.Roles[0].ID != created.Role.ID {
-			t.Fatalf("listed roles = %#v", listed.Roles)
+		if len(listed.Data) != 1 || listed.Data[0].ID != created.Role.ID {
+			t.Fatalf("listed roles = %#v", listed.Data)
 		}
 
 		response = perform(http.MethodGet, rolePath, "")

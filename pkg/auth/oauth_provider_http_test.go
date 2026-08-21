@@ -6,7 +6,68 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/zxh326/kite/pkg/model"
 )
+
+type genericProviderUserInfoTest struct {
+	name          string
+	provider      *GenericProvider
+	wantErr       bool
+	wantUsername  string
+	wantGroups    []string
+	wantProvider  string
+	wantName      string
+	wantEmail     string
+	wantAvatar    string
+	wantNoProfile bool
+}
+
+func assertGenericProviderUserInfo(t *testing.T, got *model.User, tc genericProviderUserInfoTest) {
+	t.Helper()
+	if got.Provider != tc.wantProvider {
+		t.Fatalf("Provider = %q, want %q", got.Provider, tc.wantProvider)
+	}
+	if got.Username != tc.wantUsername {
+		t.Errorf("Username = %q, want %q", got.Username, tc.wantUsername)
+	}
+	if len(got.OIDCGroups) != len(tc.wantGroups) {
+		t.Fatalf("OIDCGroups len = %d, want %d", len(got.OIDCGroups), len(tc.wantGroups))
+	}
+	for i, wantGroup := range tc.wantGroups {
+		if got.OIDCGroups[i] != wantGroup {
+			t.Errorf("OIDCGroups[%d] = %q, want %q", i, got.OIDCGroups[i], wantGroup)
+		}
+	}
+	if tc.wantNoProfile {
+		if got.Sub != "oid-123" || got.Name != "" || got.NameSource != "" || got.Email != "" || got.EmailSource != "" || got.AvatarURL != "" || got.AvatarURLSource != "" || got.EmailVerified || got.EmailVerifiedAt != nil {
+			t.Fatalf("GetUserInfo() disabled claim synchronization mismatch = %#v", got)
+		}
+		return
+	}
+	wantName := tc.wantName
+	if wantName == "" {
+		wantName = "Alice Nick"
+	}
+	wantEmail := tc.wantEmail
+	if wantEmail == "" {
+		wantEmail = "alice@example.com"
+	}
+	wantAvatar := tc.wantAvatar
+	if wantAvatar == "" {
+		wantAvatar = "https://example.com/avatar.png"
+	}
+	if got.Sub != "oid-123" || got.Name != wantName || got.NameSource != tc.wantProvider || got.Email != wantEmail || got.EmailSource != tc.wantProvider || got.AvatarURL != wantAvatar || got.AvatarURLSource != tc.wantProvider {
+		t.Fatalf("GetUserInfo() user details mismatch = %#v", got)
+	}
+	if !got.EmailVerified || got.EmailVerifiedAt == nil {
+		t.Fatalf("GetUserInfo() email verification mismatch = %#v", got)
+	}
+}
+
+func claim(value string) *string {
+	return &value
+}
 
 type rewriteTransport struct {
 	target *url.URL
@@ -122,6 +183,7 @@ func TestGenericProviderGetUserInfo(t *testing.T) {
 			"login":          "alice",
 			"displayName":    "Alice Display",
 			"nickname":       "Alice Nick",
+			"email":          "alice@example.com",
 			"picture":        "https://example.com/avatar.png",
 			"groups":         []any{"dev", "ops"},
 			"custom_uname":   "bob",
@@ -131,14 +193,7 @@ func TestGenericProviderGetUserInfo(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	tests := []struct {
-		name         string
-		provider     *GenericProvider
-		wantErr      bool
-		wantUsername string
-		wantGroups   []string
-		wantProvider string
-	}{
+	tests := []genericProviderUserInfoTest{
 		{
 			name: "default claims",
 			provider: &GenericProvider{
@@ -155,8 +210,8 @@ func TestGenericProviderGetUserInfo(t *testing.T) {
 			provider: &GenericProvider{
 				Name:          "github-custom1",
 				UserInfoURL:   server.URL + "/userinfo",
-				UsernameClaim: "custom_uname",
-				GroupsClaim:   "custom_grp_str",
+				UsernameClaim: claim("custom_uname"),
+				GroupsClaim:   claim("custom_grp_str"),
 			},
 			wantErr:      false,
 			wantUsername: "bob",
@@ -168,13 +223,46 @@ func TestGenericProviderGetUserInfo(t *testing.T) {
 			provider: &GenericProvider{
 				Name:          "github-custom2",
 				UserInfoURL:   server.URL + "/userinfo",
-				UsernameClaim: "custom_uname",
-				GroupsClaim:   "custom_grp",
+				UsernameClaim: claim("custom_uname"),
+				GroupsClaim:   claim("custom_grp"),
 			},
 			wantErr:      false,
 			wantUsername: "bob",
 			wantGroups:   []string{"admin"},
 			wantProvider: "github-custom2",
+		},
+		{
+			name: "empty claims disable synchronization",
+			provider: &GenericProvider{
+				Name:           "github-disabled",
+				UserInfoURL:    server.URL + "/userinfo",
+				UsernameClaim:  claim(""),
+				NameClaim:      claim(""),
+				EmailClaim:     claim(""),
+				AvatarURLClaim: claim(""),
+				GroupsClaim:    claim(""),
+			},
+			wantErr:       false,
+			wantUsername:  "oid-123",
+			wantGroups:    nil,
+			wantProvider:  "github-disabled",
+			wantNoProfile: true,
+		},
+		{
+			name: "custom profile claims",
+			provider: &GenericProvider{
+				Name:           "github-profile",
+				UserInfoURL:    server.URL + "/userinfo",
+				NameClaim:      claim("custom_uname"),
+				EmailClaim:     claim("custom_uname"),
+				AvatarURLClaim: claim("custom_uname"),
+			},
+			wantUsername: "alice",
+			wantGroups:   []string{"dev", "ops"},
+			wantProvider: "github-profile",
+			wantName:     "bob",
+			wantEmail:    "bob",
+			wantAvatar:   "bob",
 		},
 		{
 			name: "allowed groups success",
@@ -208,24 +296,33 @@ func TestGenericProviderGetUserInfo(t *testing.T) {
 			if tc.wantErr {
 				return
 			}
-			if got.Provider != tc.wantProvider {
-				t.Fatalf("Provider = %q, want %q", got.Provider, tc.wantProvider)
-			}
-			if got.Username != tc.wantUsername {
-				t.Errorf("Username = %q, want %q", got.Username, tc.wantUsername)
-			}
-			if len(got.OIDCGroups) != len(tc.wantGroups) {
-				t.Fatalf("OIDCGroups len = %d, want %d", len(got.OIDCGroups), len(tc.wantGroups))
-			}
-			for i, wantGroup := range tc.wantGroups {
-				if got.OIDCGroups[i] != wantGroup {
-					t.Errorf("OIDCGroups[%d] = %q, want %q", i, got.OIDCGroups[i], wantGroup)
-				}
-			}
-			if got.Sub != "oid-123" || got.Name != "Alice Nick" || got.AvatarURL != "https://example.com/avatar.png" {
-				t.Fatalf("GetUserInfo() user details mismatch = %#v", got)
-			}
+			assertGenericProviderUserInfo(t, got, tc)
 		})
+	}
+}
+
+func TestGenericProviderMissingCustomClaimsDoNotSetSources(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"oid":   "oid-123",
+			"login": "alice",
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	provider := &GenericProvider{
+		Name:           "github",
+		UserInfoURL:    server.URL,
+		NameClaim:      claim("missing_name"),
+		EmailClaim:     claim("missing_email"),
+		AvatarURLClaim: claim("missing_avatar"),
+	}
+	user, err := provider.GetUserInfo("access-token")
+	if err != nil {
+		t.Fatalf("GetUserInfo() error = %v", err)
+	}
+	if user.Name != "" || user.NameSource != "" || user.Email != "" || user.EmailSource != "" || user.AvatarURL != "" || user.AvatarURLSource != "" {
+		t.Fatalf("GetUserInfo() = %#v", user)
 	}
 }
 

@@ -53,6 +53,8 @@ export interface WebAuthnAssertionResponseJSON {
   authenticatorAttachment?: string
 }
 
+import i18n from '@/i18n'
+
 export async function createPasskeyCredential(
   options: WebAuthnCreationOptionsJSON
 ): Promise<WebAuthnRegistrationResponseJSON> {
@@ -61,7 +63,7 @@ export async function createPasskeyCredential(
     publicKey: decodeCreationOptions(options.publicKey),
   })
   if (!(credential instanceof PublicKeyCredential)) {
-    throw new Error('Passkey registration was cancelled')
+    throw new Error(i18n.t('webauthn.registrationCancelled'))
   }
 
   const response = credential.response as AuthenticatorAttestationResponse
@@ -90,7 +92,7 @@ export async function getPasskeyCredential(
     publicKey: decodeRequestOptions(options.publicKey),
   })
   if (!(credential instanceof PublicKeyCredential)) {
-    throw new Error('Passkey sign-in was cancelled')
+    throw new Error(i18n.t('webauthn.signInCancelled'))
   }
 
   const response = credential.response as AuthenticatorAssertionResponse
@@ -143,7 +145,7 @@ function decodeRequestOptions(
 
 function ensureWebAuthnSupport() {
   if (!window.PublicKeyCredential || !navigator.credentials) {
-    throw new Error('Passkeys are not available in this browser')
+    throw new Error(i18n.t('webauthn.notAvailable'))
   }
 }
 

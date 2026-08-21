@@ -6,7 +6,12 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import {
+  ColumnDef,
+  getCoreRowModel,
+  PaginationState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -15,7 +20,7 @@ import {
   createTemplate,
   deleteTemplate,
   updateTemplate,
-  useTemplates,
+  useTemplatesPaginated,
 } from '@/lib/api'
 import { translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -28,17 +33,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ResourceTableView } from '@/components/resource-table-view'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
 
-import { Action, ActionTable } from '../action-table'
+import { Action } from '../action-table'
 
 export function TemplateManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const { data: templates = [], isLoading } = useTemplates()
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  })
+  const { data: templateData, isLoading } = useTemplatesPaginated(
+    pagination.pageIndex + 1,
+    pagination.pageSize
+  )
+  const templates = templateData?.data ?? []
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] =
     useState<ResourceTemplate | null>(null)
@@ -55,6 +75,7 @@ export function TemplateManagement() {
     mutationFn: (data: Omit<ResourceTemplate, 'id'>) => createTemplate(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: ['templates-paginated'] })
       toast.success(
         t('common.messages.created', {
           resource: t('common.fields.template', 'Template'),
@@ -79,6 +100,7 @@ export function TemplateManagement() {
     }) => updateTemplate(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: ['templates-paginated'] })
       toast.success(
         t('common.messages.updated', {
           resource: t('common.fields.template', 'Template'),
@@ -97,6 +119,7 @@ export function TemplateManagement() {
     mutationFn: (id: number) => deleteTemplate(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: ['templates-paginated'] })
       toast.success(
         t('common.messages.deleted', {
           resource: t('common.fields.template', 'Template'),
@@ -197,15 +220,79 @@ export function TemplateManagement() {
     ]
   }, [t])
 
-  if (isLoading && templates.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">
-          {t('common.messages.loading', 'Loading...')}
+  const tableColumns = useMemo<ColumnDef<ResourceTemplate>[]>(() => {
+    const actionColumn: ColumnDef<ResourceTemplate> = {
+      id: 'actions',
+      header: t('common.fields.actions', 'Actions'),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('common.fields.actions', 'Actions')}
+              >
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {actions.map((action, index) => (
+                <DropdownMenuItem
+                  key={index}
+                  disabled={action.shouldDisable?.(row.original)}
+                  onClick={() => action.onClick(row.original)}
+                  className="gap-2"
+                >
+                  {action.dynamicLabel
+                    ? action.dynamicLabel(row.original)
+                    : action.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </div>
-    )
-  }
+      ),
+    }
+    return [...columns, actionColumn]
+  }, [actions, columns, t])
+
+  const table = useReactTable({
+    data: templates,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: { pagination },
+    onPaginationChange: setPagination,
+    manualPagination: true,
+    pageCount:
+      Math.ceil((templateData?.total ?? 0) / pagination.pageSize) || 0,
+  })
+
+  const emptyState = (() => {
+    if (isLoading && templates.length === 0) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-muted-foreground">
+            {t('common.messages.loading', 'Loading...')}
+          </div>
+        </div>
+      )
+    }
+    if (templates.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <IconTemplate className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>
+            {t('common.messages.noItemsFound', {
+              resource: t('common.fields.templates', 'templates'),
+              defaultValue: 'No templates found',
+            })}
+          </p>
+        </div>
+      )
+    }
+    return null
+  })()
 
   return (
     <div className="space-y-6">
@@ -232,18 +319,19 @@ export function TemplateManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable data={templates} columns={columns} actions={actions} />
-          {templates.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconTemplate className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {t('common.messages.noItemsFound', {
-                  resource: t('common.fields.templates', 'templates'),
-                  defaultValue: 'No templates found',
-                })}
-              </p>
-            </div>
-          )}
+          <ResourceTableView
+            table={table}
+            columnCount={tableColumns.length}
+            isLoading={isLoading}
+            data={templateData?.data}
+            emptyState={emptyState}
+            hasActiveFilters={false}
+            filteredRowCount={templates.length}
+            totalRowCount={templateData?.total ?? 0}
+            searchQuery=""
+            pagination={pagination}
+            setPagination={setPagination}
+          />
         </CardContent>
       </Card>
 
@@ -332,8 +420,10 @@ export function TemplateManagement() {
         onOpenChange={() => setDeletingTemplate(null)}
         onConfirm={handleDelete}
         resourceName={deletingTemplate?.name || ''}
-        resourceType="template"
+        resourceType={t('common.fields.template')}
       />
     </div>
   )
 }
+
+export default TemplateManagement

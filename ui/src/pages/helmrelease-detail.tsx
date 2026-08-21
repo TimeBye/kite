@@ -1623,7 +1623,7 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
   return (
     <ResourceDetailShell
       resourceType="helmrelease"
-      resourceLabel="Helm Release"
+      resourceLabel={t('nav.helmReleases')}
       name={name}
       namespace={namespace}
       data={data}

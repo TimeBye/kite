@@ -49,7 +49,8 @@
       "update": "Update",
       "viewDiff": "View Diff",
       "viewError": "View Error",
-      "watch": "Watch"
+      "watch": "Watch",
+      "continue": "Continue"
     },
     "fields": {
       "accessModes": "Access Modes",
@@ -69,6 +70,7 @@
       "availableReplicas": "Available Replicas",
       "avatar": "Avatar",
       "avatarUrl": "Avatar URL",
+      "avatarUrlClaim": "Avatar URL Claim",
       "allowedGroups": "Allowed Groups",
       "basicInformation": "Basic Information",
       "binaryData": "Binary Data",
@@ -98,6 +100,10 @@
       "desiredScheduled": "Desired Scheduled",
       "details": "Details",
       "effect": "Effect",
+      "email": "Email",
+      "emailClaim": "Email Claim",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
       "env": "Env",
       "envFrom": "Env From",
       "errorDetails": "Error Details",
@@ -112,6 +118,7 @@
       "hostname": "Hostname",
       "image": "Image",
       "images": "Images",
+      "id": "ID",
       "information": "Information",
       "internalIP": "Internal IP",
       "issuer": "Issuer",
@@ -135,6 +142,7 @@
       "minReadySeconds": "Min Ready",
       "mounts": "Mounts",
       "name": "Name",
+      "nameClaim": "Name Claim",
       "namespace": "Namespace",
       "namespaces": "Namespaces",
       "node": "Node",
@@ -155,6 +163,10 @@
       "podIP": "Pod IP",
       "podManagementPolicy": "Pod Management Policy",
       "pods": "Pods",
+      "pod": "Pod",
+      "configMap": "ConfigMap",
+      "secret": "Secret",
+      "daemonSet": "DaemonSet",
       "ports": "Ports",
       "progressDeadline": "Progress Deadline",
       "prometheus": "Prometheus",
@@ -279,7 +291,8 @@
       "unassigned": "Unassigned",
       "updated": "{{resource}} updated successfully",
       "updateExistingItem": "Update existing {{resource}}",
-      "yamlSaved": "YAML saved successfully"
+      "yamlSaved": "YAML saved successfully",
+      "containerUpdated": "Container updated successfully"
     },
     "tabs": {
       "containers": "Containers",
@@ -310,7 +323,9 @@
       "none": "None",
       "or": "or",
       "required": "This field is required",
-      "yes": "Yes"
+      "yes": "Yes",
+      "default": "Default",
+      "system": "System"
     },
     "placeholders": {
       "allowedGroups": "e.g., admin, developers (comma separated)",
@@ -358,10 +373,16 @@
       "pvcs": "PVCs",
       "pvs": "PVs"
     },
+    "customize": "Customize Sidebar",
+    "customizeTitle": "Customize Sidebar",
     "layout": "Layout",
     "layout.default": "Default",
     "layout.compact": "Compact",
     "layout.minimal": "Minimal",
+    "customize": "Customize Sidebar",
+    "customizeTitle": "Customize Sidebar",
+    "expand": "Expand",
+    "collapse": "Collapse",
     "pinnedItems": "Pinned Items",
     "pinned": "Pinned",
     "addAPIGroup": "Add Group",
@@ -560,6 +581,13 @@
       "started": "Started",
       "completed": "Completed",
       "age": "Age"
+    },
+    "suspended": "CronJob suspended",
+    "resumed": "CronJob resumed",
+    "jobCreated": "Job created successfully",
+    "errors": {
+      "suspendSpecMissing": "CronJob spec is missing, unable to update suspend state",
+      "templateIncomplete": "CronJob template is incomplete, unable to run now"
     }
   },
   "services": {
@@ -653,9 +681,15 @@
     "enterUsername": "Enter your username",
     "enterPassword": "Enter your password",
     "signingIn": "Signing in...",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "signInWithPassword": "Sign In with Password",
     "signInWithLdap": "Sign In with LDAP",
     "signInWithPasskey": "Sign in with a passkey",
+    "mfaCode": "MFA Code",
+    "mfaCodePlaceholder": "Enter 6-digit code",
+    "verifyMfa": "Verify MFA",
+    "passkeySignInFailed": "Passkey sign-in failed",
     "tabs": {
       "ldap": "LDAP"
     },
@@ -694,7 +728,8 @@
       "userDisabled": "User Disabled",
       "userDisabledMessage": "Your user account has been disabled. Please contact your administrator for more information.",
       "notInAllowedGroups": "Authentication succeeded, but your account is not a member of the allowed groups in {{provider}}.",
-      "notInAllowedGroupsDetails": "Please contact your administrator to be added to an allowed group."
+      "notInAllowedGroupsDetails": "Please contact your administrator to be added to an allowed group.",
+      "passkeyFailed": "Passkey sign-in failed"
     }
   },
   "cluster": {
@@ -741,20 +776,34 @@
     "noPermission": {
       "title": "Access Denied",
       "adminRequired": "You do not have permission to access this page."
-    }
+    },
+    "authenticationFailed": "Authentication failed",
+    "tokenRefreshFailed": "Token refresh failed",
+    "websocketConnection": "WebSocket connection error",
+    "websocketCreateFailed": "Failed to create WebSocket",
+    "sseConnection": "SSE connection error",
+    "sseError": "SSE error",
+    "invalidParamsNameRequired": "Invalid parameters. name are required.",
+    "resourceTypeNotFound": "Resource type \"{{resourceType}}\" not found",
+    "crdNameRequired": "Error: CRD name is required"
   },
   "rbac": {
+    "title": "RBAC Management",
     "noPermissionCluster": "User {{user}} does not have permission to {{verb}} {{resource}} on cluster {{cluster}}",
     "noPermissionNamespace": "User {{user}} does not have permission to {{verb}} {{resource}} in namespace {{namespace}} on cluster {{cluster}}",
     "accessDenied": "Access Denied",
     "insufficientPermissions": "You do not have sufficient permissions to perform this action",
     "allNamespaces": "All Namespaces",
     "anyUser": "Any user",
+    "get": "View",
     "confirmRemoveOwnRoleTitle": "Remove your role?",
     "deleteOwnRoleWarning": "This role is assigned to your current user. Deleting it may affect your permissions.",
     "permissionPreviewTitle": "Permission Preview",
     "permissionPreview": "Allows {{verbs}} on {{resources}} in namespaces {{namespaces}} on clusters {{clusters}}.",
     "resourceHint": "Use plural resource names. Type to filter suggestions. For CRDs and custom resources, enter the CRD name from the URL, for example widgets.example.com.",
+    "actions": {
+      "add": "Add Role"
+    },
     "verb": {
       "get": "Get",
       "create": "Create",
@@ -762,6 +811,13 @@
       "delete": "Delete",
       "log": "View Logs",
       "exec": "Execute"
+    },
+    "group": "Group",
+    "placeholders": {
+      "cluster": "* or cluster-name",
+      "namespace": "* or namespace",
+      "resources": "* or pods,deployments,namespaces",
+      "verbs": "* or get,create,update,delete,log,exec"
     }
   },
   "settings": {
@@ -773,6 +829,7 @@
       "oauth": "Authentication",
       "rbac": "RBAC",
       "users": "User",
+      "apikeys": "API Keys",
       "kubeconfigTokens": "Kubeconfig Tokens"
     }
   },
@@ -787,7 +844,9 @@
         "apiKey": "API Key",
         "apiKeyPlaceholder": "Leave empty to keep current API Key",
         "baseUrl": "Base URL",
-        "maxTokens": "Max Tokens"
+        "maxTokens": "Max Tokens",
+        "openaiCompatible": "OpenAI Compatible",
+        "anthropicCompatible": "Anthropic Compatible"
       }
     },
     "smtp": {
@@ -811,6 +870,7 @@
       },
       "securityHint": "This configuration may transmit email credentials or content insecurely.",
       "managed": "Managed by configuration file and cannot be modified here.",
+      "toggle": "Enable SMTP",
       "actions": {
         "test": "Send test email"
       },
@@ -873,6 +933,7 @@
   },
   "authenticationManagement": {
     "title": "Authentication",
+    "managed": "Managed by configuration file and cannot be modified here.",
     "mfa": {
       "title": "MFA",
       "description": "Allow users to configure authenticator app MFA."
@@ -895,6 +956,8 @@
         "userFilter": "User Filter",
         "usernameAttribute": "Username Attribute",
         "displayNameAttribute": "Display Name Attribute",
+        "emailAttribute": "Email Attribute",
+        "avatarUrlAttribute": "Avatar URL Attribute",
         "groupBaseDn": "Group Base DN",
         "groupFilter": "Group Filter",
         "groupNameAttribute": "Group Name Attribute"
@@ -935,7 +998,13 @@
       "importing": "Importing..."
     },
     "table": {
-      "prometheus": "Prometheus"
+      "prometheus": "Prometheus",
+      "agentVersion": "Agent Version"
+    },
+    "agentVersion": {
+      "unknown": "Unknown",
+      "upToDate": "Up to date",
+      "upgradeRequired": "Upgrade required"
     },
     "type": {
       "inCluster": "In-Cluster",
@@ -1097,6 +1166,37 @@
       "error": "Failed to rollback resource"
     }
   },
+  "templateManagement": {
+    "title": "Template Management",
+    "description": "Manage YAML templates for creating resources.",
+    "actions": {
+      "add": "Add Template"
+    },
+    "messages": {
+      "created": "Template created successfully",
+      "updated": "Template updated successfully",
+      "deleted": "Template deleted successfully"
+    },
+    "errors": {
+      "required": "Name and YAML content are required"
+    },
+    "empty": {
+      "description": "No templates"
+    },
+    "dialog": {
+      "createTitle": "Create Template",
+      "editTitle": "Edit Template",
+      "createDescription": "Add a new resource template",
+      "updateDescription": "Edit existing template"
+    },
+    "hints": {
+      "nameImmutable": "Name cannot be changed after creation"
+    },
+    "placeholders": {
+      "name": "e.g., Pod",
+      "description": "e.g., A basic Pod with a single container"
+    }
+  },
   "detail": {
     "status": {
       "loading": "Loading {{resource}} details...",
@@ -1147,7 +1247,15 @@
       "restartDaemonSet": {
         "title": "Restart DaemonSet",
         "description": "This will restart all pods managed by this DaemonSet. This action cannot be undone."
-      }
+      },
+      "scaleStatefulSet": {
+        "title": "Scale StatefulSet",
+        "description": "Adjust the number of replicas for this StatefulSet."
+      },
+      "restartStatefulSet": {
+        "description": "This will restart all pods managed by this StatefulSet."
+      },
+      "confirmRestart": "Confirm Restart"
     },
     "sections": {
       "statusOverview": "Status Overview",
@@ -1206,6 +1314,26 @@
         "workloadIssues": "List problematic workloads and probable root causes",
         "runbook": "Provide a prioritized troubleshooting runbook"
       }
+    },
+    "toolStatus": {
+      "error": "Error: {{message}}",
+      "calling": "Calling {{name}}...",
+      "cancelled": "{{name}} cancelled",
+      "failed": "{{name}} failed",
+      "completed": "{{name}} completed",
+      "missingSession": "Missing session id for pending action {{name}}",
+      "missingSessionInput": "Missing session id for input request {{name}}",
+      "requiresConfirmation": "{{name}} requires confirmation",
+      "requiresInput": "{{name}} requires input",
+      "unsupportedInput": "Unsupported input request type {{kind}}",
+      "userDenied": "User denied the requested action",
+      "inputRequest": "input request",
+      "statusText": "{{name}} {{status}}",
+      "pendingExpired": "This pending action has expired. Please ask the AI to generate the action again.",
+      "inputExpired": "This input request has expired. Please ask the AI again.",
+      "executing": "executing",
+      "submitting": "submitting",
+      "cancelling": "cancelling"
     }
   },
   "apikeyManagement": {
@@ -1267,12 +1395,83 @@
   },
   "accountSettings": {
     "title": "Account Settings",
+    "profile": {
+      "managedNotice": "The read-only information above is managed by your identity provider.",
+      "sendEmailCode": "Send Verification Code",
+      "emailVerificationCode": "Verification Code",
+      "emailCodeSent": "Verification code sent",
+      "saved": "Account updated",
+      "error": "Failed to update account",
+      "nickname": "Nickname",
+      "saveButton": "Save Profile"
+    },
     "tabs": {
       "profile": "Profile",
       "password": "Password",
       "security": "Security",
       "kubeconfigTokens": "Kubeconfig Tokens"
+    },
+    "password": {
+      "currentPassword": "Current Password",
+      "newPassword": "New Password",
+      "confirmNewPassword": "Confirm New Password",
+      "changeButton": "Change Password",
+      "mismatch": "New passwords do not match",
+      "changed": "Password changed",
+      "error": "Failed to change password"
+    },
+    "security": {
+      "emailCodeSent": "Verification code sent",
+      "sendCodeError": "Failed to send verification code",
+      "changeFailed": "Security change failed",
+      "mfa": {
+        "qrCodeAlt": "MFA QR code",
+        "otpauthUrl": "otpauth URL",
+        "authCode": "Authentication Code",
+        "setupButton": "Set Up MFA",
+        "enableButton": "Enable MFA",
+        "disableButton": "Disable MFA",
+        "enabled": "MFA enabled",
+        "disabled": "MFA disabled"
+      },
+      "passkeys": {
+        "title": "Passkeys",
+        "namePlaceholder": "Passkey name",
+        "addButton": "Add Passkey",
+        "empty": "No passkeys added.",
+        "lastUsed": "Last used {{date}}",
+        "addedOn": "Added {{date}}",
+        "deleteAriaLabel": "Delete {{name}}",
+        "added": "Passkey added",
+        "deleted": "Passkey deleted",
+        "loadError": "Failed to load passkeys"
+      },
+      "emailVerification": {
+        "title": "Verify email",
+        "description": "Enter the verification code sent to your email to continue."
+      }
     }
+  },
+  "webauthn": {
+    "registrationCancelled": "Passkey registration was cancelled",
+    "signInCancelled": "Passkey sign-in was cancelled",
+    "notAvailable": "Passkeys are not available in this browser"
+  },
+  "userMenu": {
+    "title": "User menu",
+    "via": "via {{provider}}",
+    "role": "Role: {{roles}}",
+    "accountSettings": "Account Settings",
+    "colorTheme": "Color Theme",
+    "font": "Font",
+    "system": "System",
+    "fontMaple": "Maple",
+    "fontJetBrainsMono": "JetBrains Mono",
+    "displayScale": "Display Scale",
+    "decreaseScale": "Decrease display scale",
+    "increaseScale": "Increase display scale",
+    "displayScalePercent": "Display scale percent",
+    "logout": "Log out"
   },
   "deleteConfirmation": {
     "title": "Delete {{type}}",
@@ -1290,7 +1489,8 @@
     "actions": {
       "addRepository": "Add Repository",
       "deleteRepository": "Delete Repository",
-      "install": "Install"
+      "install": "Install",
+      "toggleColumns": "Toggle columns"
     },
     "fields": {
       "repository": "Repository",
@@ -1300,7 +1500,9 @@
       "versions": "Versions",
       "defaultValues": "Default values",
       "customValues": "Custom values",
-      "updatedAt": "Updated"
+      "updatedAt": "Updated",
+      "home": "Home",
+      "readme": "README"
     },
     "filters": {
       "allRepositories": "All repositories",
@@ -1326,6 +1528,10 @@
     "placeholders": {
       "search": "Search charts..."
     }
+  },
+  "auditLog": {
+    "apikey": "apikey",
+    "ai": "AI"
   },
   "cloneResource": {
     "title": "Clone {{resource}}",

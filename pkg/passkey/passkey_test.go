@@ -140,6 +140,16 @@ func TestPasskeySessionIsSingleUse(t *testing.T) {
 	}
 }
 
+func TestPasskeyRegistrationSessionCannotCrossUsers(t *testing.T) {
+	stored := session{Ceremony: "registration", UserID: 1}
+	if err := ensureRegistrationSessionUser(stored, 2); err == nil {
+		t.Fatal("registration session accepted a different user")
+	}
+	if err := ensureRegistrationSessionUser(stored, 1); err != nil {
+		t.Fatalf("registration session rejected its user: %v", err)
+	}
+}
+
 func TestPasskeySessionCannotCrossCeremonies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	const token = "cross-ceremony-session"

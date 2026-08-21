@@ -21,8 +21,85 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+func TestUpdateCurrentUserHonorsFieldSources(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	user.Name = "Alice"
+	user.NameSource = model.AuthProviderLDAP
+	user.Email = "alice@example.com"
+	user.EmailSource = model.AuthProviderLDAP
+	if err := model.UpdateUser(user); err != nil {
+		t.Fatalf("updating user: %v", err)
+	}
+	router := gin.New()
+	router.PUT("/me", func(c *gin.Context) {
+		current, err := model.GetUserByID(uint64(user.ID))
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Set("user", *current)
+		UpdateCurrentUser(c)
+	})
+
+	blocked := performUserRequest(router, http.MethodPut, "/me", `{"name":"Updated","avatar_url":""}`)
+	if blocked.Code != http.StatusForbidden {
+		t.Fatalf("managed name update status = %d, want %d", blocked.Code, http.StatusForbidden)
+	}
+
+	allowed := performUserRequest(router, http.MethodPut, "/me", `{"name":"Alice","email":"alice@example.com","avatar_url":"https://example.com/avatar.png"}`)
+	if allowed.Code != http.StatusOK {
+		t.Fatalf("unmanaged avatar update status = %d, want %d: %s", allowed.Code, http.StatusOK, allowed.Body.String())
+	}
+	stored, err := model.GetUserByID(uint64(user.ID))
+	if err != nil {
+		t.Fatalf("loading updated user: %v", err)
+	}
+	if stored.AvatarURL != "https://example.com/avatar.png" {
+		t.Fatalf("AvatarURL = %q", stored.AvatarURL)
+	}
+}
+
+func TestUpdateCurrentUserSavesEmailWithOTP(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	user.Email = "alice@example.com"
+	if err := model.UpdateUser(user); err != nil {
+		t.Fatalf("updating user email: %v", err)
+	}
+	router := gin.New()
+	router.PUT("/me", func(c *gin.Context) {
+		current, err := model.GetUserByID(uint64(user.ID))
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Set("user", *current)
+		UpdateCurrentUser(c)
+	})
+
+	code, err := model.CreateEmailOTP(user.ID, "updated@example.com", model.EmailOTPEmailChange, time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatalf("creating email change OTP: %v", err)
+	}
+	response := performUserRequest(router, http.MethodPut, "/me", fmt.Sprintf(`{"name":"Updated","email":"updated@example.com","avatar_url":"https://example.com/avatar.png","email_otp":%q}`, code))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	stored, err := model.GetUserByID(uint64(user.ID))
+	if err != nil {
+		t.Fatalf("loading updated user: %v", err)
+	}
+	if stored.Name != "Updated" || stored.Email != "updated@example.com" || stored.AvatarURL != "https://example.com/avatar.png" || !stored.EmailVerified {
+		t.Fatalf("stored profile = %#v", stored)
+	}
+}
+
 func TestChangeCurrentUserPasswordVerifiesCurrentPassword(t *testing.T) {
 	user := setupUserHandlerTestDB(t)
+	user.Email = "alice@example.com"
+	user.EmailVerified = true
+	if err := model.UpdateUser(user); err != nil {
+		t.Fatalf("updating user email: %v", err)
+	}
 	router := gin.New()
 	router.PUT("/password", func(c *gin.Context) {
 		c.Set("user", *user)
@@ -54,8 +131,37 @@ func TestChangeCurrentUserPasswordVerifiesCurrentPassword(t *testing.T) {
 	}
 }
 
+func TestRequestCurrentUserSecurityOTPRequiresVerifiedEmail(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	user.Email = "alice@example.com"
+	if err := model.UpdateUser(user); err != nil {
+		t.Fatalf("updating user email: %v", err)
+	}
+	router := gin.New()
+	router.POST("/security-otp/request", func(c *gin.Context) {
+		current, err := model.GetUserByID(uint64(user.ID))
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Set("user", *current)
+		RequestCurrentUserSecurityOTP(c)
+	})
+
+	response := performUserRequest(router, http.MethodPost, "/security-otp/request?purpose=setup_mfa", "")
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusBadRequest, response.Body.String())
+	}
+}
+
 func TestCurrentUserMFALifecycle(t *testing.T) {
 	user := setupUserHandlerTestDB(t)
+	user.Provider = model.AuthProviderLDAP
+	user.Email = "alice@example.com"
+	user.EmailVerified = true
+	if err := model.UpdateUser(user); err != nil {
+		t.Fatalf("updating user email: %v", err)
+	}
 	router := gin.New()
 	router.POST("/mfa/setup", func(c *gin.Context) {
 		current, err := model.GetUserByID(uint64(user.ID))
@@ -85,7 +191,7 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 		DisableCurrentUserMFA(c)
 	})
 
-	setup := performUserRequest(router, http.MethodPost, "/mfa/setup", `{"current_password":"old-secret"}`)
+	setup := performUserRequest(router, http.MethodPost, "/mfa/setup", fmt.Sprintf(`{"email_otp":%q}`, createSecurityOTP(t, user, model.EmailOTPSetupMFA)))
 	if setup.Code != http.StatusOK {
 		t.Fatalf("setup status = %d, want %d: %s", setup.Code, http.StatusOK, setup.Body.String())
 	}
@@ -109,7 +215,7 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 	}
 
 	code := currentTOTPCode(t, setupBody.Secret)
-	enable := performUserRequest(router, http.MethodPost, "/mfa/enable", fmt.Sprintf(`{"code":%q}`, code))
+	enable := performUserRequest(router, http.MethodPost, "/mfa/enable", fmt.Sprintf(`{"code":%q,"email_otp":%q}`, code, createSecurityOTP(t, user, model.EmailOTPEnableMFA)))
 	if enable.Code != http.StatusOK {
 		t.Fatalf("enable status = %d, want %d: %s", enable.Code, http.StatusOK, enable.Body.String())
 	}
@@ -121,7 +227,7 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 		t.Fatalf("enabled MFA state = enabled:%v secret:%q", enabled.MFAEnabled, enabled.MFASecret)
 	}
 
-	disable := performUserRequest(router, http.MethodPost, "/mfa/disable", fmt.Sprintf(`{"code":%q}`, currentTOTPCode(t, setupBody.Secret)))
+	disable := performUserRequest(router, http.MethodPost, "/mfa/disable", fmt.Sprintf(`{"code":%q,"email_otp":%q}`, currentTOTPCode(t, setupBody.Secret), createSecurityOTP(t, user, model.EmailOTPDisableMFA)))
 	if disable.Code != http.StatusOK {
 		t.Fatalf("disable status = %d, want %d: %s", disable.Code, http.StatusOK, disable.Body.String())
 	}
@@ -209,7 +315,7 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 	if err != nil {
 		t.Fatalf("opening test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.GeneralSetting{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.EmailOTP{}, &model.GeneralSetting{}); err != nil {
 		t.Fatalf("migrating test database: %v", err)
 	}
 	model.DB = db
@@ -245,6 +351,15 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 		common.JwtSecret = originalJWTSecret
 	})
 	return user
+}
+
+func createSecurityOTP(t *testing.T, user *model.User, purpose string) string {
+	t.Helper()
+	code, err := model.CreateEmailOTP(user.ID, user.Email, purpose, time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatalf("creating security OTP: %v", err)
+	}
+	return code
 }
 
 func performUserRequest(router *gin.Engine, method string, path string, body string) *httptest.ResponseRecorder {

@@ -76,6 +76,14 @@ func (om *OAuthManager) GenerateState() string {
 }
 
 func (om *OAuthManager) GenerateJWT(user *model.User, refreshToken string) (string, error) {
+	return om.generateJWT(user, refreshToken, false)
+}
+
+func (om *OAuthManager) GenerateMFAPendingJWT(user *model.User, refreshToken string) (string, error) {
+	return om.generateJWT(user, refreshToken, true)
+}
+
+func (om *OAuthManager) generateJWT(user *model.User, refreshToken string, mfaPending bool) (string, error) {
 	now := time.Now()
 	expirationTime := now.Add(common.JWTExpirationSeconds * time.Second)
 
@@ -84,6 +92,7 @@ func (om *OAuthManager) GenerateJWT(user *model.User, refreshToken string) (stri
 		Username:     user.Username,
 		Provider:     user.Provider,
 		RefreshToken: refreshToken,
+		MFAPending:   mfaPending,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -148,15 +157,11 @@ func (om *OAuthManager) RefreshJWT(c *gin.Context, tokenString string) (string, 
 	}
 
 	if !time.Now().After(claims.ExpiresAt.Time) {
-		user := &model.User{
-			Model: model.Model{
-				ID: claims.UserID,
-			},
-			Username: claims.Username,
-			Provider: claims.Provider,
+		user, err := model.GetUserByID(uint64(claims.UserID))
+		if err != nil || !user.Enabled {
+			return "", fmt.Errorf("user not found or disabled")
 		}
-
-		return om.GenerateJWT(user, claims.RefreshToken)
+		return om.generateJWT(user, claims.RefreshToken, claims.MFAPending)
 	}
 
 	if claims.RefreshToken != "" {
@@ -177,13 +182,18 @@ func (om *OAuthManager) RefreshJWT(c *gin.Context, tokenString string) (string, 
 		}
 		user.ID = claims.UserID
 
+		existingUser, err := model.GetUserByID(uint64(claims.UserID))
+		if err != nil || !existingUser.Enabled {
+			return "", fmt.Errorf("user not found or disabled")
+		}
+
 		// Generate new JWT with refreshed token
 		newRefreshToken := tokenResp.RefreshToken
 		if newRefreshToken == "" {
 			newRefreshToken = claims.RefreshToken // Keep the old refresh token if no new one provided
 		}
 
-		return om.GenerateJWT(user, newRefreshToken)
+		return om.generateJWT(user, newRefreshToken, claims.MFAPending)
 	}
 
 	return "", fmt.Errorf("token expired")

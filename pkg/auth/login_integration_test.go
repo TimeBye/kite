@@ -1,11 +1,17 @@
 package auth
 
 import (
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base32"
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -110,6 +116,73 @@ func TestPasswordLoginHonorsMFAAndGlobalDisable(t *testing.T) {
 			t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
 		}
 	})
+}
+
+func TestCompleteMFALogin(t *testing.T) {
+	user := setupAuthIntegrationDB(t)
+	secret := "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+	if err := model.StoreMFASecret(user.ID, secret); err != nil {
+		t.Fatalf("storing MFA secret: %v", err)
+	}
+	if err := model.EnableUserMFA(user.ID); err != nil {
+		t.Fatalf("enabling MFA: %v", err)
+	}
+	handler := NewAuthHandler()
+	router := gin.New()
+	router.POST("/mfa/complete", handler.CompleteMFALogin)
+	router.GET("/protected", handler.RequireAuth(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	pendingToken, err := handler.manager.GenerateMFAPendingJWT(user, "refresh-token")
+	if err != nil {
+		t.Fatalf("generating MFA session: %v", err)
+	}
+	pendingCookie := &http.Cookie{Name: "auth_token", Value: pendingToken}
+	blocked := performAuthRequest(router, http.MethodGet, "/protected", "", pendingCookie)
+	if blocked.Code != http.StatusUnauthorized {
+		t.Fatalf("pending session status = %d, want %d", blocked.Code, http.StatusUnauthorized)
+	}
+
+	invalid := performAuthRequest(router, http.MethodPost, "/mfa/complete", `{"code":"000000"}`, pendingCookie)
+	if invalid.Code != http.StatusUnauthorized {
+		t.Fatalf("invalid MFA status = %d, want %d", invalid.Code, http.StatusUnauthorized)
+	}
+
+	completed := performAuthRequest(router, http.MethodPost, "/mfa/complete", fmt.Sprintf(`{"code":%q}`, currentAuthTOTPCode(t, secret)), pendingCookie)
+	if completed.Code != http.StatusNoContent {
+		t.Fatalf("complete MFA status = %d, want %d: %s", completed.Code, http.StatusNoContent, completed.Body.String())
+	}
+	var authCookie *http.Cookie
+	for _, cookie := range completed.Result().Cookies() {
+		if cookie.Name == "auth_token" {
+			authCookie = cookie
+			break
+		}
+	}
+	if authCookie == nil {
+		t.Fatal("MFA completion did not issue an auth cookie")
+	}
+	claims, err := handler.manager.ValidateJWT(authCookie.Value)
+	if err != nil || claims.MFAPending || claims.RefreshToken != "refresh-token" {
+		t.Fatalf("completed claims = %#v, error = %v", claims, err)
+	}
+}
+
+func currentAuthTOTPCode(t *testing.T, secret string) string {
+	t.Helper()
+	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+	if err != nil {
+		t.Fatalf("decoding TOTP secret: %v", err)
+	}
+	var message [8]byte
+	binary.BigEndian.PutUint64(message[:], uint64(time.Now().Unix()/30))
+	hash := hmac.New(sha1.New, key)
+	_, _ = hash.Write(message[:])
+	sum := hash.Sum(nil)
+	offset := sum[len(sum)-1] & 0x0f
+	value := binary.BigEndian.Uint32(sum[offset:offset+4]) & 0x7fffffff
+	return fmt.Sprintf("%06d", value%1000000)
 }
 
 func setupAuthIntegrationDB(t *testing.T) *model.User {

@@ -87,6 +87,7 @@ function ListEditor({
   hint?: string
   suggestions?: string[]
 }) {
+  const { t } = useTranslation()
   const inputFilter = input.split(',').at(-1)?.trim().toLowerCase() || ''
   const quickSuggestions =
     suggestions
@@ -127,7 +128,7 @@ function ListEditor({
             </span>
             <button
               type="button"
-              aria-label={`remove ${it}`}
+              aria-label={t('common.actions.remove') + ' ' + it}
               onClick={() => remove(it)}
               className="inline-flex shrink-0 items-center justify-center"
             >
@@ -290,7 +291,7 @@ export function RBACDialog({
                 onChange={(items) => setArrayField('clusters', items)}
                 input={drafts.clusters}
                 onInputChange={(value) => setDraft('clusters', value)}
-                placeholder="* or cluster-name"
+                placeholder={t('rbac.placeholders.cluster', '* or cluster-name')}
                 suggestions={
                   Array.isArray(clusterList)
                     ? ['*', ...(clusterList as Cluster[]).map((c) => c.name)]
@@ -304,7 +305,7 @@ export function RBACDialog({
                 onChange={(items) => setArrayField('namespaces', items)}
                 input={drafts.namespaces}
                 onInputChange={(value) => setDraft('namespaces', value)}
-                placeholder="* or namespace"
+                placeholder={t('rbac.placeholders.namespace', '* or namespace')}
                 suggestions={['*']}
               />
 
@@ -314,7 +315,7 @@ export function RBACDialog({
                 onChange={(items) => setArrayField('resources', items)}
                 input={drafts.resources}
                 onInputChange={(value) => setDraft('resources', value)}
-                placeholder="* or pods,deployments,namespaces"
+                placeholder={t('rbac.placeholders.resources', '* or pods,deployments,namespaces')}
                 hint={t(
                   'rbac.resourceHint',
                   'Use plural resource names. Type to filter suggestions. For CRDs and custom resources, enter the CRD name from the URL, for example widgets.example.com.'
@@ -328,7 +329,7 @@ export function RBACDialog({
                 onChange={(items) => setArrayField('verbs', items)}
                 input={drafts.verbs}
                 onInputChange={(value) => setDraft('verbs', value)}
-                placeholder="* or get,create,update,delete,log,exec"
+                placeholder={t('rbac.placeholders.verbs', '* or get,create,update,delete,log,exec')}
                 suggestions={VERB_SUGGESTIONS}
               />
             </div>

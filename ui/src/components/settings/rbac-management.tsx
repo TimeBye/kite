@@ -7,7 +7,12 @@ import {
   IconTrash,
 } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import {
+  ColumnDef,
+  getCoreRowModel,
+  PaginationState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -18,13 +23,20 @@ import {
   deleteRole,
   unassignRole,
   updateRole,
-  useRoleList,
+  useRoleListPaginated,
 } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ResourceTableView } from '@/components/resource-table-view'
 
-import { Action, ActionTable } from '../action-table'
+import { Action } from '../action-table'
 import { Badge } from '../ui/badge'
 import { RBACAssignmentDialog } from './rbac-assignment-dialog'
 import { RBACDialog } from './rbac-dialog'
@@ -33,8 +45,16 @@ export function RBACManagement() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const queryClient = useQueryClient()
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  })
 
-  const { data: roles = [], isLoading, error } = useRoleList()
+  const { data: roleData, isLoading, error } = useRoleListPaginated(
+    pagination.pageIndex + 1,
+    pagination.pageSize
+  )
+  const roles = roleData?.data ?? []
 
   const [showDialog, setShowDialog] = useState(false)
   const [editingRole, setEditingRole] = useState<Role | null>(null)
@@ -55,7 +75,11 @@ export function RBACManagement() {
               <span className="truncate font-medium" title={r.name}>
                 {r.name}
               </span>
-              {r.isSystem && <Badge variant="secondary">System</Badge>}
+              {r.isSystem && (
+                <Badge variant="secondary">
+                  {t('common.values.system', 'System')}
+                </Badge>
+              )}
             </div>
             {r.description && (
               <div
@@ -70,7 +94,7 @@ export function RBACManagement() {
       },
       {
         id: 'clusters',
-        header: 'Clusters',
+        header: t('common.fields.clusters'),
         cell: ({ row: { original: r } }) => (
           <div
             className="max-w-44 truncate text-sm text-muted-foreground"
@@ -119,7 +143,7 @@ export function RBACManagement() {
       },
       {
         id: 'verbs',
-        header: 'Verbs',
+        header: t('common.fields.verbs'),
         cell: ({ row: { original: r } }) => (
           <div
             className="max-w-44 truncate text-sm text-muted-foreground"
@@ -135,7 +159,7 @@ export function RBACManagement() {
       },
       {
         id: 'assignments',
-        header: 'Assignments',
+        header: t('common.fields.assignments'),
         cell: ({ row: { original: r } }) => {
           const users =
             r.assignments?.filter((a) => a.subjectType === 'user') || []
@@ -149,9 +173,9 @@ export function RBACManagement() {
                   key={a.id}
                   variant="secondary"
                   className="max-w-52 truncate text-xs"
-                  title={`user: ${a.subject}`}
+                  title={t('common.fields.user') + ': ' + a.subject}
                 >
-                  user: {a.subject}
+                  {t('common.fields.user')}: {a.subject}
                 </Badge>
               ))}
               {users.length > maxShow && (
@@ -164,9 +188,9 @@ export function RBACManagement() {
                   key={a.id}
                   variant="secondary"
                   className="max-w-52 truncate text-xs"
-                  title={`group: ${a.subject}`}
+                  title={t('rbac.group', 'Group') + ': ' + a.subject}
                 >
-                  group: {a.subject}
+                  {t('rbac.group', 'Group')}: {a.subject}
                 </Badge>
               ))}
               {groups.length > maxShow && (
@@ -228,10 +252,58 @@ export function RBACManagement() {
     [t]
   )
 
+  const tableColumns = useMemo<ColumnDef<Role>[]>(() => {
+    const actionColumn: ColumnDef<Role> = {
+      id: 'actions',
+      header: t('common.fields.actions', 'Actions'),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('common.fields.actions', 'Actions')}
+              >
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {actions.map((action, index) => (
+                <DropdownMenuItem
+                  key={index}
+                  disabled={action.shouldDisable?.(row.original)}
+                  onClick={() => action.onClick(row.original)}
+                  className="gap-2"
+                >
+                  {action.dynamicLabel
+                    ? action.dynamicLabel(row.original)
+                    : action.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    }
+    return [...columns, actionColumn]
+  }, [actions, columns, t])
+
+  const table = useReactTable({
+    data: roles,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: { pagination },
+    onPaginationChange: setPagination,
+    manualPagination: true,
+    pageCount: Math.ceil((roleData?.total ?? 0) / pagination.pageSize) || 0,
+  })
+
   const createMutation = useMutation({
     mutationFn: (data: Partial<Role>) => createRole(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      queryClient.invalidateQueries({ queryKey: ['role-list-paginated'] })
       toast.success(
         t('common.messages.created', {
           resource: t('common.fields.role', 'Role'),
@@ -255,6 +327,7 @@ export function RBACManagement() {
       updateRole(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      queryClient.invalidateQueries({ queryKey: ['role-list-paginated'] })
       toast.success(
         t('common.messages.updated', {
           resource: t('common.fields.role', 'Role'),
@@ -278,6 +351,7 @@ export function RBACManagement() {
     mutationFn: (id: number) => deleteRole(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      queryClient.invalidateQueries({ queryKey: ['role-list-paginated'] })
       toast.success(
         t('common.messages.deleted', {
           resource: t('common.fields.role', 'Role'),
@@ -320,6 +394,7 @@ export function RBACManagement() {
     try {
       await assignRole(roleId, { subjectType, subject })
       await queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      await queryClient.invalidateQueries({ queryKey: ['role-list-paginated'] })
 
       // Update assigningRole with fresh data to show the new assignment immediately
       if (assigningRole?.id === roleId) {
@@ -351,6 +426,7 @@ export function RBACManagement() {
     try {
       await unassignRole(roleId, subjectType, subject)
       await queryClient.invalidateQueries({ queryKey: ['role-list'] })
+      await queryClient.invalidateQueries({ queryKey: ['role-list-paginated'] })
 
       if (assigningRole?.id === roleId) {
         const updatedRoles = queryClient.getQueryData<Role[]>(['role-list'])
@@ -381,28 +457,49 @@ export function RBACManagement() {
       )
     : undefined
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">
-          {t('common.messages.loading', 'Loading...')}
+  const emptyState = (() => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-muted-foreground">
+            {t('common.messages.loading', 'Loading...')}
+          </div>
         </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-destructive">
-          {t('common.messages.failedToLoad', {
-            resource: t('common.fields.roles', 'roles'),
-            defaultValue: 'Failed to load roles',
-          })}
+      )
+    }
+    if (error) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-destructive">
+            {t('common.messages.failedToLoad', {
+              resource: t('common.fields.roles', 'roles'),
+              defaultValue: 'Failed to load roles',
+            })}
+          </div>
         </div>
-      </div>
-    )
-  }
+      )
+    }
+    if (roles.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <IconShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>
+            {t('common.messages.noItemsConfigured', {
+              resource: t('common.fields.roles', 'roles'),
+              defaultValue: 'No roles configured',
+            })}
+          </p>
+          <p className="text-sm mt-1">
+            {t('common.messages.createFirstItem', {
+              resource: t('common.fields.role', 'role'),
+              defaultValue: 'Create roles to grant permissions',
+            })}
+          </p>
+        </div>
+      )
+    }
+    return null
+  })()
 
   return (
     <div className="space-y-6">
@@ -428,24 +525,19 @@ export function RBACManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable actions={actions} data={roles} columns={columns} />
-          {roles.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconShieldCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {t('common.messages.noItemsConfigured', {
-                  resource: t('common.fields.roles', 'roles'),
-                  defaultValue: 'No roles configured',
-                })}
-              </p>
-              <p className="text-sm mt-1">
-                {t('common.messages.createFirstItem', {
-                  resource: t('common.fields.role', 'role'),
-                  defaultValue: 'Create roles to grant permissions',
-                })}
-              </p>
-            </div>
-          )}
+          <ResourceTableView
+            table={table}
+            columnCount={tableColumns.length}
+            isLoading={isLoading}
+            data={roleData?.data}
+            emptyState={emptyState}
+            hasActiveFilters={false}
+            filteredRowCount={roles.length}
+            totalRowCount={roleData?.total ?? 0}
+            searchQuery=""
+            pagination={pagination}
+            setPagination={setPagination}
+          />
         </CardContent>
       </Card>
 
@@ -478,7 +570,7 @@ export function RBACManagement() {
         onOpenChange={() => setDeletingRole(null)}
         onConfirm={handleDeleteRole}
         resourceName={deletingRole?.name || ''}
-        resourceType="role"
+        resourceType={t('rbac.title')}
         isDeleting={deleteMutation.isPending}
         additionalNote={deleteRoleAdditionalNote}
       />

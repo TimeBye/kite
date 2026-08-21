@@ -60,12 +60,14 @@ func TestClusterConfigurationLifecyclePreservesSecretsAndDefault(t *testing.T) {
 	if list.Code != http.StatusOK {
 		t.Fatalf("list status = %d, want %d", list.Code, http.StatusOK)
 	}
-	var listed []map[string]any
+	var listed struct {
+		Data []map[string]any `json:"data"`
+	}
 	if err := json.Unmarshal(list.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decoding list response: %v", err)
 	}
-	if len(listed) != 1 || listed[0]["config"] != "" || listed[0]["version"] != "v1.36.2" {
-		t.Fatalf("listed clusters = %#v", listed)
+	if len(listed.Data) != 1 || listed.Data[0]["config"] != "" || listed.Data[0]["version"] != "v1.36.2" {
+		t.Fatalf("listed clusters = %#v", listed.Data)
 	}
 	if strings.Contains(list.Body.String(), "secret-kubeconfig") {
 		t.Fatal("cluster list exposed kubeconfig")

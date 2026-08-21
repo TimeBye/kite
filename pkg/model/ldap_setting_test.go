@@ -13,7 +13,9 @@ func TestLDAPSetting_Normalized(t *testing.T) {
 		UserBaseDN:           " ou=users,dc=example,dc=com ",
 		UserFilter:           " ",
 		UsernameAttribute:    " ",
-		DisplayNameAttribute: " displayName ",
+		DisplayNameAttribute: " ",
+		EmailAttribute:       " ",
+		AvatarURLAttribute:   " avatar ",
 		GroupBaseDN:          " ou=groups,dc=example,dc=com ",
 		GroupFilter:          " ",
 		GroupNameAttribute:   " ",
@@ -35,14 +37,24 @@ func TestLDAPSetting_Normalized(t *testing.T) {
 	if normalized.UsernameAttribute != DefaultLDAPUsernameAttribute {
 		t.Fatalf("Normalized().UsernameAttribute = %q, want %q", normalized.UsernameAttribute, DefaultLDAPUsernameAttribute)
 	}
-	if normalized.DisplayNameAttribute != "displayName" {
-		t.Fatalf("Normalized().DisplayNameAttribute = %q", normalized.DisplayNameAttribute)
+	if normalized.DisplayNameAttribute != "" || normalized.EmailAttribute != "" {
+		t.Fatalf("Normalized() disabled profile attributes = %q, %q", normalized.DisplayNameAttribute, normalized.EmailAttribute)
+	}
+	if normalized.AvatarURLAttribute != "avatar" {
+		t.Fatalf("Normalized().AvatarURLAttribute = %q", normalized.AvatarURLAttribute)
 	}
 	if normalized.GroupFilter != DefaultLDAPGroupFilter {
 		t.Fatalf("Normalized().GroupFilter = %q, want %q", normalized.GroupFilter, DefaultLDAPGroupFilter)
 	}
 	if normalized.GroupNameAttribute != DefaultLDAPGroupNameAttribute {
 		t.Fatalf("Normalized().GroupNameAttribute = %q, want %q", normalized.GroupNameAttribute, DefaultLDAPGroupNameAttribute)
+	}
+}
+
+func TestDefaultLDAPSetting(t *testing.T) {
+	setting := DefaultLDAPSetting()
+	if setting.DisplayNameAttribute != "displayName" {
+		t.Fatalf("DefaultLDAPSetting().DisplayNameAttribute = %q, want %q", setting.DisplayNameAttribute, "displayName")
 	}
 }
 

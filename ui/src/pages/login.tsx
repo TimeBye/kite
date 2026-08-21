@@ -7,6 +7,7 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 
 import {
   beginPasskeyLogin,
+  completeMFALogin,
   finishPasskeyLogin,
   type CredentialProvider,
 } from '@/lib/api'
@@ -46,7 +47,12 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [mfaCode, setMfaCode] = useState('')
-  const [mfaRequired, setMfaRequired] = useState(false)
+  const [mfaRequired, setMfaRequired] = useState(
+    searchParams.get('mfa_required') === '1'
+  )
+  const [pendingMFALogin, setPendingMFALogin] = useState(
+    searchParams.get('mfa_required') === '1'
+  )
   const [credentialError, setCredentialError] = useState<string | null>(null)
   const [credentialsProvider, setCredentialsProvider] =
     useState<CredentialProvider>('password')
@@ -107,6 +113,11 @@ export function LoginPage() {
     setLoginLoading(credentialsProvider)
     setCredentialError(null)
     try {
+      if (pendingMFALogin) {
+        await completeMFALogin(mfaCode)
+        await checkAuth()
+        return
+      }
       await loginWithCredentials(
         credentialsProvider,
         username,
@@ -150,8 +161,15 @@ export function LoginPage() {
       await finishPasskeyLogin(credential)
       await checkAuth()
     } catch (error) {
+      if (error instanceof Error && error.message === 'mfa_required') {
+        setMfaRequired(true)
+        setPendingMFALogin(true)
+        return
+      }
       setCredentialError(
-        error instanceof Error ? error.message : 'Passkey sign-in failed'
+        error instanceof Error
+          ? error.message
+          : t('login.errors.passkeyFailed', 'Passkey sign-in failed')
       )
     } finally {
       setLoginLoading(null)
@@ -336,6 +354,7 @@ export function LoginPage() {
                               setCredentialsProvider(value)
                               setCredentialError(null)
                               setMfaRequired(false)
+                              setPendingMFALogin(false)
                               setMfaCode('')
                             }
                           }}
@@ -374,6 +393,7 @@ export function LoginPage() {
                               onChange={(e) => {
                                 setUsername(e.target.value)
                                 setMfaRequired(false)
+                                setPendingMFALogin(false)
                                 setMfaCode('')
                               }}
                               className="pl-9"
@@ -395,10 +415,12 @@ export function LoginPage() {
                               onChange={(e) => {
                                 setPassword(e.target.value)
                                 setMfaRequired(false)
+                                setPendingMFALogin(false)
                                 setMfaCode('')
                               }}
                               className="pl-9 pr-10"
-                              required
+                              disabled={pendingMFALogin}
+                              required={!pendingMFALogin}
                             />
                             <button
                               type="button"
@@ -418,16 +440,22 @@ export function LoginPage() {
                             </button>
                           </div>
                         </div>
-                        {credentialsProvider === 'password' && mfaRequired && (
+                        {mfaRequired && (
                           <div className="space-y-2">
-                            <Label htmlFor="mfaCode">MFA Code</Label>
+                            <Label htmlFor="mfaCode">
+                              {t('login.mfaCode', 'MFA Code')}
+                            </Label>
                             <Input
                               id="mfaCode"
                               type="text"
                               inputMode="numeric"
                               autoComplete="one-time-code"
                               maxLength={6}
-                              placeholder="Enter 6-digit code"
+                              autoFocus
+                              placeholder={t(
+                                'login.mfaCodePlaceholder',
+                                'Enter 6-digit code'
+                              )}
                               value={mfaCode}
                               onChange={(e) =>
                                 setMfaCode(
@@ -456,7 +484,7 @@ export function LoginPage() {
                               <span>{t('login.signingIn')}</span>
                             </div>
                           ) : mfaRequired ? (
-                            'Verify MFA'
+                            t('login.verifyMfa', 'Verify MFA')
                           ) : (
                             credentialSubmitLabel[credentialsProvider]
                           )}

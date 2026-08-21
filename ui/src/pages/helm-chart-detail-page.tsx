@@ -159,7 +159,7 @@ function ChartDetailsCard({ chart }: { chart: HelmChartDetail }) {
             )}
           </DetailItem>
           {chart.home ? (
-            <DetailItem label="Home">
+            <DetailItem label={t('helmCharts.fields.home', 'Home')}>
               <a
                 href={chart.home}
                 target="_blank"
@@ -212,7 +212,7 @@ function HelmChartOverview({ chart }: { chart: HelmChartDetail }) {
       <div className="grid gap-3 @4xl/helm-chart-overview:grid-cols-3">
         <div className="space-y-3 @4xl/helm-chart-overview:col-span-2">
           <MarkdownCard
-            title="README"
+            title={t('helmCharts.fields.readme', 'README')}
             content={chart.readme}
             emptyMessage={t('helmCharts.messages.noReadme')}
           />

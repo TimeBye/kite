@@ -8,7 +8,12 @@ import {
   IconUpload,
 } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ColumnDef } from '@tanstack/react-table'
+import {
+  ColumnDef,
+  getCoreRowModel,
+  PaginationState,
+  useReactTable,
+} from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -20,7 +25,8 @@ import {
   deleteCluster,
   importClusters,
   updateCluster,
-  useClusterList,
+  useClusterListPaginated,
+  useVersionInfo,
 } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,6 +39,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -44,8 +56,9 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ResourceTableView } from '@/components/resource-table-view'
 
-import { Action, ActionTable } from '../action-table'
+import { Action } from '../action-table'
 import { ClusterDialog } from './cluster-dialog'
 import { ClusterImportDialog } from './cluster-import-dialog'
 
@@ -53,13 +66,20 @@ export function ClusterManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 20,
+  })
+
   const {
-    data: clusters = [],
+    data: clusterData,
     isLoading,
     error,
-  } = useClusterList({
+  } = useClusterListPaginated(pagination.pageIndex + 1, pagination.pageSize, {
     refetchInterval: 5000,
   })
+  const clusters = clusterData?.data ?? []
+  const { data: versionInfo } = useVersionInfo()
 
   const [showClusterDialog, setShowClusterDialog] = useState(false)
   const [showImportDialog, setShowImportDialog] = useState(false)
@@ -159,7 +179,11 @@ export function ClusterManagement() {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium">{cluster.name}</span>
-              {cluster.isDefault && <Badge variant="secondary">Default</Badge>}
+              {cluster.isDefault && (
+                <Badge variant="secondary">
+                  {t('common.values.default', 'Default')}
+                </Badge>
+              )}
             </div>
             {cluster.description && (
               <div className="text-sm text-muted-foreground">
@@ -180,7 +204,9 @@ export function ClusterManagement() {
             return (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Badge variant="destructive">Error</Badge>
+                  <Badge variant="destructive">
+                    {t('common.messages.error')}
+                  </Badge>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p className="max-w-xs break-all">{cluster.error}</p>
@@ -201,6 +227,40 @@ export function ClusterManagement() {
         cell: ({ row: { original: cluster } }) => getClusterTypeBadge(cluster),
       },
       {
+        id: 'clusterAgentVersion',
+        header: t('clusterManagement.table.agentVersion', 'Agent Version'),
+        cell: ({ row: { original: cluster } }) => {
+          if (!cluster.clusterAgent) {
+            return <span className="text-muted-foreground">—</span>
+          }
+          if (!cluster.connected || !cluster.clusterAgentVersion || !versionInfo?.version) {
+            return (
+              <Badge variant="outline">
+                {t('clusterManagement.agentVersion.unknown', 'Unknown')}
+              </Badge>
+            )
+          }
+          const requiresUpgrade = cluster.clusterAgentVersion !== versionInfo.version
+          return (
+            <Badge
+              variant="outline"
+              className={
+                requiresUpgrade
+                  ? 'w-fit border-amber-200 bg-amber-50 text-amber-700'
+                  : 'w-fit border-green-200 bg-green-50 text-green-700'
+              }
+            >
+              <span className="font-mono">{cluster.clusterAgentVersion}</span>
+              <span>
+                {requiresUpgrade
+                  ? t('clusterManagement.agentVersion.upgradeRequired', 'Upgrade required')
+                  : t('clusterManagement.agentVersion.upToDate', 'Up to date')}
+              </span>
+            </Badge>
+          )
+        },
+      },
+      {
         id: 'status',
         header: t('common.fields.status', 'Status'),
         cell: ({ row: { original: cluster } }) => (
@@ -219,7 +279,7 @@ export function ClusterManagement() {
         ),
       },
     ],
-    [getClusterTypeBadge, getStatusBadge, t]
+    [getClusterTypeBadge, getStatusBadge, t, versionInfo?.version]
   )
 
   const actions = useMemo<Action<Cluster>[]>(
@@ -252,6 +312,53 @@ export function ClusterManagement() {
     [t]
   )
 
+  const tableColumns = useMemo<ColumnDef<Cluster>[]>(() => {
+    const actionColumn: ColumnDef<Cluster> = {
+      id: 'actions',
+      header: t('common.fields.actions', 'Actions'),
+      cell: ({ row }) => (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={t('common.fields.actions', 'Actions')}
+              >
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {actions.map((action, index) => (
+                <DropdownMenuItem
+                  key={index}
+                  disabled={action.shouldDisable?.(row.original)}
+                  onClick={() => action.onClick(row.original)}
+                  className="gap-2"
+                >
+                  {action.dynamicLabel
+                    ? action.dynamicLabel(row.original)
+                    : action.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    }
+    return [...columns, actionColumn]
+  }, [actions, columns, t])
+
+  const table = useReactTable({
+    data: clusters,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    state: { pagination },
+    onPaginationChange: setPagination,
+    manualPagination: true,
+    pageCount: Math.ceil((clusterData?.total ?? 0) / pagination.pageSize) || 0,
+  })
+
   const createMutation = useMutation({
     mutationFn: createCluster,
     onSuccess: async ({
@@ -266,6 +373,7 @@ export function ClusterManagement() {
       clusterAgentManifestURL?: string
     }) => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paginated'] })
       toast.success(
         t('clusterManagement.messages.created', 'Cluster created successfully')
       )
@@ -328,6 +436,7 @@ export function ClusterManagement() {
     mutationFn: (config: string) => importClusters({ config }),
     onSuccess: ({ importedCount }) => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paginated'] })
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
       toast.success(
         t(
@@ -346,6 +455,7 @@ export function ClusterManagement() {
       updateCluster(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paginated'] })
       toast.success(
         t('clusterManagement.messages.updated', 'Cluster updated successfully')
       )
@@ -368,6 +478,7 @@ export function ClusterManagement() {
     mutationFn: deleteCluster,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paginated'] })
       toast.success(
         t('clusterManagement.messages.deleted', 'Cluster deleted successfully')
       )
@@ -402,25 +513,39 @@ export function ClusterManagement() {
     deleteMutation.mutate(deletingCluster.id)
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-muted-foreground">
+  const emptyState = (() => {
+    if (isLoading) {
+      return (
+        <div className="py-10 text-center text-muted-foreground">
           {t('common.messages.loading', 'Loading...')}
         </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-destructive">
+      )
+    }
+    if (error) {
+      return (
+        <div className="py-10 text-center text-destructive">
           {t('clusterManagement.errors.loadFailed', 'Failed to load clusters')}
         </div>
-      </div>
-    )
-  }
+      )
+    }
+    if (clusters.length === 0) {
+      return (
+        <div className="py-10 text-center text-muted-foreground">
+          <IconServer className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>
+            {t('clusterManagement.empty.title', 'No clusters configured')}
+          </p>
+          <p className="text-sm mt-1">
+            {t(
+              'clusterManagement.empty.description',
+              'Add your first cluster to get started'
+            )}
+          </p>
+        </div>
+      )
+    }
+    return null
+  })()
 
   return (
     <div className="space-y-6">
@@ -459,21 +584,19 @@ export function ClusterManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <ActionTable data={clusters} columns={columns} actions={actions} />
-          {clusters.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <IconServer className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>
-                {t('clusterManagement.empty.title', 'No clusters configured')}
-              </p>
-              <p className="text-sm mt-1">
-                {t(
-                  'clusterManagement.empty.description',
-                  'Add your first cluster to get started'
-                )}
-              </p>
-            </div>
-          )}
+          <ResourceTableView
+            table={table}
+            columnCount={tableColumns.length}
+            isLoading={isLoading}
+            data={clusterData?.data}
+            emptyState={emptyState}
+            hasActiveFilters={false}
+            filteredRowCount={clusterData?.data?.length ?? 0}
+            totalRowCount={clusterData?.total ?? 0}
+            searchQuery=""
+            pagination={pagination}
+            setPagination={setPagination}
+          />
         </CardContent>
       </Card>
 
@@ -701,7 +824,7 @@ export function ClusterManagement() {
         onOpenChange={() => setDeletingCluster(null)}
         onConfirm={handleDeleteCluster}
         resourceName={deletingCluster?.name || ''}
-        resourceType="cluster"
+        resourceType={t('clusterManagement.title')}
         additionalNote={t(
           'clusterManagement.deleteConfirmation',
           "This action will only remove the current cluster's configuration in kite and will not delete any cluster resources."

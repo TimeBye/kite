@@ -29,6 +29,8 @@ type ldapConfig struct {
 	UserFilter           string
 	UsernameAttribute    string
 	DisplayNameAttribute string
+	EmailAttribute       string
+	AvatarURLAttribute   string
 	GroupBaseDN          string
 	GroupFilter          string
 	GroupNameAttribute   string
@@ -88,24 +90,41 @@ func (a *LDAPAuthenticator) Authenticate(setting *model.LDAPSetting, username, p
 		return nil, err
 	}
 
-	canonicalUsername := strings.TrimSpace(entry.GetAttributeValue(cfg.UsernameAttribute))
-	if canonicalUsername == "" {
-		canonicalUsername = strings.TrimSpace(username)
+	user := ldapUserFromEntry(entry, cfg, groups)
+	if user.Username == "" {
+		user.Username = strings.TrimSpace(username)
 	}
-
-	displayName := strings.TrimSpace(entry.GetAttributeValue(cfg.DisplayNameAttribute))
-	if displayName == "" {
-		displayName = canonicalUsername
+	if user.Name == "" && cfg.DisplayNameAttribute != "" {
+		user.Name = user.Username
+		user.NameSource = model.AuthProviderLDAP
 	}
+	return user, nil
+}
 
-	return &model.User{
-		Username:   canonicalUsername,
-		Name:       displayName,
+func ldapUserFromEntry(entry *ldap.Entry, cfg ldapConfig, groups model.SliceString) *model.User {
+	user := &model.User{
+		Username:   strings.TrimSpace(entry.GetAttributeValue(cfg.UsernameAttribute)),
+		Name:       strings.TrimSpace(entry.GetAttributeValue(cfg.DisplayNameAttribute)),
+		Email:      strings.TrimSpace(entry.GetAttributeValue(cfg.EmailAttribute)),
+		AvatarURL:  strings.TrimSpace(entry.GetAttributeValue(cfg.AvatarURLAttribute)),
 		Provider:   model.AuthProviderLDAP,
 		Password:   "",
 		OIDCGroups: groups,
 		Enabled:    true,
-	}, nil
+	}
+	if user.Name != "" {
+		user.NameSource = model.AuthProviderLDAP
+	}
+	if user.Email != "" {
+		now := time.Now()
+		user.EmailSource = model.AuthProviderLDAP
+		user.EmailVerified = true
+		user.EmailVerifiedAt = &now
+	}
+	if user.AvatarURL != "" {
+		user.AvatarURLSource = model.AuthProviderLDAP
+	}
+	return user
 }
 
 func newLDAPConfig(setting *model.LDAPSetting) (ldapConfig, error) {
@@ -127,6 +146,8 @@ func newLDAPConfig(setting *model.LDAPSetting) (ldapConfig, error) {
 		UserFilter:           normalized.UserFilter,
 		UsernameAttribute:    normalized.UsernameAttribute,
 		DisplayNameAttribute: normalized.DisplayNameAttribute,
+		EmailAttribute:       normalized.EmailAttribute,
+		AvatarURLAttribute:   normalized.AvatarURLAttribute,
 		GroupBaseDN:          normalized.GroupBaseDN,
 		GroupFilter:          normalized.GroupFilter,
 		GroupNameAttribute:   normalized.GroupNameAttribute,
@@ -161,6 +182,16 @@ func findLDAPUser(conn *ldap.Conn, cfg ldapConfig, username string) (*ldap.Entry
 	if err != nil {
 		return nil, err
 	}
+	attributes := []string{cfg.UsernameAttribute}
+	if cfg.DisplayNameAttribute != "" {
+		attributes = append(attributes, cfg.DisplayNameAttribute)
+	}
+	if cfg.EmailAttribute != "" {
+		attributes = append(attributes, cfg.EmailAttribute)
+	}
+	if cfg.AvatarURLAttribute != "" {
+		attributes = append(attributes, cfg.AvatarURLAttribute)
+	}
 	request := ldap.NewSearchRequest(
 		cfg.UserBaseDN,
 		ldap.ScopeWholeSubtree,
@@ -169,7 +200,7 @@ func findLDAPUser(conn *ldap.Conn, cfg ldapConfig, username string) (*ldap.Entry
 		0,
 		false,
 		filter,
-		[]string{cfg.UsernameAttribute, cfg.DisplayNameAttribute},
+		attributes,
 		nil,
 	)
 

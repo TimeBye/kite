@@ -39,7 +39,7 @@ export function SimpleResourceDetail<T extends ResourceType>(props: {
     () => [
       {
         value: 'related',
-        label: 'Related',
+        label: t('common.tabs.related'),
         content: (
           <RelatedResourcesTable
             resource={resourceType}
@@ -50,7 +50,7 @@ export function SimpleResourceDetail<T extends ResourceType>(props: {
       },
       {
         value: 'events',
-        label: 'Events',
+        label: t('common.tabs.events'),
         content: (
           <EventTable
             resource={resourceType}
@@ -61,7 +61,7 @@ export function SimpleResourceDetail<T extends ResourceType>(props: {
       },
       {
         value: 'history',
-        label: 'History',
+        label: t('common.tabs.history'),
         content: data ? (
           <ResourceHistoryTable
             resourceType={resourceType}
@@ -72,7 +72,7 @@ export function SimpleResourceDetail<T extends ResourceType>(props: {
         ) : null,
       },
     ],
-    [data, name, namespace, resourceType]
+    [data, name, namespace, resourceType, t]
   )
 
   return (

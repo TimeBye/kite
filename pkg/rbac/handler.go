@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,12 +33,35 @@ func (req roleReq) toRole() model.Role {
 
 // ListRoles returns all roles with assignments
 func ListRoles(c *gin.Context) {
+	page := 1
+	size := 20
+	if p := c.Query("page"); p != "" {
+		_, _ = fmt.Sscanf(p, "%d", &page)
+		if page <= 0 {
+			page = 1
+		}
+	}
+	if s := c.Query("size"); s != "" {
+		_, _ = fmt.Sscanf(s, "%d", &size)
+		if size <= 0 {
+			size = 20
+		}
+		if size > 200 {
+			size = 200
+		}
+	}
+
 	var roles []model.Role
-	if err := model.DB.Preload("Assignments").Find(&roles).Error; err != nil {
+	var total int64
+	if err := model.DB.Preload("Assignments").Model(&model.Role{}).Count(&total).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list roles: " + err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"roles": roles})
+	if err := model.DB.Preload("Assignments").Offset((page - 1) * size).Limit(size).Find(&roles).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list roles: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": roles, "total": total, "page": page, "size": size})
 }
 
 // GetRole returns a single role by id

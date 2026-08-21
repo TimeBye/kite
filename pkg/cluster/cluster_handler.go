@@ -90,7 +90,25 @@ func (cm *ClusterManager) GetClusters(c *gin.Context) {
 }
 
 func (cm *ClusterManager) GetClusterList(c *gin.Context) {
-	clusters, err := model.ListClusters()
+	page := 1
+	size := 20
+	if p := c.Query("page"); p != "" {
+		_, _ = fmt.Sscanf(p, "%d", &page)
+		if page <= 0 {
+			page = 1
+		}
+	}
+	if s := c.Query("size"); s != "" {
+		_, _ = fmt.Sscanf(s, "%d", &size)
+		if size <= 0 {
+			size = 20
+		}
+		if size > 200 {
+			size = 200
+		}
+	}
+
+	clusters, total, err := model.ListClustersWithPagination(page, size)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -125,7 +143,7 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 		result = append(result, clusterInfo)
 	}
 
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"data": result, "total": total, "page": page, "size": size})
 }
 
 func (cm *ClusterManager) CreateCluster(c *gin.Context) {

@@ -271,7 +271,7 @@ export function PodDetail(props: { namespace: string; name: string }) {
     <>
       <ResourceDetailShell
         resourceType="pods"
-        resourceLabel="Pod"
+        resourceLabel={t('common.fields.pod', 'Pod')}
         name={name}
         namespace={namespace}
         data={pod}

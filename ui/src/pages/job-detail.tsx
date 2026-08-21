@@ -247,7 +247,7 @@ export function JobDetail(props: { namespace: string; name: string }) {
   return (
     <ResourceDetailShell
       resourceType="jobs"
-      resourceLabel="Job"
+      resourceLabel={t('common.fields.job')}
       name={name}
       namespace={namespace}
       data={job}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -52,18 +53,29 @@ type Claims struct {
 	Username     string `json:"username"`
 	Provider     string `json:"provider"`
 	RefreshToken string `json:"refresh_token,omitempty"`
+	MFAPending   bool   `json:"mfa_pending,omitempty"`
 	jwt.RegisteredClaims
 }
 
 type GenericProvider struct {
-	Config        OAuthConfig
-	AuthURL       string
-	TokenURL      string
-	UserInfoURL   string
-	Name          string
-	UsernameClaim string
-	GroupsClaim   string
-	AllowedGroups []string
+	Config         OAuthConfig
+	AuthURL        string
+	TokenURL       string
+	UserInfoURL    string
+	Name           string
+	UsernameClaim  *string
+	NameClaim      *string
+	EmailClaim     *string
+	AvatarURLClaim *string
+	GroupsClaim    *string
+	AllowedGroups  []string
+}
+
+func syncedClaim(claim string) *string {
+	if claim == "" {
+		return nil
+	}
+	return &claim
 }
 
 // discoverOAuthEndpoints discovers OAuth endpoints from issuer's well-known configuration
@@ -154,13 +166,16 @@ func NewGenericProvider(op model.OAuthProvider) (*GenericProvider, error) {
 			RedirectURL:  op.RedirectURL,
 			Scopes:       strings.Join(scopes, " "),
 		},
-		AuthURL:       op.AuthURL,
-		TokenURL:      op.TokenURL,
-		UserInfoURL:   op.UserInfoURL,
-		Name:          string(op.Name),
-		UsernameClaim: op.UsernameClaim,
-		GroupsClaim:   op.GroupsClaim,
-		AllowedGroups: allowedGroups,
+		AuthURL:        op.AuthURL,
+		TokenURL:       op.TokenURL,
+		UserInfoURL:    op.UserInfoURL,
+		Name:           string(op.Name),
+		UsernameClaim:  syncedClaim(op.UsernameClaim),
+		NameClaim:      syncedClaim(op.NameClaim),
+		EmailClaim:     syncedClaim(op.EmailClaim),
+		AvatarURLClaim: syncedClaim(op.AvatarURLClaim),
+		GroupsClaim:    syncedClaim(op.GroupsClaim),
+		AllowedGroups:  allowedGroups,
 	}
 	return gp, nil
 }
@@ -194,6 +209,10 @@ func (g *GenericProvider) makeTokenRequest(data url.Values) (*TokenResponse, err
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token endpoint returned status %d: %s", resp.StatusCode, string(body))
+	}
 	var tokenResp TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		return nil, err
@@ -235,9 +254,22 @@ func (g *GenericProvider) GetUserInfo(accessToken string) (*model.User, error) {
 		Provider:   g.Name,
 		Sub:        extractSub(userInfo),
 		Username:   extractUsername(userInfo, g.UsernameClaim),
-		Name:       extractName(userInfo),
-		AvatarURL:  extractAvatarURL(userInfo),
+		Name:       extractName(userInfo, g.NameClaim),
+		Email:      extractEmail(userInfo, g.EmailClaim),
+		AvatarURL:  extractAvatarURL(userInfo, g.AvatarURLClaim),
 		OIDCGroups: g.extractOIDCGroups(userInfo, accessToken),
+	}
+	if user.Name != "" {
+		user.NameSource = g.Name
+	}
+	if user.Email != "" {
+		now := time.Now()
+		user.EmailSource = g.Name
+		user.EmailVerified = true
+		user.EmailVerifiedAt = &now
+	}
+	if user.AvatarURL != "" {
+		user.AvatarURLSource = g.Name
 	}
 	if user.Username == "" {
 		user.Username = user.Key()
@@ -267,6 +299,11 @@ func (g *GenericProvider) fetchUserInfo(accessToken string) (map[string]interfac
 	defer func() {
 		_ = resp.Body.Close()
 	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("userinfo endpoint returned status %d: %s", resp.StatusCode, string(body))
+	}
 
 	var userInfo map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
@@ -301,9 +338,9 @@ func extractSub(userInfo map[string]interface{}) string {
 	return ""
 }
 
-func extractUsername(userInfo map[string]interface{}, customClaim string) string {
-	if value := customClaimValue(userInfo, customClaim); value != "" {
-		return value
+func extractUsername(userInfo map[string]interface{}, customClaim *string) string {
+	if customClaim != nil {
+		return customClaimValue(userInfo, *customClaim)
 	}
 	if v := firstClaimValue(userInfo, "username", "login", "userPrincipalName", "preferred_username", "upn", "email"); v != "" {
 		return v
@@ -314,7 +351,10 @@ func extractUsername(userInfo map[string]interface{}, customClaim string) string
 	return ""
 }
 
-func extractName(userInfo map[string]interface{}) string {
+func extractName(userInfo map[string]interface{}, customClaim *string) string {
+	if customClaim != nil {
+		return customClaimValue(userInfo, *customClaim)
+	}
 	if nickname, ok := userInfo["nickname"]; ok {
 		return fmt.Sprintf("%v", nickname)
 	}
@@ -322,26 +362,39 @@ func extractName(userInfo map[string]interface{}) string {
 		return v
 	}
 	if nested, ok := unwrapDataField(userInfo); ok {
-		return extractName(nested)
+		return extractName(nested, customClaim)
 	}
 	return ""
 }
 
-func extractAvatarURL(userInfo map[string]interface{}) string {
+func extractEmail(userInfo map[string]interface{}, customClaim *string) string {
+	if customClaim != nil {
+		return customClaimValue(userInfo, *customClaim)
+	}
+	if v := firstClaimValue(userInfo, "email", "emailAddress", "mail"); v != "" {
+		return v
+	}
+	if nested, ok := unwrapDataField(userInfo); ok {
+		return extractEmail(nested, customClaim)
+	}
+	return ""
+}
+
+func extractAvatarURL(userInfo map[string]interface{}, customClaim *string) string {
+	if customClaim != nil {
+		return customClaimValue(userInfo, *customClaim)
+	}
 	if v := firstClaimValue(userInfo, "avatar_url", "picture"); v != "" {
 		return v
 	}
 	if nested, ok := unwrapDataField(userInfo); ok {
-		return extractAvatarURL(nested)
+		return extractAvatarURL(nested, customClaim)
 	}
 	return ""
 }
 
 func customClaimValue(userInfo map[string]interface{}, claim string) string {
-	if claim == "" {
-		return ""
-	}
-	if value, ok := userInfo[claim]; ok && value != "" {
+	if value, ok := userInfo[claim]; ok && value != nil {
 		return fmt.Sprintf("%v", value)
 	}
 	return ""
@@ -349,7 +402,7 @@ func customClaimValue(userInfo map[string]interface{}, claim string) string {
 
 func firstClaimValue(userInfo map[string]interface{}, claims ...string) string {
 	for _, claim := range claims {
-		if value, ok := userInfo[claim]; ok {
+		if value, ok := userInfo[claim]; ok && value != nil {
 			return fmt.Sprintf("%v", value)
 		}
 	}
@@ -357,12 +410,14 @@ func firstClaimValue(userInfo map[string]interface{}, claims ...string) string {
 }
 
 func (g *GenericProvider) extractOIDCGroups(userInfo map[string]interface{}, accessToken string) []string {
-	groups := extractClaimGroups(userInfo, g.GroupsClaim)
-	if len(groups) == 0 {
+	var groups []interface{}
+	if g.GroupsClaim != nil {
+		groups = extractClaimGroups(userInfo, *g.GroupsClaim)
+	} else {
 		groups = extractClaimGroups(userInfo, "groups", "roles")
 	}
 
-	if len(groups) == 0 && strings.Contains(g.UserInfoURL, "graph.microsoft.com") {
+	if len(groups) == 0 && g.GroupsClaim == nil && strings.Contains(g.UserInfoURL, "graph.microsoft.com") {
 		klog.V(1).Infof("No groups in user info, fetching from /me/memberOf for %s", g.Name)
 		memberOfGroups, err := g.fetchAzureADGroups(accessToken)
 		if err != nil {

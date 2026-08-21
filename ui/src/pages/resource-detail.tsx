@@ -1,4 +1,5 @@
 import { useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { ResourceType } from '@/types/api'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -8,6 +9,7 @@ import { getResourceDefinition, getResourceLabel } from './resource-definitions'
 import { SimpleResourceDetail } from './simple-resource-detail'
 
 export function ResourceDetail() {
+  const { t } = useTranslation()
   const { resource, namespace, name } = useParams()
   const resourceDefinition = resource
     ? getResourceDefinition(resource)
@@ -23,7 +25,7 @@ export function ResourceDetail() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-muted-foreground">
-              Invalid parameters. name are required.
+              {t('errors.invalidParamsNameRequired', 'Invalid parameters. name are required.')}
             </div>
           </CardContent>
         </Card>

@@ -26,6 +26,7 @@ const (
 
 type session struct {
 	Ceremony string
+	UserID   uint
 	Name     string
 	Data     webauthn.SessionData
 }
@@ -82,11 +83,14 @@ func BeginRegistration(c *gin.Context, user model.User, name string) (*protocol.
 	if err != nil {
 		return nil, err
 	}
-	saveSession(c, session{
+	if err := saveSession(c, session{
 		Ceremony: "registration",
+		UserID:   user.ID,
 		Name:     passkeyName(name),
 		Data:     *data,
-	})
+	}); err != nil {
+		return nil, err
+	}
 	return creation, nil
 }
 
@@ -97,6 +101,9 @@ func FinishRegistration(c *gin.Context, user model.User) (*model.PasskeyCredenti
 	}
 	storedSession, err := loadSession(c, "registration")
 	if err != nil {
+		return nil, err
+	}
+	if err := ensureRegistrationSessionUser(storedSession, user.ID); err != nil {
 		return nil, err
 	}
 	webUser, err := webAuthnUserFor(user)
@@ -110,6 +117,13 @@ func FinishRegistration(c *gin.Context, user model.User) (*model.PasskeyCredenti
 	return createCredential(user.ID, storedSession.Name, *credential)
 }
 
+func ensureRegistrationSessionUser(storedSession session, userID uint) error {
+	if storedSession.UserID != userID {
+		return errors.New("passkey session user mismatch")
+	}
+	return nil
+}
+
 func BeginLogin(c *gin.Context) (*protocol.CredentialAssertion, error) {
 	w, err := webAuthnForRequest(c)
 	if err != nil {
@@ -119,10 +133,12 @@ func BeginLogin(c *gin.Context) (*protocol.CredentialAssertion, error) {
 	if err != nil {
 		return nil, err
 	}
-	saveSession(c, session{
+	if err := saveSession(c, session{
 		Ceremony: "login",
 		Data:     *data,
-	})
+	}); err != nil {
+		return nil, err
+	}
 	return assertion, nil
 }
 
@@ -230,10 +246,14 @@ func webAuthnUserFor(user model.User) (webAuthnUser, error) {
 	return webAuthnUser{user: &user, credentials: credentials}, nil
 }
 
-func saveSession(c *gin.Context, data session) {
-	token := randomToken()
+func saveSession(c *gin.Context, data session) error {
+	token, err := randomToken()
+	if err != nil {
+		return err
+	}
 	sessionCache.Add(token, data)
 	setCookie(c, sessionCookieName, token, int(sessionMaxAge.Seconds()))
+	return nil
 }
 
 func loadSession(c *gin.Context, ceremony string) (session, error) {
@@ -306,12 +326,12 @@ func passkeyName(name string) string {
 	return name
 }
 
-func randomToken() string {
+func randomToken() (string, error) {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
+		return "", fmt.Errorf("failed to generate random token: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(buf)
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
 func userHandle(id uint) []byte {
