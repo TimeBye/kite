@@ -204,11 +204,11 @@ test('backend APIs work end to end against the real test environment', async ({
       }),
       200
     )
-    const clustersAfterUpdate = await expectJSON<
-      Array<{ id: number; description: string; enabled: boolean }>
-    >(await request.get('/api/v1/admin/clusters/'), 200)
+    const clustersAfterUpdate = await expectJSON<{
+      data: Array<{ id: number; description: string; enabled: boolean }>
+    }>(await request.get('/api/v1/admin/clusters/'), 200)
     expect(
-      clustersAfterUpdate.find((cluster) => cluster.id === dummyClusterId)
+      clustersAfterUpdate.data.find((cluster) => cluster.id === dummyClusterId)
     ).toMatchObject({
       description: 'updated backend API E2E cluster',
       enabled: false,

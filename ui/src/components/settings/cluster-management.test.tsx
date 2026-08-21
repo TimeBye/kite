@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ClusterManagement } from './cluster-management'
 
-const { useClusterList, useVersionInfo } = vi.hoisted(() => ({
-  useClusterList: vi.fn(),
+const { useClusterListPaginated, useVersionInfo } = vi.hoisted(() => ({
+  useClusterListPaginated: vi.fn(),
   useVersionInfo: vi.fn(),
 }))
 
@@ -18,7 +18,7 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('@/lib/api', () => ({
-  useClusterList,
+  useClusterListPaginated,
   useVersionInfo,
   createCluster: vi.fn(),
   deleteCluster: vi.fn(),
@@ -81,7 +81,10 @@ const clusters = [
 ]
 
 function renderManagement() {
-  useClusterList.mockReturnValue({ data: clusters, isLoading: false })
+  useClusterListPaginated.mockReturnValue({
+    data: { data: clusters, total: clusters.length, page: 1, size: 20 },
+    isLoading: false,
+  })
   useVersionInfo.mockReturnValue({ data: { version: 'v0.15.0' } })
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
