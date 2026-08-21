@@ -163,6 +163,7 @@ async function waitForOAuthTableReady(page: Page) {
   await expect(
     page
       .getByRole('row')
+      .first()
       .or(page.getByText('No OAuth providers configured'))
   ).toBeVisible({ timeout: 10000 })
 }
