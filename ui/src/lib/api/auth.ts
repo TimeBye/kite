@@ -108,7 +108,16 @@ export const changeCurrentUserPassword = async (
 }
 
 export type SecurityOTPPurpose =
-  'setup_mfa' | 'enable_mfa' | 'disable_mfa' | 'add_passkey' | 'delete_passkey'
+  'setup_mfa' | 'disable_mfa' | 'add_passkey' | 'delete_passkey'
+
+export type SecurityMethod = 'email_otp' | 'password' | 'none'
+
+export const getCurrentUserSecurityMethod = async (): Promise<SecurityMethod> => {
+  const result = await authApiClient.get<{ method: SecurityMethod }>(
+    '/users/me/security-method'
+  )
+  return result.method
+}
 
 export const requestCurrentUserSecurityOTP = async (
   purpose: SecurityOTPPurpose
@@ -132,31 +141,28 @@ export interface PasskeyCredential {
   last_used_at?: string
 }
 
-export const setupCurrentUserMFA = async (
-  emailOTP: string
-): Promise<MFASetupResponse> => {
-  return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', {
-    email_otp: emailOTP,
-  })
+export interface SecurityVerification {
+  email_otp?: string
+  current_password?: string
 }
 
-export const enableCurrentUserMFA = async (
-  code: string,
-  emailOTP: string
-): Promise<AuthUser> => {
-  return authApiClient.post<AuthUser>('/users/me/mfa/enable', {
-    code,
-    email_otp: emailOTP,
-  })
+export const setupCurrentUserMFA = async (
+  verification: SecurityVerification
+): Promise<MFASetupResponse> => {
+  return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', verification)
+}
+
+export const enableCurrentUserMFA = async (code: string): Promise<AuthUser> => {
+  return authApiClient.post<AuthUser>('/users/me/mfa/enable', { code })
 }
 
 export const disableCurrentUserMFA = async (
   code: string,
-  emailOTP: string
+  verification: SecurityVerification
 ): Promise<AuthUser> => {
   return authApiClient.post<AuthUser>('/users/me/mfa/disable', {
     code,
-    email_otp: emailOTP,
+    ...verification,
   })
 }
 
@@ -171,11 +177,11 @@ export const listCurrentUserPasskeys = async (): Promise<
 
 export const beginCurrentUserPasskeyRegistration = async (
   name: string,
-  emailOTP: string
+  verification: SecurityVerification
 ): Promise<WebAuthnCreationOptionsJSON> => {
   return authApiClient.post<WebAuthnCreationOptionsJSON>(
     '/users/me/passkeys/begin',
-    { name, email_otp: emailOTP }
+    { name, ...verification }
   )
 }
 
@@ -190,11 +196,11 @@ export const finishCurrentUserPasskeyRegistration = async (
 
 export const deleteCurrentUserPasskey = async (
   id: number,
-  emailOTP: string
+  verification: SecurityVerification
 ): Promise<void> => {
   await authApiClient.request(`/users/me/passkeys/${id}`, {
     method: 'DELETE',
-    body: JSON.stringify({ email_otp: emailOTP }),
+    body: JSON.stringify(verification),
   })
 }
 

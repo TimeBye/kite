@@ -1367,6 +1367,10 @@
       "emailVerification": {
         "title": "验证邮箱",
         "description": "输入发送到你邮箱的验证码以继续。"
+      },
+      "passwordVerification": {
+        "title": "验证密码",
+        "description": "输入当前密码以继续。"
       }
     },
     "tabs": {

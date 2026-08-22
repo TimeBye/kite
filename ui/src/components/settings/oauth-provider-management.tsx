@@ -397,6 +397,7 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
+            fitViewportHeight
           />
         </CardContent>
       </Card>

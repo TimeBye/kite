@@ -74,6 +74,7 @@ func registerUserRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler) {
 	userGroup.PUT("/me", authHandler.RequireAuth(), users.UpdateCurrentUser)
 	userGroup.POST("/me/email/request", authHandler.RequireAuth(), users.RequestCurrentUserEmailUpdate)
 	userGroup.POST("/me/security-otp/request", authHandler.RequireAuth(), users.RequestCurrentUserSecurityOTP)
+	userGroup.GET("/me/security-method", authHandler.RequireAuth(), users.GetCurrentUserSecurityMethod)
 	userGroup.POST("/me/password", authHandler.RequireAuth(), users.ChangeCurrentUserPassword)
 	userGroup.POST("/me/mfa/setup", authHandler.RequireAuth(), users.SetupCurrentUserMFA)
 	userGroup.POST("/me/mfa/enable", authHandler.RequireAuth(), users.EnableCurrentUserMFA)

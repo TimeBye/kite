@@ -369,6 +369,7 @@ export function APIKeyManagement() {
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
+            fitViewportHeight
           />
         </CardContent>
       </Card>

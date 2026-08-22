@@ -94,7 +94,7 @@ export function ResourceTableView<T>({
   }
 
   const dataLength = data?.length ?? 0
-  const resolvedAllPageSize = allPageSize ?? dataLength
+  const resolvedAllPageSize = allPageSize ?? totalRowCount
   const rootRef = useRef<HTMLDivElement>(null)
   const tableShellRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)

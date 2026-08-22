@@ -596,6 +596,7 @@ export function ClusterManagement() {
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
+            fitViewportHeight
           />
         </CardContent>
       </Card>

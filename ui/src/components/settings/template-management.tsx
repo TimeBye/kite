@@ -331,6 +331,7 @@ export function TemplateManagement() {
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
+            fitViewportHeight
           />
         </CardContent>
       </Card>

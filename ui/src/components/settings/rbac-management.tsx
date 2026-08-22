@@ -545,6 +545,7 @@ export function RBACManagement() {
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
+            fitViewportHeight
           />
         </CardContent>
       </Card>

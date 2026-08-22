@@ -13,6 +13,7 @@ import {
   disableCurrentUserMFA,
   enableCurrentUserMFA,
   finishCurrentUserPasskeyRegistration,
+  getCurrentUserSecurityMethod,
   listCurrentUserPasskeys,
   requestCurrentUserSecurityOTP,
   setupCurrentUserMFA,
@@ -20,6 +21,8 @@ import {
   useCurrentUserKubeconfigTokens,
   type MFASetupResponse,
   type PasskeyCredential,
+  type SecurityMethod,
+  type SecurityVerification,
 } from '@/lib/api'
 import { translateError } from '@/lib/utils'
 import { createPasskeyCredential } from '@/lib/webauthn'
@@ -48,7 +51,6 @@ interface AccountSettingsDialogProps {
 
 type SecurityAction =
   | 'mfa-setup'
-  | 'mfa-enable'
   | 'mfa-disable'
   | 'passkey-add'
   | 'passkey-delete'
@@ -105,6 +107,8 @@ export function AccountSettingsDialog({
   // Security OTP dialog state
   const [securityAction, setSecurityAction] =
     useState<SecurityAction | null>(null)
+  const [securityMethod, setSecurityMethod] =
+    useState<SecurityMethod>('email_otp')
   const [passkeyToDelete, setPasskeyToDelete] = useState<number | null>(null)
 
   useEffect(() => {
@@ -236,6 +240,12 @@ export function AccountSettingsDialog({
 
   // ── Security OTP (MFA + Passkey) ──
 
+  const buildVerification = (value: string): SecurityVerification => {
+    return securityMethod === 'password'
+      ? { current_password: value }
+      : { email_otp: value }
+  }
+
   const openSecurityOTP = async (action: SecurityAction, passkeyID?: number) => {
     const purpose =
       action === 'mfa-setup'
@@ -244,24 +254,86 @@ export function AccountSettingsDialog({
           ? 'disable_mfa'
           : action === 'passkey-add'
             ? 'add_passkey'
-            : action === 'passkey-delete'
-              ? 'delete_passkey'
-              : 'enable_mfa'
+            : 'delete_passkey'
+    const isMFAAction = action.startsWith('mfa')
     try {
-      await requestCurrentUserSecurityOTP(purpose)
-      setSecurityAction(action)
+      const method = await getCurrentUserSecurityMethod()
+      setSecurityMethod(method)
       setPasskeyToDelete(passkeyID ?? null)
-      toast.success(
-        t('accountSettings.security.emailCodeSent', 'Verification code sent')
-      )
+
+      if (method === 'email_otp') {
+        await requestCurrentUserSecurityOTP(purpose)
+        toast.success(
+          t('accountSettings.security.emailCodeSent', 'Verification code sent')
+        )
+      }
+
+      // For email_otp and password modes, open the dialog.
+      // For none mode, execute the action directly.
+      if (method === 'none') {
+        if (isMFAAction) {
+          setSavingMFA(true)
+          setMFAError('')
+        } else {
+          setSavingPasskey(true)
+          setPasskeyError('')
+        }
+        try {
+          await executeSecurityAction(action, '')
+        } catch (error) {
+          const message = translateError(error, t)
+          if (isMFAAction) setMFAError(message)
+          else setPasskeyError(message)
+        } finally {
+          if (isMFAAction) setSavingMFA(false)
+          else setSavingPasskey(false)
+        }
+      } else {
+        setSecurityAction(action)
+      }
     } catch (error) {
       const message = translateError(error, t)
-      if (action.startsWith('mfa')) setMFAError(message)
+      if (isMFAAction) setMFAError(message)
       else setPasskeyError(message)
     }
   }
 
-  const handleConfirmSecurityOTP = async (otp: string) => {
+  const executeSecurityAction = async (
+    action: SecurityAction,
+    verificationValue: string
+  ) => {
+    const verification = buildVerification(verificationValue)
+
+    if (action === 'mfa-setup') {
+      setMFASetup(await setupCurrentUserMFA(verification))
+      setMFACode('')
+    } else if (action === 'mfa-disable') {
+      await disableCurrentUserMFA(mfaCode, verification)
+      await checkAuth()
+      setMFACode('')
+      toast.success(t('accountSettings.security.mfa.disabled', 'MFA disabled'))
+    } else if (action === 'passkey-add') {
+      const options = await beginCurrentUserPasskeyRegistration(
+        passkeyName,
+        verification
+      )
+      const credential = await createPasskeyCredential(options)
+      await finishCurrentUserPasskeyRegistration(credential)
+      setPasskeyName('')
+      setPasskeys(await listCurrentUserPasskeys())
+      toast.success(
+        t('accountSettings.security.passkeys.added', 'Passkey added')
+      )
+    } else if (passkeyToDelete) {
+      await deleteCurrentUserPasskey(passkeyToDelete, verification)
+      setPasskeys(await listCurrentUserPasskeys())
+      toast.success(
+        t('accountSettings.security.passkeys.deleted', 'Passkey deleted')
+      )
+    }
+  }
+
+  const handleConfirmSecurityOTP = async (value: string) => {
     if (!securityAction) return
     const action = securityAction
     const isMFAAction = action.startsWith('mfa')
@@ -275,34 +347,7 @@ export function AccountSettingsDialog({
     }
 
     try {
-      if (action === 'mfa-setup') {
-        setMFASetup(await setupCurrentUserMFA(otp))
-        setMFACode('')
-      } else if (action === 'mfa-enable') {
-        await enableCurrentUserMFA(mfaCode, otp)
-        await checkAuth()
-        setMFASetup(null)
-        setMFACode('')
-        toast.success(t('accountSettings.security.mfa.enabled', 'MFA enabled'))
-      } else if (action === 'mfa-disable') {
-        await disableCurrentUserMFA(mfaCode, otp)
-        await checkAuth()
-        setMFACode('')
-        toast.success(t('accountSettings.security.mfa.disabled', 'MFA disabled'))
-      } else if (action === 'passkey-add') {
-        const options = await beginCurrentUserPasskeyRegistration(passkeyName, otp)
-        setSecurityAction(null)
-        const credential = await createPasskeyCredential(options)
-        await finishCurrentUserPasskeyRegistration(credential)
-        setPasskeyName('')
-        setPasskeys(await listCurrentUserPasskeys())
-        toast.success(t('accountSettings.security.passkeys.added', 'Passkey added'))
-        return
-      } else if (passkeyToDelete) {
-        await deleteCurrentUserPasskey(passkeyToDelete, otp)
-        setPasskeys(await listCurrentUserPasskeys())
-        toast.success(t('accountSettings.security.passkeys.deleted', 'Passkey deleted'))
-      }
+      await executeSecurityAction(action, value)
       setSecurityAction(null)
     } catch (error) {
       const message = translateError(error, t)
@@ -312,6 +357,25 @@ export function AccountSettingsDialog({
     } finally {
       if (isMFAAction) setSavingMFA(false)
       else setSavingPasskey(false)
+    }
+  }
+
+  // ── MFA Enable (TOTP only, no security verification) ──
+
+  const handleEnableMFA = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setMFAError('')
+    setSavingMFA(true)
+    try {
+      await enableCurrentUserMFA(mfaCode)
+      await checkAuth()
+      setMFASetup(null)
+      setMFACode('')
+      toast.success(t('accountSettings.security.mfa.enabled', 'MFA enabled'))
+    } catch (error) {
+      setMFAError(translateError(error, t))
+    } finally {
+      setSavingMFA(false)
     }
   }
 
@@ -577,10 +641,7 @@ export function AccountSettingsDialog({
                     </form>
                   ) : mfaSetup ? (
                     <form
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        openSecurityOTP('mfa-enable')
-                      }}
+                      onSubmit={handleEnableMFA}
                       className="space-y-4"
                     >
                       <div className="space-y-2">
@@ -779,6 +840,7 @@ export function AccountSettingsDialog({
 
       <SecurityOTPDialog
         open={securityAction !== null}
+        method={securityMethod}
         onOpenChange={(next) => {
           if (!next) setSecurityAction(null)
         }}

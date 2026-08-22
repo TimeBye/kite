@@ -191,7 +191,8 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 		DisableCurrentUserMFA(c)
 	})
 
-	setup := performUserRequest(router, http.MethodPost, "/mfa/setup", fmt.Sprintf(`{"email_otp":%q}`, createSecurityOTP(t, user, model.EmailOTPSetupMFA)))
+	// LDAP user with no password and no SMTP → method=none, no verification needed
+	setup := performUserRequest(router, http.MethodPost, "/mfa/setup", `{}`)
 	if setup.Code != http.StatusOK {
 		t.Fatalf("setup status = %d, want %d: %s", setup.Code, http.StatusOK, setup.Body.String())
 	}
@@ -214,8 +215,9 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 		t.Fatalf("pending MFA state = enabled:%v secret:%q", pending.MFAEnabled, pending.MFASecret)
 	}
 
+	// Enable only requires TOTP code, no security verification
 	code := currentTOTPCode(t, setupBody.Secret)
-	enable := performUserRequest(router, http.MethodPost, "/mfa/enable", fmt.Sprintf(`{"code":%q,"email_otp":%q}`, code, createSecurityOTP(t, user, model.EmailOTPEnableMFA)))
+	enable := performUserRequest(router, http.MethodPost, "/mfa/enable", fmt.Sprintf(`{"code":%q}`, code))
 	if enable.Code != http.StatusOK {
 		t.Fatalf("enable status = %d, want %d: %s", enable.Code, http.StatusOK, enable.Body.String())
 	}
@@ -227,7 +229,8 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 		t.Fatalf("enabled MFA state = enabled:%v secret:%q", enabled.MFAEnabled, enabled.MFASecret)
 	}
 
-	disable := performUserRequest(router, http.MethodPost, "/mfa/disable", fmt.Sprintf(`{"code":%q,"email_otp":%q}`, currentTOTPCode(t, setupBody.Secret), createSecurityOTP(t, user, model.EmailOTPDisableMFA)))
+	// Disable requires TOTP code + security verification (method=none → passes)
+	disable := performUserRequest(router, http.MethodPost, "/mfa/disable", fmt.Sprintf(`{"code":%q}`, currentTOTPCode(t, setupBody.Secret)))
 	if disable.Code != http.StatusOK {
 		t.Fatalf("disable status = %d, want %d: %s", disable.Code, http.StatusOK, disable.Body.String())
 	}
@@ -237,6 +240,56 @@ func TestCurrentUserMFALifecycle(t *testing.T) {
 	}
 	if disabled.MFAEnabled || disabled.MFASecret != "" {
 		t.Fatalf("disabled MFA state = enabled:%v secret:%q", disabled.MFAEnabled, disabled.MFASecret)
+	}
+}
+
+func TestCurrentUserMFAWithPasswordVerification(t *testing.T) {
+	user := setupUserHandlerTestDB(t)
+	// Password user, no verified email, no SMTP → method=password
+	router := gin.New()
+	router.POST("/mfa/setup", func(c *gin.Context) {
+		c.Set("user", *user)
+		SetupCurrentUserMFA(c)
+	})
+	router.POST("/mfa/enable", func(c *gin.Context) {
+		current, err := model.GetUserByID(uint64(user.ID))
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		c.Set("user", *current)
+		EnableCurrentUserMFA(c)
+	})
+
+	// Setup with wrong password should fail
+	badSetup := performUserRequest(router, http.MethodPost, "/mfa/setup", `{"current_password":"wrong"}`)
+	if badSetup.Code != http.StatusBadRequest {
+		t.Fatalf("wrong-password setup status = %d, want %d", badSetup.Code, http.StatusBadRequest)
+	}
+
+	// Setup with correct password should succeed
+	setup := performUserRequest(router, http.MethodPost, "/mfa/setup", `{"current_password":"old-secret"}`)
+	if setup.Code != http.StatusOK {
+		t.Fatalf("setup status = %d, want %d: %s", setup.Code, http.StatusOK, setup.Body.String())
+	}
+	var setupBody struct {
+		Secret string `json:"secret"`
+	}
+	if err := json.Unmarshal(setup.Body.Bytes(), &setupBody); err != nil {
+		t.Fatalf("decoding setup response: %v", err)
+	}
+
+	// Enable only needs TOTP code
+	enable := performUserRequest(router, http.MethodPost, "/mfa/enable", fmt.Sprintf(`{"code":%q}`, currentTOTPCode(t, setupBody.Secret)))
+	if enable.Code != http.StatusOK {
+		t.Fatalf("enable status = %d, want %d: %s", enable.Code, http.StatusOK, enable.Body.String())
+	}
+	enabled, err := model.GetUserByID(uint64(user.ID))
+	if err != nil {
+		t.Fatalf("loading enabled MFA user: %v", err)
+	}
+	if !enabled.MFAEnabled {
+		t.Fatal("MFA should be enabled")
 	}
 }
 
@@ -351,15 +404,6 @@ func setupUserHandlerTestDB(t *testing.T) *model.User {
 		common.JwtSecret = originalJWTSecret
 	})
 	return user
-}
-
-func createSecurityOTP(t *testing.T, user *model.User, purpose string) string {
-	t.Helper()
-	code, err := model.CreateEmailOTP(user.ID, user.Email, purpose, time.Now().Add(time.Minute))
-	if err != nil {
-		t.Fatalf("creating security OTP: %v", err)
-	}
-	return code
 }
 
 func performUserRequest(router *gin.Engine, method string, path string, body string) *httptest.ResponseRecorder {

@@ -13,27 +13,30 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import type { SecurityMethod } from '@/lib/api'
 
 interface SecurityOTPDialogProps {
   open: boolean
+  method: SecurityMethod
   onOpenChange: (open: boolean) => void
   loading: boolean
-  onConfirm: (otp: string) => Promise<void>
+  onConfirm: (value: string) => Promise<void>
 }
 
 export function SecurityOTPDialog({
   open,
+  method,
   onOpenChange,
   loading,
   onConfirm,
 }: SecurityOTPDialogProps) {
   const { t } = useTranslation()
-  const [otp, setOtp] = useState('')
+  const [value, setValue] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!open) {
-      setOtp('')
+      setValue('')
       setError('')
     }
   }, [open])
@@ -42,11 +45,13 @@ export function SecurityOTPDialog({
     e.preventDefault()
     setError('')
     try {
-      await onConfirm(otp)
+      await onConfirm(value)
     } catch (err) {
       setError(err instanceof Error ? err.message : t('accountSettings.security.changeFailed', 'Security change failed'))
     }
   }
+
+  const isPasswordMode = method === 'password'
 
   return (
     <Dialog
@@ -58,33 +63,49 @@ export function SecurityOTPDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {t(
-              'accountSettings.security.emailVerification.title',
-              'Verify email'
-            )}
+            {isPasswordMode
+              ? t(
+                  'accountSettings.security.passwordVerification.title',
+                  'Verify password'
+                )
+              : t(
+                  'accountSettings.security.emailVerification.title',
+                  'Verify email'
+                )}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              'accountSettings.security.emailVerification.description',
-              'Enter the verification code sent to your email to continue.'
-            )}
+            {isPasswordMode
+              ? t(
+                  'accountSettings.security.passwordVerification.description',
+                  'Enter your current password to continue.'
+                )
+              : t(
+                  'accountSettings.security.emailVerification.description',
+                  'Enter the verification code sent to your email to continue.'
+                )}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="security-otp">
-              {t(
-                'accountSettings.profile.emailVerificationCode',
-                'Verification Code'
-              )}
+              {isPasswordMode
+                ? t(
+                    'accountSettings.password.currentPassword',
+                    'Current Password'
+                  )
+                : t(
+                    'accountSettings.profile.emailVerificationCode',
+                    'Verification Code'
+                  )}
             </Label>
             <Input
               id="security-otp"
-              autoComplete="one-time-code"
-              inputMode="numeric"
+              autoComplete={isPasswordMode ? 'current-password' : 'one-time-code'}
+              inputMode={isPasswordMode ? undefined : 'numeric'}
+              type={isPasswordMode ? 'password' : 'text'}
               required
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
             />
           </div>
           {error && (
