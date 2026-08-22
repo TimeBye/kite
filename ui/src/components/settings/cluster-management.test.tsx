@@ -13,7 +13,13 @@ const { useClusterListPaginated, useVersionInfo } = vi.hoisted(() => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, defaultValue?: string) => defaultValue ?? _key,
+    t: (key: string, defaultValueOrOptions?: string | Record<string, unknown>) => {
+      if (typeof defaultValueOrOptions === 'string') return defaultValueOrOptions
+      if (typeof defaultValueOrOptions === 'object' && defaultValueOrOptions?.defaultValue) {
+        return defaultValueOrOptions.defaultValue as string
+      }
+      return key
+    },
   }),
 }))
 

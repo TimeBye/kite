@@ -230,7 +230,7 @@ export function ResourceTableView<T>({
         </div>
       </div>
 
-      {dataLength > 0 && (
+      {(dataLength > 0 || totalRowCount > 0) && (
         <div
           ref={footerRef}
           className="flex flex-col gap-3 px-2 py-1 sm:flex-row sm:items-center sm:justify-between"
