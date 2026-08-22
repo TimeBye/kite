@@ -110,7 +110,7 @@ export function LoginPage() {
 
   const handleCredentialLogin = async (e: FormEvent) => {
     e.preventDefault()
-    setLoginLoading(credentialsProvider)
+    setLoginLoading(pendingMFALogin ? 'mfa' : credentialsProvider)
     setCredentialError(null)
     try {
       if (pendingMFALogin) {
@@ -342,6 +342,52 @@ export function LoginPage() {
                     {t('login.configureAuth')}
                   </p>
                 </div>
+              ) : pendingMFALogin ? (
+                <form onSubmit={handleCredentialLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="mfaCode">
+                      {t('login.mfaCode', 'MFA Code')}
+                    </Label>
+                    <Input
+                      id="mfaCode"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      autoFocus
+                      placeholder={t(
+                        'login.mfaCodePlaceholder',
+                        'Enter 6-digit code'
+                      )}
+                      value={mfaCode}
+                      onChange={(e) =>
+                        setMfaCode(
+                          e.target.value.replace(/\D/g, '').slice(0, 6)
+                        )
+                      }
+                      required
+                    />
+                  </div>
+                  {credentialError && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{credentialError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={credentialSubmitDisabled}
+                    className="w-full h-10"
+                  >
+                    {loginLoading === 'mfa' ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2"></div>
+                        <span>{t('login.signingIn')}</span>
+                      </div>
+                    ) : (
+                      t('login.verifyMfa', 'Verify MFA')
+                    )}
+                  </Button>
+                </form>
               ) : (
                 <div className="space-y-4">
                   {credentialProviders.length > 0 && (
