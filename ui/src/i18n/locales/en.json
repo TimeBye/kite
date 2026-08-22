@@ -767,7 +767,15 @@
       "restartResourcesDescription": "This updates each {{resource}} Pod template and triggers a rollout. Paused or OnDelete strategies may not restart immediately, and rollout health is not monitored."
     },
     "watch": "Watch",
-    "namespace": "Namespace"
+    "namespace": "Namespace",
+    "rowsPerPage": "Rows per page:",
+    "page": "Page {{page}} of {{totalPages}}",
+    "previousPage": "Go to previous page",
+    "nextPage": "Go to next page",
+    "showing": "Showing {{filtered}} of {{total}} row(s)",
+    "filteredBy": "(filtered by \"{{query}}\")",
+    "rowsTotal": "{{count}} row(s) total.",
+    "all": "All"
   },
   "errors": {
     "crdNotInstalledTitle": "Resource Type Not Available",

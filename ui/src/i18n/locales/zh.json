@@ -767,7 +767,15 @@
       "restartResourcesDescription": "此操作会更新每个 {{resource}} 的 Pod 模板并触发滚动更新。Paused 或 OnDelete 策略可能不会立即重启，且不会等待滚动更新健康完成。"
     },
     "watch": "监听",
-    "namespace": "Namespace"
+    "namespace": "Namespace",
+    "rowsPerPage": "每页行数：",
+    "page": "第 {{page}} / {{totalPages}} 页",
+    "previousPage": "上一页",
+    "nextPage": "下一页",
+    "showing": "显示 {{filtered}} / {{total}} 条",
+    "filteredBy": "（按 \"{{query}}\" 筛选）",
+    "rowsTotal": "共 {{count}} 条",
+    "all": "全部"
   },
   "errors": {
     "crdNotInstalledTitle": "资源类型不可用",
