@@ -48,7 +48,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
@@ -654,16 +653,14 @@ export function ClusterManagement() {
               )}
             </DialogDescription>
           </DialogHeader>
-          <Tabs defaultValue="command">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="command">
-                {t('clusterManagement.clusterAgent.command', 'Command')}
-              </TabsTrigger>
-              <TabsTrigger value="yaml">
-                {t('clusterManagement.clusterAgent.yaml', 'Kubernetes YAML')}
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="command" className="space-y-2">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                {t(
+                  'clusterManagement.clusterAgent.command',
+                  'Command'
+                )}
+              </Label>
               <div className="flex gap-2">
                 <Input
                   readOnly
@@ -704,8 +701,9 @@ export function ClusterManagement() {
                   )}
                 </p>
               )}
-            </TabsContent>
-            <TabsContent value="yaml" className="space-y-2">
+            </div>
+
+            <div className="space-y-2">
               {clusterAgentManifestURL && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">
@@ -798,8 +796,8 @@ export function ClusterManagement() {
                   )}
                 </p>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
           <DialogFooter>
             <Button
               type="button"
