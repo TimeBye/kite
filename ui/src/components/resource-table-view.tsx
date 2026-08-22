@@ -42,6 +42,7 @@ interface ResourceTableViewProps<T> {
   shrinkFirstColumn?: boolean
   showAllPageSize?: boolean
   pageSizeOptions?: number[]
+  showPagination?: boolean
 }
 
 export function ResourceTableView<T>({
@@ -63,6 +64,7 @@ export function ResourceTableView<T>({
   shrinkFirstColumn = true,
   showAllPageSize = true,
   pageSizeOptions = [10, 20, 50, 100],
+  showPagination = true,
 }: ResourceTableViewProps<T>) {
   const renderRows = () => {
     const rows = table.getRowModel().rows
@@ -243,62 +245,64 @@ export function ResourceTableView<T>({
               `${totalRowCount} row(s) total.`
             )}
           </div>
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 lg:w-fit">
-            <div className="flex items-center justify-between gap-2 sm:justify-start">
-              <span className="text-sm text-muted-foreground">
-                Rows per page:
-              </span>
-              <Select
-                value={pagination.pageSize.toString()}
-                onValueChange={(value) => {
-                  setPagination((prev) => ({
-                    ...prev,
-                    pageSize: Number(value),
-                    pageIndex: 0,
-                  }))
-                }}
-              >
-                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {pageSizeOptions.map((pageSize) => (
-                    <SelectItem key={pageSize} value={`${pageSize}`}>
-                      {pageSize}
-                    </SelectItem>
-                  ))}
-                  {showAllPageSize && resolvedAllPageSize > 0 && (
-                    <SelectItem value={`${resolvedAllPageSize}`}>
-                      All
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
+          {showPagination && (
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 lg:w-fit">
+              <div className="flex items-center justify-between gap-2 sm:justify-start">
+                <span className="text-sm text-muted-foreground">
+                  Rows per page:
+                </span>
+                <Select
+                  value={pagination.pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPagination((prev) => ({
+                      ...prev,
+                      pageSize: Number(value),
+                      pageIndex: 0,
+                    }))
+                  }}
+                >
+                  <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pageSizeOptions.map((pageSize) => (
+                      <SelectItem key={pageSize} value={`${pageSize}`}>
+                        {pageSize}
+                      </SelectItem>
+                    ))}
+                    {showAllPageSize && resolvedAllPageSize > 0 && (
+                      <SelectItem value={`${resolvedAllPageSize}`}>
+                        All
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-center text-sm font-medium">
+                Page {pagination.pageIndex + 1} of {table.getPageCount() || 1}
+              </div>
+              <div className="flex items-center justify-end gap-2 sm:justify-start lg:ml-0">
+                <Button
+                  variant="outline"
+                  className="size-8"
+                  size="icon"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  <span className="sr-only">Go to previous page</span>←
+                </Button>
+                <Button
+                  variant="outline"
+                  className="size-8"
+                  size="icon"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  <span className="sr-only">Go to next page</span>→
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center justify-center text-sm font-medium">
-              Page {pagination.pageIndex + 1} of {table.getPageCount() || 1}
-            </div>
-            <div className="flex items-center justify-end gap-2 sm:justify-start lg:ml-0">
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">Go to previous page</span>←
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">Go to next page</span>→
-              </Button>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

@@ -17,7 +17,7 @@ import {
   OAuthProviderCreateRequest,
   OAuthProviderUpdateRequest,
   updateOAuthProvider,
-  useOAuthProviderListPaginated,
+  useOAuthProviderList,
 } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -39,15 +39,10 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
   const queryClient = useQueryClient()
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
-    pageSize: 20,
+    pageSize: 200,
   })
 
-  // Use real API to fetch OAuth providers
-  const { data: providerData, isLoading, error } = useOAuthProviderListPaginated(
-    pagination.pageIndex + 1,
-    pagination.pageSize
-  )
-  const providers = providerData?.data ?? []
+  const { data: providers = [], isLoading, error } = useOAuthProviderList()
 
   const [showProviderDialog, setShowProviderDialog] = useState(false)
   const [editingProvider, setEditingProvider] = useState<OAuthProvider | null>(
@@ -192,9 +187,6 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
     getCoreRowModel: getCoreRowModel(),
     state: { pagination },
     onPaginationChange: setPagination,
-    manualPagination: true,
-    pageCount:
-      Math.ceil((providerData?.total ?? 0) / pagination.pageSize) || 0,
   })
 
   // Create provider mutation
@@ -202,9 +194,6 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
     mutationFn: createOAuthProvider,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oauth-provider-list'] })
-      queryClient.invalidateQueries({
-        queryKey: ['oauth-provider-list-paginated'],
-      })
       queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
       toast.success(
         t(
@@ -236,9 +225,6 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
     }) => updateOAuthProvider(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oauth-provider-list'] })
-      queryClient.invalidateQueries({
-        queryKey: ['oauth-provider-list-paginated'],
-      })
       queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
       toast.success(
         t(
@@ -265,9 +251,6 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
     mutationFn: deleteOAuthProvider,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['oauth-provider-list'] })
-      queryClient.invalidateQueries({
-        queryKey: ['oauth-provider-list-paginated'],
-      })
       queryClient.invalidateQueries({ queryKey: ['bootstrap'] })
       toast.success(
         t(
@@ -389,15 +372,16 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
             table={table}
             columnCount={tableColumns.length}
             isLoading={isLoading}
-            data={providerData?.data}
+            data={providers}
             emptyState={emptyState}
             hasActiveFilters={false}
             filteredRowCount={providers.length}
-            totalRowCount={providerData?.total ?? 0}
+            totalRowCount={providers.length}
             searchQuery=""
             pagination={pagination}
             setPagination={setPagination}
             fitViewportHeight
+            showPagination={false}
           />
         </CardContent>
       </Card>
