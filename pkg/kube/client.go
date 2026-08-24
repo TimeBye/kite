@@ -184,6 +184,7 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 			},
 			Cache: cache.Options{
 				DefaultWatchErrorHandler: func(ctx context.Context, r *toolscache.Reflector, err error) {
+					klog.Warningf("informer watch error: %v", err)
 				},
 			},
 		})
@@ -209,14 +210,21 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 			}
 		}()
 		syncCtx, syncCancel := context.WithTimeout(ctx, cacheSyncTimeout())
-		defer syncCancel()
 		if !mgr.GetCache().WaitForCacheSync(syncCtx) {
+			syncCancel()
+			klog.Warningf("cache sync timed out after %s, falling back to uncached client", cacheSyncTimeout())
 			cancel()
-			return nil, fmt.Errorf("failed to wait for cache sync (timeout: %s); "+
-				"the cluster may be too large or the API server too slow. "+
-				"Consider increasing KITE_CACHE_SYNC_TIMEOUT or setting DISABLE_CACHE=true", cacheSyncTimeout())
+			c, err = client.New(config, client.Options{
+				Scheme: runtimeScheme,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create uncached client after cache sync timeout: %w", err)
+			}
+			cacheEnabled = false
+		} else {
+			syncCancel()
+			c = mgr.GetClient()
 		}
-		c = mgr.GetClient()
 	}
 
 	return &K8sClient{
