@@ -448,7 +448,7 @@ func serverVersionWithContext(kc *kube.K8sClient, timeout time.Duration) (*versi
 	}
 	var info version.Info
 	if err := json.Unmarshal(body, &info); err != nil {
-		return nil, fmt.Errorf("unable to parse the server version: %v", err)
+		return nil, fmt.Errorf("unable to parse the server version: %w", err)
 	}
 	return &info, nil
 }
