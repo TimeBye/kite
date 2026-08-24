@@ -10,18 +10,19 @@ func TestGenerateManifest(t *testing.T) {
 
 	checks := []string{
 		"apiVersion: v1\nkind: Secret",
-		"name: kite-cluster-agent-token",
+		"name: kite-cluster-agent",
 		"namespace: kube-system",
-		"token: \"my-token\"",
+		"KITE_SERVER: \"https://kite.example.com\"",
+		"CLUSTER_AGENT_TOKEN: \"my-token\"",
+		"CLUSTER_AGENT_PUBLIC_KEY: \"public-key\"",
 		"apiVersion: v1\nkind: ServiceAccount",
 		"name: kite-cluster-agent",
 		"apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding",
 		"name: cluster-admin",
 		"apiVersion: apps/v1\nkind: Deployment",
 		`image: "ghcr.io/kite-org/kite:v1.0"`,
-		"--server=$(KITE_SERVER)",
-		"--token=$(CLUSTER_AGENT_TOKEN)",
-		"value: \"https://kite.example.com\"",
+		"envFrom:",
+		"secretRef:",
 	}
 	for _, want := range checks {
 		if !strings.Contains(manifest, want) {

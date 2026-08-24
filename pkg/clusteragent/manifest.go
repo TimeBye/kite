@@ -24,11 +24,13 @@ func GenerateManifest(serverURL, token, publicKey, image string) string {
 	return fmt.Sprintf(`apiVersion: v1
 kind: Secret
 metadata:
-  name: kite-cluster-agent-token
+  name: kite-cluster-agent
   namespace: kube-system
 type: Opaque
 stringData:
-  token: %s
+  KITE_SERVER: %s
+  CLUSTER_AGENT_TOKEN: %s
+  CLUSTER_AGENT_PUBLIC_KEY: %s
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -74,18 +76,8 @@ spec:
             - /app/kite
           args:
             - cluster-agent
-            - --server=$(KITE_SERVER)
-            - --token=$(CLUSTER_AGENT_TOKEN)
-            - --public-key=$(CLUSTER_AGENT_PUBLIC_KEY)
-          env:
-            - name: KITE_SERVER
-              value: %s
-            - name: CLUSTER_AGENT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: kite-cluster-agent-token
-                  key: token
-            - name: CLUSTER_AGENT_PUBLIC_KEY
-              value: %s
-`, tokenJSON, tokenHashJSON, imageJSON, serverJSON, publicKeyJSON)
+          envFrom:
+            - secretRef:
+                name: kite-cluster-agent
+`, serverJSON, tokenJSON, publicKeyJSON, tokenHashJSON, imageJSON)
 }

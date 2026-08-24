@@ -380,7 +380,7 @@ export function ClusterManagement() {
       if (clusterAgentServer && clusterAgentToken && clusterAgentPublicKey) {
         setClusterAgentCopyError(null)
         setClusterAgentCommand(
-          `kite cluster-agent --server='${clusterAgentServer}' --token='${clusterAgentToken}' --public-key='${clusterAgentPublicKey}'`
+          `KITE_SERVER='${clusterAgentServer}' CLUSTER_AGENT_TOKEN='${clusterAgentToken}' CLUSTER_AGENT_PUBLIC_KEY='${clusterAgentPublicKey}' kite cluster-agent`
         )
         setClusterAgentYaml('')
         setClusterAgentYamlError(null)

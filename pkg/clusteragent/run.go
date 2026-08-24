@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -27,6 +28,15 @@ func Run(ctx context.Context, args []string) error {
 	kubeconfig := flags.String("kubeconfig", "", "Path to kubeconfig file")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if *server == "" {
+		*server = os.Getenv("KITE_SERVER")
+	}
+	if *token == "" {
+		*token = os.Getenv("CLUSTER_AGENT_TOKEN")
+	}
+	if *publicKey == "" {
+		*publicKey = os.Getenv("CLUSTER_AGENT_PUBLIC_KEY")
 	}
 	if *server == "" {
 		return errors.New("--server is required")
