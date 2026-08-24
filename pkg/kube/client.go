@@ -141,7 +141,7 @@ type K8sClient struct {
 }
 
 // NewClient creates a K8sClient from a rest.Config
-func NewClient(config *rest.Config) (*K8sClient, error) {
+func NewClient(name string, config *rest.Config) (*K8sClient, error) {
 	// Tune QPS/Burst so the initial cache sync LIST on large/remote clusters is
 	// not throttled by the client-go defaults (QPS=5, Burst=10). Values are
 	// overridable via KITE_KUBE_API_QPS and KITE_KUBE_API_BURST. A value
@@ -184,7 +184,15 @@ func NewClient(config *rest.Config) (*K8sClient, error) {
 			},
 			Cache: cache.Options{
 				DefaultWatchErrorHandler: func(ctx context.Context, r *toolscache.Reflector, err error) {
-					klog.Warningf("informer watch error: %v", err)
+					klog.Warningf("informer watch error for cluster %s: %v", name, err)
+				},
+			},
+			Client: client.Options{
+				Cache: &client.CacheOptions{
+					DisableFor: []client.Object{
+						&metricsv1.PodMetrics{},
+						&metricsv1.NodeMetrics{},
+					},
 				},
 			},
 		})

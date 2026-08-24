@@ -125,7 +125,7 @@ func ListClustersWithPagination(page, size int) ([]*Cluster, int64, error) {
 	if err := DB.Model(&Cluster{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := DB.Offset((page - 1) * size).Limit(size).Find(&clusters).Error; err != nil {
+	if err := DB.Order("name ASC").Offset((page - 1) * size).Limit(size).Find(&clusters).Error; err != nil {
 		return nil, 0, err
 	}
 	return clusters, total, nil

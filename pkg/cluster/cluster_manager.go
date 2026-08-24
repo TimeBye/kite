@@ -77,7 +77,7 @@ func newClientSet(name string, k8sConfig *rest.Config, prometheusURL string) (*C
 		prometheusURL: prometheusURL,
 	}
 	var err error
-	cs.K8sClient, err = kube.NewClient(k8sConfig)
+	cs.K8sClient, err = kube.NewClient(name, k8sConfig)
 	if err != nil {
 		klog.Warningf("Failed to create k8s client for cluster %s: %v", name, err)
 		return nil, err
