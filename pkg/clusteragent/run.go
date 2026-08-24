@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/rancher/remotedialer"
@@ -19,6 +20,11 @@ import (
 
 const registrationRefreshInterval = 10 * time.Minute
 
+// tunnelConnected is set to 1 while the WebSocket tunnel to the Kite server is
+// active, and 0 when it is disconnected. The readiness probe reads this to
+// report whether the agent is ready to serve tunnelled requests.
+var tunnelConnected atomic.Bool
+
 func Run(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("kite cluster-agent", flag.ContinueOnError)
 	klog.InitFlags(flags)
@@ -26,6 +32,7 @@ func Run(ctx context.Context, args []string) error {
 	token := flags.String("token", "", "Cluster Agent token")
 	publicKey := flags.String("public-key", "", "Cluster Agent registration public key")
 	kubeconfig := flags.String("kubeconfig", "", "Path to kubeconfig file")
+	probeAddr := flags.String("probe-addr", ":8080", "HTTP probe listen address for liveness/readiness checks")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -89,6 +96,13 @@ func Run(ctx context.Context, args []string) error {
 	connectURL.RawPath = ""
 	connectURL.RawQuery = ""
 
+	// Start the HTTP probe server for Kubernetes liveness/readiness probes.
+	// The liveness probe always returns 200 while the process is running.
+	// The readiness probe returns 200 only when the WebSocket tunnel is
+	// connected, so Kubernetes stops routing traffic (and eventually restarts
+	// the pod via the liveness probe) if the tunnel is silently dropped.
+	go startProbeServer(ctx, *probeAddr)
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	go func() {
 		ticker := time.NewTicker(registrationRefreshInterval)
@@ -114,7 +128,9 @@ func Run(ctx context.Context, args []string) error {
 	for {
 		err := registerClusterAgent(ctx, client, registrationURL.String(), *token, *publicKey, config)
 		if err == nil {
+			tunnelConnected.Store(true)
 			err = remotedialer.ConnectToProxy(ctx, connectURL.String(), headers, authorizer, nil, nil)
+			tunnelConnected.Store(false)
 		}
 		if ctx.Err() != nil {
 			return nil //nolint:nilerr // Context cancellation is a clean shutdown.
@@ -125,5 +141,39 @@ func Run(ctx context.Context, args []string) error {
 			return nil
 		case <-time.After(5 * time.Second):
 		}
+	}
+}
+
+// startProbeServer runs an HTTP server with /healthz and /readyz endpoints.
+// /healthz always returns 200 — the process is alive.
+// /readyz returns 200 only when the tunnel is connected — the agent can serve.
+func startProbeServer(ctx context.Context, addr string) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if tunnelConnected.Load() {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ready"))
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("not ready"))
+	})
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		klog.Errorf("Probe server error: %v", err)
 	}
 }

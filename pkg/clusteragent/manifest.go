@@ -79,5 +79,24 @@ spec:
           envFrom:
             - secretRef:
                 name: kite-cluster-agent
+          ports:
+            - name: probe
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: probe
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: probe
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
 `, serverJSON, tokenJSON, publicKeyJSON, tokenHashJSON, imageJSON)
 }

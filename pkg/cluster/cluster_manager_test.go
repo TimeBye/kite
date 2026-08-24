@@ -8,7 +8,6 @@ import (
 	"github.com/zxh326/kite/pkg/kube"
 	"github.com/zxh326/kite/pkg/model"
 	"k8s.io/apimachinery/pkg/version"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -115,13 +114,13 @@ func Test_shouldUpdateCluster(t *testing.T) {
 
 	t.Run("k8s version change, need update", func(t *testing.T) {
 		mockey.PatchConvey("mock ServerVersion change", t, func() {
-			mockey.Mock((*discovery.DiscoveryClient).ServerVersion).
+			mockey.Mock(serverVersionWithContext).
 				Return(&version.Info{GitVersion: "v1.34.0"}, nil).Build()
 			cs := &ClientSet{
 				Name:    "test",
 				Version: "v1.33.0",
 				K8sClient: &kube.K8sClient{
-					ClientSet: &kubernetes.Clientset{DiscoveryClient: &discovery.DiscoveryClient{}},
+					ClientSet: &kubernetes.Clientset{},
 				},
 			}
 			cluster := &model.Cluster{Name: "test", Enable: true}
@@ -133,13 +132,13 @@ func Test_shouldUpdateCluster(t *testing.T) {
 
 	t.Run("same, skip update", func(t *testing.T) {
 		mockey.PatchConvey("mock ServerVersion change", t, func() {
-			mockey.Mock((*discovery.DiscoveryClient).ServerVersion).
+			mockey.Mock(serverVersionWithContext).
 				Return(&version.Info{GitVersion: "v1.34.0"}, nil).Build()
 			cs := &ClientSet{
 				Name:    "test",
 				Version: "v1.34.0",
 				K8sClient: &kube.K8sClient{
-					ClientSet: &kubernetes.Clientset{DiscoveryClient: &discovery.DiscoveryClient{}},
+					ClientSet: &kubernetes.Clientset{},
 				},
 				config:        "test-config",
 				prometheusURL: "test-prometheus-url",

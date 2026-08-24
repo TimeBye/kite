@@ -23,6 +23,10 @@ func TestGenerateManifest(t *testing.T) {
 		`image: "ghcr.io/kite-org/kite:v1.0"`,
 		"envFrom:",
 		"secretRef:",
+		"livenessProbe:",
+		"path: /healthz",
+		"readinessProbe:",
+		"path: /readyz",
 	}
 	for _, want := range checks {
 		if !strings.Contains(manifest, want) {

@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -15,6 +17,7 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"github.com/zxh326/kite/pkg/prometheus"
 	"gorm.io/gorm"
+	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -108,7 +111,7 @@ func newClientSet(name string, k8sConfig *rest.Config, prometheusURL string) (*C
 			klog.Warningf("Failed to create Prometheus client for cluster %s, some features may not work as expected, err: %v", name, err)
 		}
 	}
-	v, err := cs.K8sClient.ClientSet.Discovery().ServerVersion()
+	v, err := serverVersionWithContext(cs.K8sClient, 30*time.Second)
 	if err != nil {
 		klog.Warningf("Failed to get server version for cluster %s: %v", name, err)
 	} else {
@@ -416,9 +419,7 @@ func shouldUpdateCluster(cs *ClientSet, cluster *model.Cluster) bool {
 	}
 
 	// k8s version change
-	// TODO: Replace direct ClientSet.Discovery() call with a small DiscoveryInterface.
-	// current code depends on *kubernetes.Clientset, which is hard to mock in tests.
-	version, err := cs.K8sClient.ClientSet.Discovery().ServerVersion()
+	version, err := serverVersionWithContext(cs.K8sClient, 10*time.Second)
 	if err != nil {
 		klog.Warningf("Failed to get server version for cluster %s: %v", cluster.Name, err)
 	} else if version.String() != cs.Version {
@@ -427,6 +428,29 @@ func shouldUpdateCluster(cs *ClientSet, cluster *model.Cluster) bool {
 	}
 
 	return false
+}
+
+// serverVersionWithContext fetches the Kubernetes server version with a
+// deadline. Discovery().ServerVersion() uses context.TODO() internally, which
+// can block indefinitely when the cluster agent tunnel is half-open. The
+// timeout ensures syncClusters is not stuck waiting on an unreachable API
+// server.
+func serverVersionWithContext(kc *kube.K8sClient, timeout time.Duration) (*version.Info, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	restClient := kc.ClientSet.Discovery().RESTClient()
+	if restClient == nil {
+		return nil, errors.New("discovery REST client is nil")
+	}
+	body, err := restClient.Get().AbsPath("/version").Do(ctx).Raw()
+	if err != nil {
+		return nil, err
+	}
+	var info version.Info
+	if err := json.Unmarshal(body, &info); err != nil {
+		return nil, fmt.Errorf("unable to parse the server version: %v", err)
+	}
+	return &info, nil
 }
 
 func buildClientSet(cluster *model.Cluster) (*ClientSet, error) {
