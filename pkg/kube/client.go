@@ -132,6 +132,7 @@ func (l controllerRuntimeLogSink) WithCallDepth(depth int) logr.LogSink {
 // K8sClient holds the Kubernetes client instances
 type K8sClient struct {
 	client.Client
+	Name          string
 	ClientSet     kubernetes.Interface
 	Configuration *rest.Config
 	MetricsClient *metricsclient.Clientset
@@ -152,6 +153,10 @@ func NewClient(name string, config *rest.Config) (*K8sClient, error) {
 	if config.Burst == 0 {
 		config.Burst = kubeAPIBurst()
 	}
+	// Use JSON content type for compatibility with older Kubernetes API servers
+	// (e.g. 1.18/1.19) whose protobuf schemas are incompatible with newer
+	// client-go versions, causing "proto: illegal wireType 7" errors.
+	config.ContentType = "application/json"
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -237,6 +242,7 @@ func NewClient(name string, config *rest.Config) (*K8sClient, error) {
 
 	return &K8sClient{
 		Client:        c,
+		Name:          name,
 		ClientSet:     clientset,
 		Configuration: config,
 		MetricsClient: metricsClient,

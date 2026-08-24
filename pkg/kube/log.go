@@ -144,7 +144,7 @@ func (l *BatchLogHandler) heartbeat(ctx context.Context) {
 			_, _, err := l.conn.ReadMessage()
 			if err != nil {
 				if !errors.Is(err, io.EOF) {
-					klog.Errorf("WebSocket connection error in heartbeat, cancelling internal context: %v", err)
+					klog.Warningf("WebSocket connection closed in heartbeat for cluster %s, cancelling internal context: %v", l.k8sClient.Name, err)
 				}
 				l.cancel() // Cancel internal context when connection is lost
 				return
