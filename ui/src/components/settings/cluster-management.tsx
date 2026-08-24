@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   IconCopy,
   IconEdit,
+  IconLink,
   IconPlus,
   IconServer,
   IconTrash,
@@ -24,6 +25,7 @@ import {
   createCluster,
   deleteCluster,
   importClusters,
+  regenerateClusterAgentRegistration,
   updateCluster,
   useClusterListPaginated,
   useVersionInfo,
@@ -96,6 +98,9 @@ export function ClusterManagement() {
     'command' | 'yaml' | null
   >(null)
   const clusterAgentYamlRequestID = useRef(0)
+  const [regeneratingCluster, setRegeneratingCluster] = useState<Cluster | null>(
+    null
+  )
 
   const getClusterTypeBadge = useCallback(
     (cluster: Cluster) => {
@@ -328,6 +333,18 @@ export function ClusterManagement() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {row.original.clusterAgent && !row.original.connected && (
+                <DropdownMenuItem
+                  onClick={() => setRegeneratingCluster(row.original)}
+                  className="gap-2"
+                >
+                  <IconLink className="h-4 w-4" />
+                  {t(
+                    'clusterManagement.actions.connect',
+                    'Connect'
+                  )}
+                </DropdownMenuItem>
+              )}
               {actions.map((action, index) => (
                 <DropdownMenuItem
                   key={index}
@@ -377,47 +394,13 @@ export function ClusterManagement() {
         t('clusterManagement.messages.created', 'Cluster created successfully')
       )
       setShowClusterDialog(false)
-      if (clusterAgentServer && clusterAgentToken && clusterAgentPublicKey) {
-        setClusterAgentCopyError(null)
-        setClusterAgentCommand(
-          `KITE_SERVER='${clusterAgentServer}' CLUSTER_AGENT_TOKEN='${clusterAgentToken}' CLUSTER_AGENT_PUBLIC_KEY='${clusterAgentPublicKey}' kite cluster-agent`
+      if (clusterAgentServer && clusterAgentToken && clusterAgentPublicKey && clusterAgentManifestURL) {
+        await showClusterAgentDialog(
+          clusterAgentServer,
+          clusterAgentToken,
+          clusterAgentPublicKey,
+          clusterAgentManifestURL
         )
-        setClusterAgentYaml('')
-        setClusterAgentYamlError(null)
-        setClusterAgentManifestURL(clusterAgentManifestURL || '')
-        setIsClusterAgentYamlLoading(true)
-        const requestID = ++clusterAgentYamlRequestID.current
-        try {
-          if (!clusterAgentManifestURL) throw new Error('Missing manifest URL')
-          const manifestURL = new URL(
-            clusterAgentManifestURL,
-            window.location.origin
-          )
-          const response = await fetch(
-            `${manifestURL.pathname}${manifestURL.search}`,
-            {
-              cache: 'no-store',
-            }
-          )
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          const yaml = await response.text()
-          if (requestID === clusterAgentYamlRequestID.current) {
-            setClusterAgentYaml(yaml)
-          }
-        } catch {
-          if (requestID === clusterAgentYamlRequestID.current) {
-            setClusterAgentYamlError(
-              t(
-                'clusterManagement.clusterAgent.loadYamlError',
-                'Failed to load YAML from the manifest URL.'
-              )
-            )
-          }
-        } finally {
-          if (requestID === clusterAgentYamlRequestID.current) {
-            setIsClusterAgentYamlLoading(false)
-          }
-        }
       }
     },
     onError: (error: Error) => {
@@ -426,6 +409,78 @@ export function ClusterManagement() {
           t(
             'clusterManagement.messages.createError',
             'Failed to create cluster'
+          )
+      )
+    },
+  })
+
+  const showClusterAgentDialog = useCallback(
+    async (
+      clusterAgentServer: string,
+      clusterAgentToken: string,
+      clusterAgentPublicKey: string,
+      clusterAgentManifestURL: string
+    ) => {
+      setClusterAgentCopyError(null)
+      setClusterAgentCommand(
+        `KITE_SERVER='${clusterAgentServer}' CLUSTER_AGENT_TOKEN='${clusterAgentToken}' CLUSTER_AGENT_PUBLIC_KEY='${clusterAgentPublicKey}' kite cluster-agent`
+      )
+      setClusterAgentYaml('')
+      setClusterAgentYamlError(null)
+      setClusterAgentManifestURL(clusterAgentManifestURL)
+      setIsClusterAgentYamlLoading(true)
+      const requestID = ++clusterAgentYamlRequestID.current
+      try {
+        const manifestURL = new URL(
+          clusterAgentManifestURL,
+          window.location.origin
+        )
+        const response = await fetch(
+          `${manifestURL.pathname}${manifestURL.search}`,
+          { cache: 'no-store' }
+        )
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const yaml = await response.text()
+        if (requestID === clusterAgentYamlRequestID.current) {
+          setClusterAgentYaml(yaml)
+        }
+      } catch {
+        if (requestID === clusterAgentYamlRequestID.current) {
+          setClusterAgentYamlError(
+            t(
+              'clusterManagement.clusterAgent.loadYamlError',
+              'Failed to load YAML from the manifest URL.'
+            )
+          )
+        }
+      } finally {
+        if (requestID === clusterAgentYamlRequestID.current) {
+          setIsClusterAgentYamlLoading(false)
+        }
+      }
+    },
+    [t]
+  )
+
+  const regenerateMutation = useMutation({
+    mutationFn: regenerateClusterAgentRegistration,
+    onSuccess: async (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+      queryClient.invalidateQueries({ queryKey: ['cluster-list-paginated'] })
+      setRegeneratingCluster(null)
+      await showClusterAgentDialog(
+        data.clusterAgentServer,
+        data.clusterAgentToken,
+        data.clusterAgentPublicKey,
+        data.clusterAgentManifestURL
+      )
+    },
+    onError: (error: Error) => {
+      toast.error(
+        error.message ||
+          t(
+            'clusterManagement.messages.regenerateError',
+            'Failed to regenerate registration credentials'
           )
       )
     },
@@ -829,6 +884,53 @@ export function ClusterManagement() {
           "This action will only remove the current cluster's configuration in kite and will not delete any cluster resources."
         )}
       />
+
+      <Dialog
+        open={!!regeneratingCluster}
+        onOpenChange={(open) => {
+          if (!open && !regenerateMutation.isPending) {
+            setRegeneratingCluster(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {t(
+                'clusterManagement.regenerateConfirmation.title',
+                'Regenerate Connection Credentials'
+              )}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'clusterManagement.regenerateConfirmation.description',
+                'This will invalidate the previous credentials. If the agent is still running, its connection will be terminated. You will receive new connection instructions after confirming.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRegeneratingCluster(null)}
+              disabled={regenerateMutation.isPending}
+            >
+              {t('common.actions.cancel', 'Cancel')}
+            </Button>
+            <Button
+              onClick={() => {
+                if (regeneratingCluster) {
+                  regenerateMutation.mutate(regeneratingCluster.id)
+                }
+              }}
+              disabled={regenerateMutation.isPending}
+            >
+              {regenerateMutation.isPending
+                ? t('common.messages.processing', 'Processing...')
+                : t('common.actions.confirm', 'Confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

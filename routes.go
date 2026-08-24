@@ -111,6 +111,7 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 	clusterAPI.POST("/import", cm.ImportClustersFromKubeconfig)
 	clusterAPI.PUT("/:id", cm.UpdateCluster)
 	clusterAPI.DELETE("/:id", cm.DeleteCluster)
+	clusterAPI.POST("/:id/registration", cm.RegenerateClusterAgentRegistration)
 
 	rbacAPI := adminAPI.Group("/roles")
 	rbacAPI.GET("/", rbac.ListRoles)

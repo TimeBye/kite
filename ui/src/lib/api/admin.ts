@@ -109,6 +109,23 @@ export const deleteCluster = async (
   return await apiClient.delete<{ message: string }>(`/admin/clusters/${id}`)
 }
 
+// Regenerate cluster agent registration credentials
+export const regenerateClusterAgentRegistration = async (
+  id: number
+): Promise<{
+  clusterAgentServer: string
+  clusterAgentToken: string
+  clusterAgentPublicKey: string
+  clusterAgentManifestURL: string
+}> => {
+  return await apiClient.post<{
+    clusterAgentServer: string
+    clusterAgentToken: string
+    clusterAgentPublicKey: string
+    clusterAgentManifestURL: string
+  }>(`/admin/clusters/${id}/registration`)
+}
+
 // OAuth Provider Management
 export interface OAuthProviderCreateRequest {
   name: string

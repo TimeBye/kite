@@ -365,6 +365,75 @@ func (cm *ClusterManager) ConnectClusterAgent(c *gin.Context) {
 	cm.clusterAgentManager.ServeHTTP(c.Writer, c.Request)
 }
 
+// RegenerateClusterAgentRegistration generates a new token and key pair for a
+// cluster agent cluster, invalidating the previous credentials. This is used
+// when the original connection information has been lost (e.g. the agent was
+// deleted) and a new registration command is needed.
+func (cm *ClusterManager) RegenerateClusterAgentRegistration(c *gin.Context) {
+	if common.IsSectionManaged("clusters") {
+		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
+		return
+	}
+
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cluster id"})
+		return
+	}
+
+	cluster, err := model.GetClusterByID(uint(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "cluster not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	if !cluster.ClusterAgent {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster is not a cluster agent cluster"})
+		return
+	}
+
+	token, tokenHash, err := clusteragent.NewToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	publicKey, privateKey, err := clusteragent.NewRegistrationKeyPair()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	manifestGrant, err := cm.clusterAgentManager.CreateManifestGrant(token)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := model.UpdateCluster(cluster, map[string]interface{}{
+		"cluster_agent_token_hash":  tokenHash,
+		"cluster_agent_public_key":  publicKey,
+		"cluster_agent_private_key": model.SecretString(privateKey),
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Disconnect any existing session using the old credentials.
+	cm.clusterAgentManager.Disconnect(cluster.ID)
+
+	serverURL := clusterAgentServerURL(c)
+	c.JSON(http.StatusOK, gin.H{
+		"clusterAgentServer":      serverURL,
+		"clusterAgentToken":       token,
+		"clusterAgentPublicKey":   publicKey,
+		"clusterAgentManifestURL": fmt.Sprintf("%s/api/v1/cluster-agent/manifest?grant=%s", strings.TrimRight(serverURL, "/"), manifestGrant),
+	})
+}
+
 func (cm *ClusterManager) RegisterClusterAgent(c *gin.Context) {
 	cm.clusterAgentManager.Register(c.Writer, c.Request)
 }

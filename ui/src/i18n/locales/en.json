@@ -1066,7 +1066,8 @@
     "actions": {
       "add": "Add Cluster",
       "import": "Import Clusters",
-      "importing": "Importing..."
+      "importing": "Importing...",
+      "connect": "Connect"
     },
     "table": {
       "prometheus": "Prometheus",
@@ -1112,12 +1113,17 @@
       "createError": "Failed to create cluster",
       "updateError": "Failed to update cluster",
       "deleteError": "Failed to delete cluster",
-      "fileReadError": "Failed to read kubeconfig file"
+      "fileReadError": "Failed to read kubeconfig file",
+      "regenerateError": "Failed to regenerate registration credentials"
     },
     "errors": {
       "loadFailed": "Failed to load clusters"
     },
     "deleteConfirmation": "This action will only remove the current cluster's configuration in kite and will not delete any cluster resources.",
+    "regenerateConfirmation": {
+      "title": "Regenerate Connection Credentials",
+      "description": "This will invalidate the previous credentials. If the agent is still running, its connection will be terminated. You will receive new connection instructions after confirming."
+    },
     "dialog": {
       "createTitle": "Add Cluster",
       "editTitle": "Edit Cluster",

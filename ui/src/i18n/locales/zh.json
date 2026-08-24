@@ -1050,7 +1050,8 @@
     "actions": {
       "add": "添加集群",
       "import": "导入集群",
-      "importing": "导入中..."
+      "importing": "导入中...",
+      "connect": "连接"
     },
     "table": {
       "prometheus": "Prometheus",
@@ -1096,12 +1097,17 @@
       "createError": "创建集群失败",
       "updateError": "更新集群失败",
       "deleteError": "删除集群失败",
-      "fileReadError": "无法读取 kubeconfig 文件"
+      "fileReadError": "无法读取 kubeconfig 文件",
+      "regenerateError": "重新生成注册凭证失败"
     },
     "errors": {
       "loadFailed": "加载集群失败"
     },
     "deleteConfirmation": "此操作仅移除 Kite 中的集群配置，不会删除集群内的任何资源。",
+    "regenerateConfirmation": {
+      "title": "重新生成连接凭证",
+      "description": "此操作将使之前的凭证失效。如果 Agent 仍在运行，其连接将被终止。确认后将显示新的连接指令。"
+    },
     "dialog": {
       "createTitle": "添加集群",
       "editTitle": "编辑集群",
