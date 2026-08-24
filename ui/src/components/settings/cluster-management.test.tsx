@@ -29,6 +29,7 @@ vi.mock('@/lib/api', () => ({
   createCluster: vi.fn(),
   deleteCluster: vi.fn(),
   importClusters: vi.fn(),
+  regenerateClusterAgentRegistration: vi.fn(),
   updateCluster: vi.fn(),
 }))
 
