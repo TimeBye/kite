@@ -71,14 +71,25 @@ export function ClusterManagement() {
     pageIndex: 0,
     pageSize: 20,
   })
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const handleSearchChange = useCallback((value: string) => {
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }))
+    setSearchQuery(value)
+  }, [])
 
   const {
     data: clusterData,
     isLoading,
     error,
-  } = useClusterListPaginated(pagination.pageIndex + 1, pagination.pageSize, {
-    refetchInterval: 5000,
-  })
+  } = useClusterListPaginated(
+    pagination.pageIndex + 1,
+    pagination.pageSize,
+    searchQuery,
+    {
+      refetchInterval: 5000,
+    }
+  )
   const clusters = clusterData?.data ?? []
   const { data: versionInfo } = useVersionInfo()
 
@@ -613,6 +624,15 @@ export function ClusterManagement() {
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
+              <Input
+                placeholder={t(
+                  'common.placeholders.searchClusterName',
+                  'Search cluster name...'
+                )}
+                value={searchQuery}
+                onChange={(event) => handleSearchChange(event.target.value)}
+                className="w-64"
+              />
               <Button
                 variant="outline"
                 onClick={() => {
@@ -644,10 +664,10 @@ export function ClusterManagement() {
             isLoading={isLoading}
             data={clusterData?.data}
             emptyState={emptyState}
-            hasActiveFilters={false}
+            hasActiveFilters={Boolean(searchQuery)}
             filteredRowCount={clusterData?.data?.length ?? 0}
             totalRowCount={clusterData?.total ?? 0}
-            searchQuery=""
+            searchQuery={searchQuery}
             pagination={pagination}
             setPagination={setPagination}
             fitViewportHeight

@@ -50,21 +50,30 @@ export const useClusterList = (options?: {
 // Paginated cluster list for management table
 export const fetchClusterListPaginated = async (
   page: number,
-  size: number
+  size: number,
+  search?: string
 ): Promise<{ data: Cluster[]; total: number; page: number; size: number }> => {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  })
+  if (search) {
+    params.set('search', search)
+  }
   return fetchAPI<{ data: Cluster[]; total: number; page: number; size: number }>(
-    `/admin/clusters/?page=${page}&size=${size}`
+    `/admin/clusters/?${params.toString()}`
   )
 }
 
 export const useClusterListPaginated = (
   page: number,
   size: number,
+  search: string,
   options?: { refetchInterval?: number | false }
 ) => {
   return useQuery({
-    queryKey: ['cluster-list-paginated', page, size],
-    queryFn: () => fetchClusterListPaginated(page, size),
+    queryKey: ['cluster-list-paginated', page, size, search],
+    queryFn: () => fetchClusterListPaginated(page, size, search),
     staleTime: 30000,
     refetchInterval: options?.refetchInterval,
   })

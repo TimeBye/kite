@@ -119,13 +119,17 @@ func ListClusters() ([]*Cluster, error) {
 	return clusters, nil
 }
 
-func ListClustersWithPagination(page, size int) ([]*Cluster, int64, error) {
+func ListClustersWithPagination(page, size int, search string) ([]*Cluster, int64, error) {
 	var clusters []*Cluster
 	var total int64
-	if err := DB.Model(&Cluster{}).Count(&total).Error; err != nil {
+	query := DB.Model(&Cluster{})
+	if search != "" {
+		query = query.Where("name LIKE ?", "%"+search+"%")
+	}
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := DB.Order("name ASC").Offset((page - 1) * size).Limit(size).Find(&clusters).Error; err != nil {
+	if err := query.Order("name ASC").Offset((page - 1) * size).Limit(size).Find(&clusters).Error; err != nil {
 		return nil, 0, err
 	}
 	return clusters, total, nil

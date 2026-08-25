@@ -336,6 +336,7 @@
       "issuer": "https://provider.com (auto discovery)",
       "scopes": "openid,profile,email",
       "searchResourceName": "Search resource name...",
+      "searchClusterName": "Search cluster name...",
       "searchUsers": "Search users...",
       "selectTemplate": "Select a template",
       "selectUser": "Select user",

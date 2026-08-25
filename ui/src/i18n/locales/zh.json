@@ -336,6 +336,7 @@
       "issuer": "https://provider.com（自动发现）",
       "scopes": "openid,profile,email",
       "searchResourceName": "搜索资源名称...",
+      "searchClusterName": "搜索集群名称...",
       "searchUsers": "搜索用户...",
       "selectTemplate": "选择模板",
       "selectUser": "选择用户",

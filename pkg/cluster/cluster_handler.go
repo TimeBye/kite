@@ -108,7 +108,9 @@ func (cm *ClusterManager) GetClusterList(c *gin.Context) {
 		}
 	}
 
-	clusters, total, err := model.ListClustersWithPagination(page, size)
+	search := strings.TrimSpace(c.Query("search"))
+
+	clusters, total, err := model.ListClustersWithPagination(page, size, search)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
