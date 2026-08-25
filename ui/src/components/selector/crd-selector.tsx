@@ -149,7 +149,7 @@ export function CRDSelector({
           />
         </div>
         <div
-          className="max-h-[300px] overflow-y-auto"
+          className="max-h-[300px] overflow-y-auto scrollbar-thin"
           onWheelCapture={(event) => event.stopPropagation()}
           onTouchMove={(event) => event.stopPropagation()}
         >
