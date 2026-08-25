@@ -344,6 +344,9 @@
       "tokenUrl": "https://provider.com/oauth/token",
       "userInfoUrl": "https://provider.com/oauth/userinfo",
       "usernameClaim": "例如：preferred_username"
+    },
+    "empty": {
+      "noClustersFound": "未找到集群。"
     }
   },
   "globalSearch": {

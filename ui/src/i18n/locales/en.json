@@ -344,6 +344,9 @@
       "tokenUrl": "https://provider.com/oauth/token",
       "userInfoUrl": "https://provider.com/oauth/userinfo",
       "usernameClaim": "e.g., preferred_username"
+    },
+    "empty": {
+      "noClustersFound": "No clusters found."
     }
   },
   "globalSearch": {
