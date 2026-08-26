@@ -17,7 +17,7 @@ import (
 
 func TestListAuditLogsFiltersOrdersAndPaginates(t *testing.T) {
 	db := setupAuditTestDB(t)
-	alice := model.User{Username: "alice", Provider: model.AuthProviderPassword}
+	alice := model.User{Username: "alice", Name: "Alice Wonderland", Provider: model.AuthProviderPassword}
 	bob := model.User{Username: "bob", Provider: model.AuthProviderPassword}
 	if err := db.Create(&alice).Error; err != nil {
 		t.Fatalf("creating alice: %v", err)
@@ -75,6 +75,9 @@ func TestListAuditLogsFiltersOrdersAndPaginates(t *testing.T) {
 	}
 	if response.Data[0].Operator == nil || response.Data[0].Operator.Username != "alice" {
 		t.Fatalf("preloaded operator = %#v", response.Data[0].Operator)
+	}
+	if response.Data[0].Operator.Name != "Alice Wonderland" {
+		t.Fatalf("operator name = %q, want %q", response.Data[0].Operator.Name, "Alice Wonderland")
 	}
 }
 

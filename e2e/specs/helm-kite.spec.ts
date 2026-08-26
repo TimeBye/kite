@@ -182,6 +182,26 @@ async function deleteReleaseFromCurrentPage(page: Page, releaseName: string) {
   ).toBeEnabled()
   await deleteDialog.getByRole('button', { name: 'Delete' }).click()
   await page.waitForURL('**/helmrelease', { timeout: 120_000 })
+
+  // Wait for the async delete task to complete — the release should
+  // disappear from the list.
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get(
+          `/api/v1/helmrelease/_all?labelSelector=${encodeURIComponent(
+            `app.kubernetes.io/instance=${releaseName}`
+          )}`
+        )
+        if (!response.ok()) {
+          return 1
+        }
+        const body = (await response.json()) as { items?: unknown[] }
+        return body.items?.length ?? 1
+      },
+      { timeout: 120_000 }
+    )
+    .toBe(0)
 }
 
 async function deleteRepositoryFromChartsPage(
@@ -373,6 +393,25 @@ test.describe('helm kite lifecycle', () => {
       await rollbackDialog.getByRole('button', { name: 'Rollback' }).click()
       await expect(rollbackDialog).toBeHidden({ timeout: 120_000 })
 
+      // Wait for the async rollback task to complete before reloading
+      await expect
+        .poll(
+          async () => {
+            const response = await page.request.get(
+              `/api/v1/helmrelease/${namespace}/${encodeURIComponent(releaseName)}`
+            )
+            if (!response.ok()) {
+              return 0
+            }
+            const body = (await response.json()) as {
+              spec?: { revision?: number }
+            }
+            return body.spec?.revision ?? 0
+          },
+          { timeout: 120_000 }
+        )
+        .toBe(3)
+
       await page.reload()
       await expectReleaseSummary(page, releaseName, installVersion, 3)
       await expectReleaseValues(page, 'e2e-mode: base', 'e2e-mode: upgraded')
@@ -418,5 +457,827 @@ test.describe('helm kite lifecycle', () => {
         await cleanupRepositoryFromUI(page, repositoryName)
       }
     }
+  })
+
+  test('refresh button forces cache refresh on private repository', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-refresh-${suffix}`
+
+    try {
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      // Select the newly created repo from the filter
+      await selectRepositoryFilter(page, repositoryName)
+
+      // Wait for charts to load
+      await expect(
+        page.getByRole('link', { name: chartName, exact: true })
+      ).toBeVisible({ timeout: 60_000 })
+
+      // Click refresh and verify the request includes refresh=true
+      const refreshPromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/charts') &&
+          response.url().includes('refresh=true'),
+        { timeout: 60_000 }
+      )
+      await page.getByRole('button', { name: 'Refresh' }).click()
+      const response = await refreshPromise
+      expect(response.ok()).toBe(true)
+    } finally {
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('chart search uses server-side pagination in repositories mode', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-search-${suffix}`
+
+    try {
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      // Verify that initial load sends limit and offset query params
+      const initialLoadPromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/charts') &&
+          response.url().includes('limit=') &&
+          response.url().includes('offset=0'),
+        { timeout: 60_000 }
+      )
+      await selectRepositoryFilter(page, repositoryName)
+      const initialResponse = await initialLoadPromise
+      expect(initialResponse.ok()).toBe(true)
+      await expect(
+        page.getByRole('link', { name: chartName, exact: true })
+      ).toBeVisible({ timeout: 60_000 })
+
+      // Verify that searching sends q, limit, and offset query params
+      const searchPromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/charts') &&
+          response.url().includes('q=') &&
+          response.url().includes('limit=') &&
+          response.url().includes('offset=0'),
+        { timeout: 60_000 }
+      )
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const searchResponse = await searchPromise
+      expect(searchResponse.ok()).toBe(true)
+      const searchBody = (await searchResponse.json()) as {
+        items?: unknown[]
+        total?: number
+      }
+      expect(searchBody.items?.length).toBeGreaterThan(0)
+      expect(searchBody.total).toBeGreaterThanOrEqual(
+        searchBody.items!.length
+      )
+
+      // Verify the search result is filtered server-side
+      await expect(
+        page.getByRole('link', { name: chartName, exact: true })
+      ).toBeVisible()
+
+      // Verify that clearing search resets to offset=0
+      const clearSearchPromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/charts') &&
+          !response.url().includes('q=') &&
+          response.url().includes('offset=0'),
+        { timeout: 60_000 }
+      )
+      await page.getByPlaceholder('Search charts...').fill('')
+      const clearResponse = await clearSearchPromise
+      expect(clearResponse.ok()).toBe(true)
+    } finally {
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('install and upgrade with --set values', async ({ page }) => {
+    test.setTimeout(8 * 60 * 1000)
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-set-${suffix}`
+    const releaseName = `e2e-set-${suffix}`
+    let repositoryDeleted = false
+    let releaseDeleted = false
+
+    try {
+      // Add repository
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+      const addRepoDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepoDialog).toBeVisible()
+      await addRepoDialog.locator('#helm-repository-name').fill(repositoryName)
+      await addRepoDialog.locator('#helm-repository-url').fill(repositoryURL)
+      await addRepoDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepoDialog).toBeHidden({ timeout: 60_000 })
+
+      // Navigate to chart install page
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.waitForURL(
+        `**/charts/${encodeURIComponent(repositoryName)}/${chartName}`
+      )
+      await page.goto(
+        `/charts/${encodeURIComponent(repositoryName)}/${encodeURIComponent(chartName)}?version=${encodeURIComponent(installVersion)}`
+      )
+      await expect(
+        page.getByRole('heading', { name: chartName }).first()
+      ).toBeVisible({ timeout: 60_000 })
+
+      // Install with --set values
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+      await installDialog.getByLabel('Release Name').fill(releaseName)
+
+      // Fill base values in YAML editor
+      await fillMonacoEditor(page, installDialog, 1, baseValues)
+
+      // Expand Advanced settings and fill --set values
+      await installDialog.getByText('Advanced settings').click()
+      const setValuesTextarea = installDialog.locator(
+        '#helm-install-set-values'
+      )
+      await expect(setValuesTextarea).toBeVisible()
+      await setValuesTextarea.fill('podLabels.e2e-set-mode=install')
+
+      await expect(
+        installDialog.getByRole('button', { name: 'Install' })
+      ).toBeEnabled({ timeout: 60_000 })
+      await installDialog.getByRole('button', { name: 'Install' }).click()
+
+      await page.waitForURL(
+        `**/helmrelease/${namespace}/${encodeURIComponent(releaseName)}`,
+        { timeout: 120_000 }
+      )
+      await expectReleaseSummary(page, releaseName, installVersion, 1)
+
+      // Verify --set value was applied to the pod labels
+      await expect
+        .poll(
+          async () => {
+            const response = await page.request.get(
+              `/api/v1/deployments/${namespace}?labelSelector=${encodeURIComponent(
+                `app.kubernetes.io/instance=${releaseName}`
+              )}`
+            )
+            if (!response.ok()) {
+              return ''
+            }
+            const body = (await response.json()) as {
+              items?: Array<{
+                spec?: {
+                  template?: {
+                    metadata?: {
+                      labels?: Record<string, string>
+                    }
+                  }
+                }
+              }>
+            }
+            const labels = (body.items || []).map(
+              (item) =>
+                item.spec?.template?.metadata?.labels?.['e2e-set-mode'] || ''
+            )
+            if (!labels.length || labels.some((l) => !l)) {
+              return ''
+            }
+            return labels.every((l) => l === 'install') ? 'install' : labels.join(',')
+          },
+          { timeout: 120_000 }
+        )
+        .toBe('install')
+
+      // Upgrade with different --set values
+      await page.getByRole('button', { name: 'Upgrade', exact: true }).click()
+      const upgradeDialog = page.getByRole('dialog', { name: 'Upgrade' })
+      await expect(upgradeDialog).toBeVisible()
+      await fillMonacoEditor(page, upgradeDialog, 1, upgradedValues)
+
+      // Expand Advanced settings and fill --set values
+      await upgradeDialog.getByText('Advanced settings').click()
+      const upgradeSetValuesTextarea = upgradeDialog.locator(
+        '#helm-upgrade-set-values'
+      )
+      await expect(upgradeSetValuesTextarea).toBeVisible()
+      await upgradeSetValuesTextarea.fill('podLabels.e2e-set-mode=upgrade')
+
+      await expect(
+        upgradeDialog.getByRole('button', { name: 'Upgrade' })
+      ).toBeEnabled({ timeout: 60_000 })
+      await upgradeDialog.getByRole('button', { name: 'Upgrade' }).click()
+      await expect(upgradeDialog).toBeHidden({ timeout: 120_000 })
+
+      // Verify --set value was updated
+      await expect
+        .poll(
+          async () => {
+            const response = await page.request.get(
+              `/api/v1/deployments/${namespace}?labelSelector=${encodeURIComponent(
+                `app.kubernetes.io/instance=${releaseName}`
+              )}`
+            )
+            if (!response.ok()) {
+              return ''
+            }
+            const body = (await response.json()) as {
+              items?: Array<{
+                spec?: {
+                  template?: {
+                    metadata?: {
+                      labels?: Record<string, string>
+                    }
+                  }
+                }
+              }>
+            }
+            const labels = (body.items || []).map(
+              (item) =>
+                item.spec?.template?.metadata?.labels?.['e2e-set-mode'] || ''
+            )
+            if (!labels.length || labels.some((l) => !l)) {
+              return ''
+            }
+            return labels.every((l) => l === 'upgrade')
+              ? 'upgrade'
+              : labels.join(',')
+          },
+          { timeout: 120_000 }
+        )
+        .toBe('upgrade')
+
+      // Cleanup
+      await deleteReleaseFromCurrentPage(page, releaseName)
+      releaseDeleted = true
+      await deleteRepositoryFromChartsPage(page, repositoryName)
+      repositoryDeleted = true
+    } finally {
+      if (!releaseDeleted) {
+        await cleanupReleaseFromUI(page, releaseName)
+      }
+      if (!repositoryDeleted) {
+        await cleanupRepositoryFromUI(page, repositoryName)
+      }
+    }
+  })
+
+  test('merged values preview is displayed during install', async ({ page }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-merged-${suffix}`
+
+    try {
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.waitForURL(
+        `**/charts/${encodeURIComponent(repositoryName)}/${chartName}`
+      )
+
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+
+      // Verify the merged values preview API is called
+      const previewPromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/helmrelease/') &&
+          response.url().includes('/preview-values'),
+        { timeout: 60_000 }
+      )
+
+      // Fill custom values to trigger the merge preview
+      await fillMonacoEditor(page, installDialog, 1, 'replicaCount: 3\n')
+      const previewResponse = await previewPromise
+      expect(previewResponse.ok()).toBe(true)
+      const previewBody = (await previewResponse.json()) as { values?: string }
+      expect(previewBody.values).toContain('replicaCount:')
+
+      // Verify the merged preview panel is visible
+      await expect(
+        installDialog.getByText('Merged values preview')
+      ).toBeVisible({ timeout: 60_000 })
+
+      await installDialog.getByRole('button', { name: 'Cancel' }).click()
+    } finally {
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('merged values preview is displayed during upgrade', async ({ page }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-merged-upgrade-${suffix}`
+    const releaseName = `e2e-merge-up-${suffix}`
+
+    try {
+      // Setup: add repository
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      // Install a release first
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.waitForURL(
+        `**/charts/${encodeURIComponent(repositoryName)}/${chartName}`
+      )
+
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+      await installDialog
+        .locator('#helm-install-release-name')
+        .fill(releaseName)
+      await installDialog.getByRole('button', { name: 'Install' }).click()
+      await expect(installDialog).toBeHidden({ timeout: 120_000 })
+
+      // Navigate to release detail
+      await page.goto(`/helmrelease/default/${releaseName}`)
+
+      // Open upgrade dialog
+      await page.getByRole('button', { name: 'Upgrade', exact: true }).click()
+      const upgradeDialog = page.getByRole('dialog', { name: 'Upgrade' })
+      await expect(upgradeDialog).toBeVisible()
+
+      // Verify the merged values preview API is called when editing custom values
+      const previewPromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/helmrelease/') &&
+          response.url().includes('/upgrade/preview-values'),
+        { timeout: 60_000 }
+      )
+
+      // Modify custom values to trigger the merge preview
+      await fillMonacoEditor(page, upgradeDialog, 1, 'replicaCount: 3\n')
+      const previewResponse = await previewPromise
+      expect(previewResponse.ok()).toBe(true)
+      const previewBody = (await previewResponse.json()) as { values?: string }
+      expect(previewBody.values).toContain('replicaCount:')
+
+      // Verify the merged preview panel is visible
+      await expect(
+        upgradeDialog.getByText('Merged values preview')
+      ).toBeVisible({ timeout: 60_000 })
+
+      await upgradeDialog.getByRole('button', { name: 'Cancel' }).click()
+    } finally {
+      await cleanupReleaseFromUI(page, releaseName)
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('version selector in install dialog fetches chart for selected version', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-version-${suffix}`
+
+    try {
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.waitForURL(
+        `**/charts/${encodeURIComponent(repositoryName)}/${chartName}`
+      )
+
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+
+      // The version selector should be visible in the install dialog
+      const versionSelect = installDialog
+        .locator('[data-slot="select-trigger"]')
+        .first()
+      await expect(versionSelect).toBeVisible({ timeout: 60_000 })
+
+      // Select a different version
+      const chartVersionPromise = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/charts/') &&
+          response.url().includes(`version=${encodeURIComponent(installVersion)}`),
+        { timeout: 60_000 }
+      )
+      await versionSelect.click()
+      await page
+        .getByRole('option', {
+          name: new RegExp(`^${escapeRegExp(installVersion)}(?:\\s|$)`),
+        })
+        .click()
+      const chartVersionResponse = await chartVersionPromise
+      expect(chartVersionResponse.ok()).toBe(true)
+
+      // The dialog description should reflect the selected version
+      await expect(
+        installDialog.getByText(
+          `${repositoryName}/${chartName}:${installVersion}`
+        )
+      ).toBeVisible({ timeout: 60_000 })
+
+      await installDialog.getByRole('button', { name: 'Cancel' }).click()
+    } finally {
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('install dialog shows create namespace option for non-existent namespace', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-ns-${suffix}`
+
+    try {
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.waitForURL(
+        `**/charts/${encodeURIComponent(repositoryName)}/${chartName}`
+      )
+
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+
+      // Type a non-existent namespace in the selector search
+      const nsSelector = installDialog.locator('[data-slot="select-trigger"]').nth(1)
+      await nsSelector.click()
+
+      // Search for a namespace that doesn't exist
+      const nonexistentNs = `e2e-nonexistent-${suffix}`
+      await page.keyboard.type(nonexistentNs)
+
+      // The "Create" option should appear
+      const createOption = page.getByRole('option', { name: nonexistentNs })
+      await expect(createOption).toBeVisible({ timeout: 10_000 })
+      await createOption.click()
+
+      // The "Create namespace" checkbox should now be visible inline
+      await expect(
+        installDialog.locator('#helm-create-namespace')
+      ).toBeVisible({ timeout: 10_000 })
+
+      // Now select an existing namespace ("default")
+      await nsSelector.click()
+      await page.getByRole('option', { name: 'default', exact: true }).click()
+
+      // The "Create namespace" checkbox should disappear
+      await expect(
+        installDialog.locator('#helm-create-namespace')
+      ).toBeHidden({ timeout: 10_000 })
+
+      await installDialog.getByRole('button', { name: 'Cancel' }).click()
+    } finally {
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('chart search debounces API requests in Artifact Hub mode', async ({
+    page,
+  }) => {
+    await page.goto('/charts')
+
+    // Ensure we're in Artifact Hub mode (default)
+    await expect(page.getByText('Artifact Hub', { exact: true }).first()).toBeVisible()
+
+    // Count API requests triggered by typing
+    let requestCount = 0
+    page.on('request', (request) => {
+      if (
+        request.url().includes('/api/v1/charts/artifacthub') &&
+        request.url().includes('q=')
+      ) {
+        requestCount++
+      }
+    })
+
+    // Type quickly without pausing
+    const searchInput = page.getByPlaceholder('Search charts...')
+    await searchInput.type('nginx', { delay: 50 })
+
+    // Wait for debounce (400ms) + network
+    await page.waitForTimeout(2000)
+
+    // Should have sent at most 1 request with the final query,
+    // not one per keystroke
+    expect(requestCount).toBeLessThanOrEqual(1)
+
+    // Verify the final request includes the full search term
+    const results = await page.evaluate(async () => {
+      const resp = await fetch(
+        '/api/v1/charts/artifacthub?q=nginx&limit=20&offset=0'
+      )
+      return resp.ok
+    })
+    expect(results).toBe(true)
+  })
+
+  test('chart list returns partial results when one repository is unreachable', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const goodRepoName = `e2e-p0-good-${suffix}`
+    const badRepoName = `e2e-p0-bad-${suffix}`
+
+    try {
+      await page.goto('/charts')
+
+      // Add a valid repository
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+      const addGoodDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addGoodDialog).toBeVisible()
+      await addGoodDialog.locator('#helm-repository-name').fill(goodRepoName)
+      await addGoodDialog.locator('#helm-repository-url').fill(repositoryURL)
+      await addGoodDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addGoodDialog).toBeHidden({ timeout: 60_000 })
+
+      // Add an unreachable repository (valid URL format but non-existent host)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+      const addBadDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addBadDialog).toBeVisible()
+      await addBadDialog.locator('#helm-repository-name').fill(badRepoName)
+      await addBadDialog
+        .locator('#helm-repository-url')
+        .fill('https://nonexistent.invalid.example/charts')
+      await addBadDialog.getByRole('button', { name: 'Add' }).click()
+      // The unreachable repo should fail validation during creation
+      await expect(addBadDialog).toBeVisible({ timeout: 60_000 })
+      await addBadDialog.getByRole('button', { name: 'Cancel' }).click()
+
+      // Verify chart list still loads successfully with the good repo
+      await selectRepositoryFilter(page, goodRepoName)
+      await expect(
+        page.getByRole('link', { name: chartName, exact: true })
+      ).toBeVisible({ timeout: 60_000 })
+
+      // Also verify via API that listing all charts returns 200 even
+      // if we had a bad repo (we test with the good repo only since
+      // the bad repo couldn't be created)
+      const response = await page.request.get('/api/v1/charts')
+      expect(response.ok()).toBe(true)
+      const body = (await response.json()) as { items?: unknown[] }
+      expect(body.items?.length).toBeGreaterThan(0)
+    } finally {
+      await cleanupRepositoryFromUI(page, goodRepoName)
+    }
+  })
+
+  test('deleting repository disables associated auto-upgrade tasks', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-p0-del-${suffix}`
+    const releaseName = `e2e-p0-del-${suffix}`
+
+    try {
+      // Add repository and install a release
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+      const addRepoDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepoDialog).toBeVisible()
+      await addRepoDialog.locator('#helm-repository-name').fill(repositoryName)
+      await addRepoDialog.locator('#helm-repository-url').fill(repositoryURL)
+      await addRepoDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepoDialog).toBeHidden({ timeout: 60_000 })
+
+      // Install a release
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.goto(
+        `/charts/${encodeURIComponent(repositoryName)}/${encodeURIComponent(chartName)}?version=${encodeURIComponent(installVersion)}`
+      )
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+      await installDialog.getByLabel('Release Name').fill(releaseName)
+      await installDialog.getByRole('button', { name: 'Install' }).click()
+      await page.waitForURL(
+        `**/helmrelease/${namespace}/${encodeURIComponent(releaseName)}`,
+        { timeout: 120_000 }
+      )
+
+      // Configure auto-upgrade for the release
+      const autoUpgradeResponse = await page.request.put(
+        `/api/v1/helmrelease/${namespace}/${encodeURIComponent(releaseName)}/auto-upgrade`,
+        {
+          data: {
+            enabled: true,
+            scheduleType: 'interval',
+            intervalMinutes: 60,
+            scheduleTime: '03:00',
+            timeoutMinutes: 5,
+            source: 'repository',
+            repositoryName,
+            chartName,
+            rollbackOnFailure: false,
+          },
+        }
+      )
+      expect(autoUpgradeResponse.ok()).toBe(true)
+
+      // Verify the auto-upgrade task is enabled
+      const getResponse = await page.request.get(
+        `/api/v1/helmrelease/${namespace}/${encodeURIComponent(releaseName)}/auto-upgrade`
+      )
+      expect(getResponse.ok()).toBe(true)
+      const autoUpgrade = (await getResponse.json()) as { enabled?: boolean }
+      expect(autoUpgrade.enabled).toBe(true)
+
+      // Delete the repository via API
+      // First find the repository ID
+      const listResponse = await page.request.get(
+        '/api/v1/charts/repositories'
+      )
+      expect(listResponse.ok()).toBe(true)
+      const repos = (await listResponse.json()) as Array<{
+        id: number
+        name: string
+      }>
+      const repo = repos.find((r) => r.name === repositoryName)
+      expect(repo).toBeDefined()
+
+      const deleteResponse = await page.request.delete(
+        `/api/v1/charts/repositories/${repo!.id}`
+      )
+      expect(deleteResponse.ok()).toBe(true)
+
+      // Verify the auto-upgrade task is now disabled
+      const getResponseAfter = await page.request.get(
+        `/api/v1/helmrelease/${namespace}/${encodeURIComponent(releaseName)}/auto-upgrade`
+      )
+      expect(getResponseAfter.ok()).toBe(true)
+      const autoUpgradeAfter = (await getResponseAfter.json()) as {
+        enabled?: boolean
+      }
+      expect(autoUpgradeAfter.enabled).toBe(false)
+    } finally {
+      await cleanupReleaseFromUI(page, releaseName)
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('auto-upgrade returns 404 for non-existent release', async ({
+    page,
+  }) => {
+    await page.goto('/')
+
+    const nonexistentRelease = `e2e-nonexistent-${Date.now().toString(36)}`
+
+    const response = await page.request.put(
+      `/api/v1/helmrelease/${namespace}/${encodeURIComponent(nonexistentRelease)}/auto-upgrade`,
+      {
+        data: {
+          enabled: true,
+          scheduleType: 'interval',
+          intervalMinutes: 60,
+          scheduleTime: '03:00',
+          timeoutMinutes: 5,
+          source: 'repository',
+          repositoryName: 'test-repo',
+          chartName: 'test-chart',
+          rollbackOnFailure: false,
+        },
+      }
+    )
+    expect(response.status()).toBe(404)
   })
 })

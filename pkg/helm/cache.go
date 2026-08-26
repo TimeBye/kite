@@ -40,17 +40,19 @@ var (
 	artifactHubCache   = map[string]cachedArtifactHubResponse{}
 )
 
-func (h *HelmChartHandler) loadRepositoryIndex(repository model.HelmRepository) (*repo.IndexFile, error) {
+func (h *HelmChartHandler) loadRepositoryIndex(repository model.HelmRepository, refresh bool) (*repo.IndexFile, error) {
 	cacheKey := repositoryIndexCacheKey(repository)
 	now := time.Now()
 
-	h.indexCacheMu.Lock()
-	cached, ok := h.indexCache[cacheKey]
-	if ok && now.Before(cached.expiresAt) {
+	if !refresh {
+		h.indexCacheMu.Lock()
+		cached, ok := h.indexCache[cacheKey]
+		if ok && now.Before(cached.expiresAt) {
+			h.indexCacheMu.Unlock()
+			return cached.indexFile, nil
+		}
 		h.indexCacheMu.Unlock()
-		return cached.indexFile, nil
 	}
-	h.indexCacheMu.Unlock()
 
 	entry := &repo.Entry{
 		Name:     repository.Name,
@@ -88,20 +90,22 @@ func (h *HelmChartHandler) loadRepositoryIndex(repository model.HelmRepository) 
 	return indexFile, nil
 }
 
-func (h *HelmChartHandler) loadChartContent(repository model.HelmRepository, entry *repo.ChartVersion) (helmChartContent, error) {
+func (h *HelmChartHandler) loadChartContent(repository model.HelmRepository, entry *repo.ChartVersion, refresh bool) (helmChartContent, error) {
 	if len(entry.URLs) == 0 {
 		return helmChartContent{}, nil
 	}
 	cacheKey := chartContentCacheKey(repository, entry)
 	now := time.Now()
 
-	h.contentCacheMu.Lock()
-	cached, ok := h.contentCache[cacheKey]
-	if ok && now.Before(cached.expiresAt) {
+	if !refresh {
+		h.contentCacheMu.Lock()
+		cached, ok := h.contentCache[cacheKey]
+		if ok && now.Before(cached.expiresAt) {
+			h.contentCacheMu.Unlock()
+			return cached.content, nil
+		}
 		h.contentCacheMu.Unlock()
-		return cached.content, nil
 	}
-	h.contentCacheMu.Unlock()
 
 	loadedChart, err := helmutil.LoadRepositoryArchive(repository, entry)
 	if err != nil {

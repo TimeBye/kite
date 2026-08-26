@@ -1648,6 +1648,7 @@
       "releaseName": "Release Name",
       "createNamespace": "Create namespace",
       "dryRunPreview": "Dry run preview",
+      "mergedPreview": "Merged values preview",
       "ignoreLabelsAnnotationsChanges": "Ignore labels/annotations changes (diff only)",
       "forceConflicts": "force-conflicts",
       "wait": "wait",
@@ -1666,7 +1667,9 @@
       "timeoutMinutes": "Timeout (minutes)",
       "lastChecked": "Last checked",
       "lastUpgraded": "Last upgraded",
-      "lastError": "Last error"
+      "lastError": "Last error",
+      "advancedSettings": "Advanced settings",
+      "setValues": "Set values (--set)"
     },
     "diff": {
       "added": "Added",
@@ -1712,7 +1715,8 @@
       "autoUpgradeChartRequired": "Select a chart for auto upgrade."
     },
     "placeholders": {
-      "selectChart": "Select a chart..."
+      "selectChart": "Select a chart...",
+      "setValues": "image.tag=v2.0.0\nreplicas=3"
     }
   }
 }

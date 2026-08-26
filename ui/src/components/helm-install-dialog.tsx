@@ -1,23 +1,34 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import * as yaml from 'js-yaml'
-import { Loader2 } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import type {
   HelmChartDetail,
+  HelmChartVersion,
   HelmReleaseDryRunResponse,
   HelmReleaseInstallRequest,
 } from '@/types/api'
 import {
   dryRunInstallHelmRelease,
+  fetchHelmTask,
   installHelmRelease,
+  previewInstallValues,
+  useHelmChart,
   useHelmChartContent,
+  useResources,
 } from '@/lib/api'
-import { translateError } from '@/lib/utils'
+import { isSameHelmVersion } from '@/pages/helmrelease-chart-selection'
+import { formatDate, translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import {
   Dialog,
   DialogContent,
@@ -28,8 +39,16 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
+import { Textarea } from '@/components/ui/textarea'
 import { YamlFileTreeViewerNative as YamlFileTreeViewer } from '@/components/yaml-file-tree-viewer-native'
 
 function defaultReleaseName(name: string) {
@@ -56,25 +75,69 @@ export function HelmInstallDialog({
     defaultReleaseName(chart.name)
   )
   const [namespace, setNamespace] = useState('default')
-  const [isNamespaceManual, setIsNamespaceManual] = useState(false)
   const [createNamespace, setCreateNamespace] = useState(true)
   const [valuesYaml, setValuesYaml] = useState('')
+  const [setValuesStr, setSetValuesStr] = useState('')
+  const [wait, setWait] = useState(false)
+  const [forceConflicts, setForceConflicts] = useState(false)
+  const [rollbackOnFailure, setRollbackOnFailure] = useState(false)
   const [error, setError] = useState('')
   const [isInstalling, setIsInstalling] = useState(false)
+  const [installTaskID, setInstallTaskID] = useState<number | null>(null)
   const [isDryRunning, setIsDryRunning] = useState(false)
   const [dryRunPreview, setDryRunPreview] =
     useState<HelmReleaseDryRunResponse | null>(null)
+  const [mergedPreview, setMergedPreview] = useState('')
+  const [isMergedLoading, setIsMergedLoading] = useState(false)
+  const [mergedError, setMergedError] = useState('')
+  const [selectedVersion, setSelectedVersion] = useState('')
+
+  const versionOptions = useMemo<HelmChartVersion[]>(
+    () => chart.versions?.length ?? 0 ? chart.versions : chart.version ? [{ version: chart.version }] : [],
+    [chart.versions, chart.version]
+  )
+  const visibleVersionOptions = useMemo<HelmChartVersion[]>(() => {
+    if (
+      !chart.version ||
+      versionOptions.some((v) => isSameHelmVersion(v.version, chart.version))
+    ) {
+      return versionOptions
+    }
+    return [{ version: chart.version }, ...versionOptions]
+  }, [chart.version, versionOptions])
+  const activeVersion = selectedVersion || chart.version
+  const isDefaultVersion = isSameHelmVersion(activeVersion, chart.version)
+  const selectedChartQuery = useHelmChart(
+    chart.repositoryName,
+    chart.name,
+    activeVersion,
+    chart.source,
+    !isDefaultVersion && open,
+    open
+  )
+  const activeChartUrl = isDefaultVersion
+    ? chart.chartUrl
+    : selectedChartQuery.data?.chartUrl
+  const isVersionLoading = !isDefaultVersion && selectedChartQuery.isLoading
   const defaultValuesQuery = useHelmChartContent(
     chart.repositoryName,
     chart.name,
     'values',
-    chart.version,
+    activeVersion,
     chart.source,
     open
   )
   const defaultValues = defaultValuesQuery.isLoading
     ? t('common.messages.loading')
     : defaultValuesQuery.data?.content || ''
+  const { data: namespaces } = useResources('namespaces')
+  const namespaceExists = useMemo(() => {
+    if (!namespace.trim()) return false
+    return (namespaces || []).some(
+      (ns) => ns.metadata?.name === namespace.trim()
+    )
+  }, [namespaces, namespace])
+  const showCreateNamespace = !dryRunPreview && !namespaceExists && !!namespace.trim()
   const readableError = error.replace(/\s&&\s/g, '\n')
 
   const buildInstallRequest = (): {
@@ -83,7 +146,7 @@ export function HelmInstallDialog({
   } | null => {
     setError('')
 
-    if (!chart.chartUrl) {
+    if (!activeChartUrl) {
       setError(
         t('helmCharts.messages.noChartUrl', {
           defaultValue: 'Chart package URL is missing.',
@@ -112,18 +175,67 @@ export function HelmInstallDialog({
     }
 
     const targetNamespace = namespace.trim()
+    const setValues = setValuesStr
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
     const request = {
       releaseName: releaseName.trim(),
       namespace: targetNamespace,
-      chartUrl: chart.chartUrl,
+      chartUrl: activeChartUrl,
       repositoryName: chart.repositoryName,
       source: chart.source,
-      createNamespace: isNamespaceManual && createNamespace,
+      createNamespace: !namespaceExists && createNamespace,
       values,
+      setValues: setValues.length > 0 ? setValues : undefined,
+      wait,
+      forceConflicts,
+      rollbackOnFailure,
     }
 
     return { targetNamespace, request }
   }
+
+  // Fetch merged values preview with debounce
+  useEffect(() => {
+    if (!open || dryRunPreview) {
+      return
+    }
+    const payload = buildInstallRequest()
+    if (!payload) {
+      setMergedPreview('')
+      setMergedError('')
+      return
+    }
+    let cancelled = false
+    setIsMergedLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const result = await previewInstallValues(
+          payload.targetNamespace,
+          payload.request
+        )
+        if (!cancelled) {
+          setMergedPreview(result.values)
+          setMergedError('')
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setMergedError(translateError(err, t))
+          setMergedPreview('')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsMergedLoading(false)
+        }
+      }
+    }, 500)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, dryRunPreview, valuesYaml, setValuesStr, activeChartUrl])
 
   const handleDryRun = async () => {
     const payload = buildInstallRequest()
@@ -152,29 +264,63 @@ export function HelmInstallDialog({
     }
 
     setIsInstalling(true)
+    setError('')
     try {
-      const release = await installHelmRelease(
+      const response = await installHelmRelease(
         payload.targetNamespace,
         payload.request
       )
-      const installedNamespace =
-        release.metadata?.namespace || payload.targetNamespace
-      const targetName = release.metadata?.name || releaseName.trim()
-      toast.success(
-        t('helmCharts.messages.installed', {
-          defaultValue: 'Helm release installed',
-        })
-      )
-      onOpenChange(false)
-      navigate(
-        `/helmrelease/${encodeURIComponent(installedNamespace)}/${encodeURIComponent(targetName)}`
-      )
+      setInstallTaskID(response.taskId)
     } catch (err) {
       setError(translateError(err, t))
-    } finally {
       setIsInstalling(false)
     }
   }
+
+  // Poll install task status
+  useEffect(() => {
+    if (!installTaskID) {
+      return
+    }
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const task = await fetchHelmTask(installTaskID)
+        if (cancelled) {
+          return
+        }
+        if (task.status === 'succeeded') {
+          setIsInstalling(false)
+          setInstallTaskID(null)
+          toast.success(
+            t('helmCharts.messages.installed', {
+              defaultValue: 'Helm release installed',
+            })
+          )
+          onOpenChange(false)
+          navigate(
+            `/helmrelease/${encodeURIComponent(task.namespace)}/${encodeURIComponent(task.releaseName)}`
+          )
+        } else if (task.status === 'failed') {
+          setIsInstalling(false)
+          setInstallTaskID(null)
+          setError(task.error || t('common.messages.operationFailed'))
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setIsInstalling(false)
+          setInstallTaskID(null)
+          setError(translateError(err, t))
+        }
+      }
+    }
+    const interval = setInterval(poll, 2000)
+    poll()
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [installTaskID, navigate, onOpenChange, t])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -205,7 +351,7 @@ export function HelmInstallDialog({
               {t('helmCharts.actions.install', { defaultValue: 'Install' })}
             </DialogTitle>
             <DialogDescription>
-              {chart.repositoryName}/{chart.name}:{chart.version}
+              {chart.repositoryName}/{chart.name}:{activeVersion}
             </DialogDescription>
           </DialogHeader>
 
@@ -230,7 +376,7 @@ export function HelmInstallDialog({
                 : 'min-h-0 flex-1 space-y-4 overflow-y-auto pr-1'
             }
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="grid gap-2">
                 <Label htmlFor="helm-release-name">
                   {t('helm.fields.releaseName')}
@@ -256,27 +402,106 @@ export function HelmInstallDialog({
                     selectedNamespace={namespace}
                     handleNamespaceChange={(value) => {
                       setNamespace(value)
-                      setIsNamespaceManual(false)
                       setDryRunPreview(null)
                     }}
                     disabled={isInstalling || isDryRunning || !!dryRunPreview}
-                    triggerClassName="w-44 sm:w-44 sm:min-w-0"
+                    triggerClassName="w-full sm:w-48 sm:min-w-0"
                     modal
-                  />
-                  <Input
-                    id="helm-release-namespace"
-                    value={namespace}
-                    onChange={(event) => {
-                      setNamespace(event.target.value)
-                      setIsNamespaceManual(true)
-                      setCreateNamespace(true)
-                      setDryRunPreview(null)
-                    }}
-                    disabled={isInstalling || isDryRunning || !!dryRunPreview}
-                    required
-                    className="w-48"
+                    allowCreate
                   />
                 </div>
+                {showCreateNamespace ? (
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="helm-create-namespace"
+                      checked={createNamespace}
+                      onCheckedChange={(value) => {
+                        setCreateNamespace(value === true)
+                        setDryRunPreview(null)
+                      }}
+                      disabled={isInstalling || isDryRunning}
+                    />
+                    <Label
+                      htmlFor="helm-create-namespace"
+                      className="text-sm font-normal text-muted-foreground"
+                    >
+                      {t('helm.fields.createNamespace')}
+                    </Label>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="grid gap-2">
+                <Label>{t('helm.fields.version')}</Label>
+                {visibleVersionOptions.length > 0 ? (
+                  <Select
+                    value={activeVersion}
+                    onValueChange={(value) => {
+                      setSelectedVersion(value)
+                      setDryRunPreview(null)
+                    }}
+                    disabled={isInstalling || isDryRunning || !!dryRunPreview}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent
+                      className="min-w-80"
+                      viewportClassName="h-auto max-h-72 overflow-y-auto"
+                    >
+                      {visibleVersionOptions.map((version) => (
+                        <SelectItem
+                          key={version.version}
+                          value={version.version}
+                          textValue={version.version}
+                        >
+                          <span className="tabular-nums">
+                            {version.version}
+                          </span>
+                          {isSameHelmVersion(
+                            version.version,
+                            chart.version
+                          ) ? (
+                            <span className="text-xs text-muted-foreground">
+                              {t('common.fields.current')}
+                            </span>
+                          ) : null}
+                          {version.appVersion ? (
+                            <span className="text-xs text-muted-foreground">
+                              {version.appVersion}
+                            </span>
+                          ) : null}
+                          {version.publishedAt ? (
+                            <span className="text-xs text-muted-foreground tabular-nums">
+                              {formatDate(version.publishedAt)}
+                            </span>
+                          ) : null}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex h-9 items-center rounded-md border bg-muted/30 px-3 text-sm text-muted-foreground">
+                    {isVersionLoading ? (
+                      <>
+                        <Loader2 className="mr-2 size-4 animate-spin" />
+                        {t('helm.messages.loadingVersions', {
+                          defaultValue: 'Loading versions...',
+                        })}
+                      </>
+                    ) : (
+                      activeVersion || '-'
+                    )}
+                  </div>
+                )}
+                {isVersionLoading ? (
+                  <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" />
+                    {t('helm.messages.loadingChartPackage', {
+                      defaultValue: 'Loading chart package...',
+                    })}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -288,7 +513,7 @@ export function HelmInstallDialog({
                 fillHeight
               />
             ) : (
-              <div className="grid min-h-0 gap-4 lg:grid-cols-2">
+              <div className="grid min-h-0 gap-4 lg:grid-cols-3">
                 <div className="grid min-h-0 gap-2">
                   <Label>{t('helmCharts.fields.defaultValues')}</Label>
                   <SimpleYamlEditor
@@ -311,6 +536,28 @@ export function HelmInstallDialog({
                     height="calc(100dvh - 20rem)"
                   />
                 </div>
+
+                <div className="grid min-h-0 gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>{t('helm.fields.mergedPreview')}</Label>
+                    {isMergedLoading ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Loader2 className="size-3 animate-spin" />
+                        {t('common.messages.loading')}
+                      </span>
+                    ) : null}
+                  </div>
+                  {mergedError ? (
+                    <p className="text-sm text-destructive">{mergedError}</p>
+                  ) : (
+                    <SimpleYamlEditor
+                      value={mergedPreview}
+                      onChange={() => undefined}
+                      disabled
+                      height="calc(100dvh - 20rem)"
+                    />
+                  )}
+                </div>
               </div>
             )}
 
@@ -321,26 +568,71 @@ export function HelmInstallDialog({
             ) : null}
           </div>
 
+          {!dryRunPreview ? (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                <ChevronDown className="size-4" />
+                {t('helm.fields.advancedSettings')}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 space-y-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="helm-install-set-values">
+                    {t('helm.fields.setValues')}
+                  </Label>
+                  <Textarea
+                    id="helm-install-set-values"
+                    value={setValuesStr}
+                    onChange={(e) => setSetValuesStr(e.target.value)}
+                    disabled={isInstalling || isDryRunning}
+                    placeholder={t('helm.placeholders.setValues')}
+                    className="min-h-[80px] font-mono text-sm"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <Label
+                    htmlFor="helm-install-force-conflicts"
+                    className="flex items-center gap-2 font-normal text-muted-foreground"
+                  >
+                    <Checkbox
+                      id="helm-install-force-conflicts"
+                      checked={forceConflicts}
+                      onCheckedChange={(value) => setForceConflicts(value === true)}
+                      disabled={isInstalling || isDryRunning}
+                    />
+                    {t('helm.fields.forceConflicts')}
+                  </Label>
+                  <Label
+                    htmlFor="helm-install-wait"
+                    className="flex items-center gap-2 font-normal text-muted-foreground"
+                  >
+                    <Checkbox
+                      id="helm-install-wait"
+                      checked={wait}
+                      onCheckedChange={(value) => setWait(value === true)}
+                      disabled={isInstalling || isDryRunning}
+                    />
+                    {t('helm.fields.wait')}
+                  </Label>
+                  <Label
+                    htmlFor="helm-install-rollback-on-failure"
+                    className="flex items-center gap-2 font-normal text-muted-foreground"
+                  >
+                    <Checkbox
+                      id="helm-install-rollback-on-failure"
+                      checked={rollbackOnFailure}
+                      onCheckedChange={(value) =>
+                        setRollbackOnFailure(value === true)
+                      }
+                      disabled={isInstalling || isDryRunning}
+                    />
+                    {t('helm.fields.rollbackOnFailure')}
+                  </Label>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          ) : null}
+
           <DialogFooter className="items-center gap-3 sm:justify-end">
-            {!dryRunPreview && isNamespaceManual ? (
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="helm-create-namespace"
-                  checked={createNamespace}
-                  onCheckedChange={(value) => {
-                    setCreateNamespace(value === true)
-                    setDryRunPreview(null)
-                  }}
-                  disabled={isInstalling || isDryRunning}
-                />
-                <Label
-                  htmlFor="helm-create-namespace"
-                  className="text-sm font-normal"
-                >
-                  {t('helm.fields.createNamespace')}
-                </Label>
-              </div>
-            ) : null}
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               {dryRunPreview ? (
                 <Button
@@ -369,7 +661,7 @@ export function HelmInstallDialog({
                   disabled={
                     !releaseName.trim() ||
                     !namespace.trim() ||
-                    !chart.chartUrl ||
+                    !activeChartUrl ||
                     isInstalling ||
                     isDryRunning
                   }
@@ -386,7 +678,7 @@ export function HelmInstallDialog({
                 disabled={
                   !releaseName.trim() ||
                   !namespace.trim() ||
-                  !chart.chartUrl ||
+                  !activeChartUrl ||
                   isInstalling ||
                   isDryRunning
                 }

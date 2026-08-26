@@ -1682,6 +1682,7 @@
       "releaseName": "Release 名称",
       "createNamespace": "创建 Namespace",
       "dryRunPreview": "Dry Run 预览",
+      "mergedPreview": "合并值预览",
       "ignoreLabelsAnnotationsChanges": "忽略标签/注解变更（仅 Diff）",
       "forceConflicts": "force-conflicts",
       "wait": "wait",
@@ -1700,7 +1701,9 @@
       "timeoutMinutes": "超时（分钟）",
       "lastChecked": "上次检查",
       "lastUpgraded": "上次升级",
-      "lastError": "最近错误"
+      "lastError": "最近错误",
+      "advancedSettings": "高级设置",
+      "setValues": "Set values (--set)"
     },
     "diff": {
       "added": "新增",
@@ -1746,7 +1749,8 @@
       "autoUpgradeChartRequired": "请选择用于自动升级的 Chart。"
     },
     "placeholders": {
-      "selectChart": "选择 Chart..."
+      "selectChart": "选择 Chart...",
+      "setValues": "image.tag=v2.0.0\nreplicas=3"
     }
   }
 }

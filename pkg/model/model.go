@@ -105,6 +105,7 @@ func InitDB() {
 		PendingSession{},
 		HelmRepository{},
 		ScheduledTask{},
+		HelmTask{},
 		KubeconfigToken{},
 	}
 	for _, model := range models {

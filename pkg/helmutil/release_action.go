@@ -12,13 +12,15 @@ import (
 )
 
 type InstallReleaseOptions struct {
-	ReleaseName     string
-	Namespace       string
-	Timeout         time.Duration
-	Description     string
-	CreateNamespace bool
-	DryRun          bool
-	Wait            bool
+	ReleaseName       string
+	Namespace         string
+	Timeout           time.Duration
+	Description       string
+	CreateNamespace   bool
+	DryRun            bool
+	Wait              bool
+	ForceConflicts    bool
+	RollbackOnFailure bool
 }
 
 type UninstallReleaseOptions struct {
@@ -79,6 +81,8 @@ func InstallRelease(ctx context.Context, cfg *action.Configuration, chartToInsta
 	install.Timeout = opts.Timeout
 	install.Description = opts.Description
 	install.CreateNamespace = opts.CreateNamespace
+	install.ForceConflicts = opts.ForceConflicts
+	install.RollbackOnFailure = opts.RollbackOnFailure
 	if opts.DryRun {
 		install.DryRunStrategy = action.DryRunClient
 	}

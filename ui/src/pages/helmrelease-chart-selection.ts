@@ -27,6 +27,7 @@ export function useHelmReleaseChartSelection({
   const { t } = useTranslation()
   const chartsQuery = useHelmCharts({
     query: chartName,
+    refresh: open,
     enabled: open && !!chartName,
   })
   const managedChartCandidates = useMemo(

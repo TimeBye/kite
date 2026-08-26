@@ -7,7 +7,6 @@ import {
   HelmChartContentType,
   HelmChartDetail,
   HelmChartList,
-  HelmRelease,
   HelmReleaseAutoUpgrade,
   HelmReleaseAutoUpgradeRequest,
   HelmReleaseDryRunResponse,
@@ -15,6 +14,8 @@ import {
   HelmReleaseInstallRequest,
   HelmReleaseUpgradeRequest,
   HelmRepository,
+  HelmTask,
+  HelmTaskResponse,
   ImageTagInfo,
   RelatedResources,
   ResourceHistoryResponse,
@@ -30,6 +31,7 @@ import { useCluster } from '@/hooks/use-cluster'
 import i18n from '@/i18n'
 
 import { API_BASE_URL, apiClient } from '../api-client'
+import { ApiError } from '@/lib/api-error'
 import {
   appendCurrentClusterParam,
   withCurrentClusterPath,
@@ -142,8 +144,8 @@ export const upgradeHelmRelease = async (
   namespace: string,
   name: string,
   body?: HelmReleaseUpgradeRequest
-): Promise<{ message?: string }> => {
-  return apiClient.put<{ message?: string }>(
+): Promise<HelmTaskResponse> => {
+  return apiClient.put<HelmTaskResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/upgrade`,
     body || {}
   )
@@ -160,15 +162,48 @@ export const dryRunUpgradeHelmRelease = async (
   )
 }
 
+export const previewUpgradeValues = async (
+  namespace: string,
+  name: string,
+  body?: HelmReleaseUpgradeRequest
+): Promise<{ values: string }> => {
+  return apiClient.put<{ values: string }>(
+    `/helmrelease/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/upgrade/preview-values`,
+    body || {}
+  )
+}
+
 export const rollbackHelmRelease = async (
   namespace: string,
   name: string,
   revision?: number
-): Promise<{ message?: string }> => {
-  return apiClient.put<{ message?: string }>(
+): Promise<HelmTaskResponse> => {
+  return apiClient.put<HelmTaskResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/rollback`,
     revision ? { revision } : {}
   )
+}
+
+export const fetchHelmTask = (taskID: number): Promise<HelmTask> => {
+  return fetchAPI<HelmTask>(`/helmrelease/tasks/${taskID}`)
+}
+
+export const useHelmTaskPolling = (
+  taskID: number | null,
+  options?: { enabled?: boolean }
+) => {
+  return useQuery({
+    queryKey: ['helm-task', taskID],
+    queryFn: () => fetchHelmTask(taskID!),
+    enabled: (options?.enabled ?? true) && taskID !== null,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      if (status === 'succeeded' || status === 'failed') {
+        return false
+      }
+      return 2000
+    },
+  })
 }
 
 export const fetchHelmReleaseAutoUpgrade = (
@@ -207,8 +242,8 @@ export const useHelmReleaseAutoUpgrade = (
 export const installHelmRelease = async (
   namespace: string,
   body: HelmReleaseInstallRequest
-): Promise<HelmRelease> => {
-  return apiClient.post<HelmRelease>(
+): Promise<HelmTaskResponse> => {
+  return apiClient.post<HelmTaskResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}`,
     body
   )
@@ -220,6 +255,16 @@ export const dryRunInstallHelmRelease = async (
 ): Promise<HelmReleaseDryRunResponse> => {
   return apiClient.post<HelmReleaseDryRunResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}/dry-run`,
+    body
+  )
+}
+
+export const previewInstallValues = async (
+  namespace: string,
+  body: HelmReleaseInstallRequest
+): Promise<{ values: string }> => {
+  return apiClient.post<{ values: string }>(
+    `/helmrelease/${encodeURIComponent(namespace)}/preview-values`,
     body
   )
 }
@@ -270,6 +315,9 @@ export const deleteHelmRepository = (
 export const fetchHelmCharts = (options?: {
   repository?: string
   query?: string
+  refresh?: boolean
+  limit?: number
+  offset?: number
 }): Promise<HelmChartList> => {
   const params = new URLSearchParams()
   if (options?.repository) {
@@ -277,6 +325,15 @@ export const fetchHelmCharts = (options?: {
   }
   if (options?.query) {
     params.append('q', options.query)
+  }
+  if (options?.refresh) {
+    params.append('refresh', 'true')
+  }
+  if (options?.limit) {
+    params.append('limit', String(options.limit))
+  }
+  if (options?.offset) {
+    params.append('offset', String(options.offset))
   }
   const query = params.toString()
   return fetchAPI<HelmChartList>(`/charts${query ? `?${query}` : ''}`)
@@ -311,11 +368,15 @@ export const fetchHelmChart = (
   repository: string,
   name: string,
   version?: string,
-  source?: 'repository' | 'artifacthub'
+  source?: 'repository' | 'artifacthub',
+  refresh?: boolean
 ): Promise<HelmChartDetail> => {
   const params = new URLSearchParams()
   if (version) {
     params.append('version', version)
+  }
+  if (refresh) {
+    params.append('refresh', 'true')
   }
   const query = params.toString()
   const endpoint =
@@ -331,11 +392,15 @@ export const fetchHelmChartContent = (
   name: string,
   content: HelmChartContentType,
   version?: string,
-  source?: 'repository' | 'artifacthub'
+  source?: 'repository' | 'artifacthub',
+  refresh?: boolean
 ): Promise<HelmChartContent> => {
   const params = new URLSearchParams()
   if (version) {
     params.append('version', version)
+  }
+  if (refresh) {
+    params.append('refresh', 'true')
   }
   const query = params.toString()
   const endpoint =
@@ -356,6 +421,9 @@ export const useHelmRepositories = () => {
 export const useHelmCharts = (options?: {
   repository?: string
   query?: string
+  refresh?: boolean
+  limit?: number
+  offset?: number
   enabled?: boolean
 }) => {
   return useQuery({
@@ -364,6 +432,9 @@ export const useHelmCharts = (options?: {
       'charts',
       options?.repository || '',
       options?.query || '',
+      options?.refresh ? 'refresh' : '',
+      options?.limit || 0,
+      options?.offset || 0,
     ],
     queryFn: () => fetchHelmCharts(options),
     enabled: options?.enabled ?? true,
@@ -396,7 +467,8 @@ export const useHelmChart = (
   name: string | undefined,
   version?: string,
   source?: 'repository' | 'artifacthub',
-  enabled = true
+  enabled = true,
+  refresh?: boolean
 ) => {
   return useQuery({
     queryKey: [
@@ -406,9 +478,10 @@ export const useHelmChart = (
       repository,
       name,
       version || '',
+      refresh ? 'refresh' : '',
     ],
     queryFn: () =>
-      fetchHelmChart(repository || '', name || '', version, source),
+      fetchHelmChart(repository || '', name || '', version, source, refresh),
     enabled: Boolean(enabled && repository && name),
   })
 }
@@ -419,7 +492,8 @@ export const useHelmChartContent = (
   content: HelmChartContentType,
   version?: string,
   source?: 'repository' | 'artifacthub',
-  enabled = true
+  enabled = true,
+  refresh?: boolean
 ) => {
   return useQuery({
     queryKey: [
@@ -430,6 +504,7 @@ export const useHelmChartContent = (
       name,
       version || '',
       content,
+      refresh ? 'refresh' : '',
     ],
     queryFn: () =>
       fetchHelmChartContent(
@@ -437,7 +512,8 @@ export const useHelmChartContent = (
         name || '',
         content,
         version,
-        source
+        source,
+        refresh
       ),
     enabled: Boolean(enabled && repository && name),
   })
@@ -1046,10 +1122,19 @@ export async function getRelatedResources(
   name: string,
   namespace?: string
 ) {
-  const resp = await apiClient.get<RelatedResources[]>(
-    `/${resource}/${namespace ? namespace : '_all'}/${name}/related`
-  )
-  return resp
+  try {
+    const resp = await apiClient.get<RelatedResources[]>(
+      `/${resource}/${namespace ? namespace : '_all'}/${name}/related`
+    )
+    return resp
+  } catch (err) {
+    // Not all resource types have a /related route registered.
+    // Gracefully return empty array instead of erroring.
+    if (err instanceof ApiError && err.message.includes('404')) {
+      return []
+    }
+    throw err
+  }
 }
 
 export function useRelatedResources(

@@ -1,6 +1,7 @@
 package helm
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/model"
+	"github.com/zxh326/kite/pkg/scheduler"
+	"k8s.io/klog/v2"
 )
 
 func (h *HelmChartHandler) ListRepositories(c *gin.Context) {
@@ -72,7 +75,7 @@ func (h *HelmChartHandler) CreateRepository(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.loadRepositoryIndex(repository); err != nil {
+	if _, err := h.loadRepositoryIndex(repository, false); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -103,8 +106,29 @@ func (h *HelmChartHandler) DeleteRepository(c *gin.Context) {
 		return
 	}
 	h.clearRepositoryCache(repository)
+	h.disableAutoUpgradeTasksForRepository(repository.Name)
 
 	c.JSON(http.StatusOK, gin.H{"message": "repository deleted"})
+}
+
+func (h *HelmChartHandler) disableAutoUpgradeTasksForRepository(repoName string) {
+	var tasks []model.ScheduledTask
+	if err := model.DB.Where("type = ?", scheduler.HelmReleaseAutoUpgradeTaskType).Find(&tasks).Error; err != nil {
+		klog.Warningf("failed to query auto upgrade tasks for repository %q: %v", repoName, err)
+		return
+	}
+	for _, task := range tasks {
+		var payload scheduler.HelmReleaseAutoUpgradePayload
+		if err := json.Unmarshal([]byte(task.Payload), &payload); err != nil {
+			continue
+		}
+		if payload.RepositoryName != repoName {
+			continue
+		}
+		if err := model.DB.Model(&task).Update("enabled", false).Error; err != nil {
+			klog.Warningf("failed to disable auto upgrade task %d for deleted repository %q: %v", task.ID, repoName, err)
+		}
+	}
 }
 
 func toHelmRepositoryResponse(repository model.HelmRepository) helmRepositoryResponse {

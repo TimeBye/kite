@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useState, type SubmitEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SubmitEvent,
+} from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import {
   ColumnFiltersState,
   createColumnHelper,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
   PaginationState,
   useReactTable,
   VisibilityState,
@@ -119,8 +123,7 @@ function readHelmChartListSessionState(): HelmChartListSessionState {
         pagination.pageIndex >= 0 &&
         Number.isInteger(pagination.pageSize) &&
         pagination.pageSize > 0 &&
-        (state.chartSource === repositoriesSource ||
-          artifactHubPageSizeOptions.includes(pagination.pageSize))
+        artifactHubPageSizeOptions.includes(pagination.pageSize)
           ? pagination
           : undefined,
     }
@@ -146,22 +149,6 @@ function ChartNameLink({ chart }: { chart: HelmChart }) {
       {chart.name}
     </Link>
   )
-}
-
-function chartMatchesSearch(chart: HelmChart, query: string) {
-  const searchQuery = query.trim().toLowerCase()
-  if (!searchQuery) {
-    return true
-  }
-
-  return [
-    chart.name,
-    chart.repositoryName,
-    chart.version,
-    chart.appVersion,
-    chart.description,
-    ...(chart.keywords || []),
-  ].some((value) => value?.toLowerCase().includes(searchQuery))
 }
 
 function AddRepositoryDialog({
@@ -292,6 +279,8 @@ export function HelmChartListPage() {
   const [searchQuery, setSearchQuery] = useState(
     initialSessionState.searchQuery ?? ''
   )
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [repositoryFilter, setRepositoryFilter] = useState(
     initialSessionState.repositoryFilter ?? allRepositories
   )
@@ -304,6 +293,7 @@ export function HelmChartListPage() {
   const [pagination, setPagination] = useState<PaginationState>(
     initialSessionState.pagination ?? defaultPagination
   )
+  const [forceRefresh, setForceRefresh] = useState(false)
   const selectedRepository =
     repositoryFilter === allRepositories ? undefined : repositoryFilter
   const isArtifactHubSource = chartSource === artifactHubSource
@@ -330,6 +320,16 @@ export function HelmChartListPage() {
     pagination,
   ])
 
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 400)
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    }
+  }, [searchQuery])
+
   const { data: repositories = [], refetch: refetchRepositories } =
     useHelmRepositories()
   const selectedRepositoryItem = repositories.find(
@@ -337,10 +337,14 @@ export function HelmChartListPage() {
   )
   const localChartsQuery = useHelmCharts({
     repository: selectedRepository,
+    query: debouncedSearchQuery,
+    refresh: forceRefresh,
+    limit: pagination.pageSize,
+    offset: pagination.pageIndex * pagination.pageSize,
     enabled: !isArtifactHubSource,
   })
   const artifactHubChartsQuery = useArtifactHubCharts({
-    query: searchQuery,
+    query: debouncedSearchQuery,
     verifiedPublisher: verifiedPublisherOnly,
     limit: pagination.pageSize,
     offset: pagination.pageIndex * pagination.pageSize,
@@ -358,9 +362,7 @@ export function HelmChartListPage() {
     refetch: refetchCharts,
   } = activeChartsQuery
   const charts = data?.items || []
-  const totalRowCount = isArtifactHubSource
-    ? (data?.total ?? charts.length)
-    : charts.length
+  const totalRowCount = data?.total ?? charts.length
 
   const columns = useMemo(
     () => [
@@ -419,23 +421,18 @@ export function HelmChartListPage() {
     data: charts,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange: setPagination,
     enableSorting: false,
-    manualPagination: isArtifactHubSource,
-    pageCount: isArtifactHubSource
-      ? Math.ceil(totalRowCount / pagination.pageSize) || 0
-      : undefined,
+    manualPagination: true,
+    manualFiltering: true,
+    pageCount: Math.ceil(totalRowCount / pagination.pageSize) || 0,
     getRowId: (chart) =>
       `${chart.source || repositoriesSource}/${chart.repositoryUrl}/${chart.name}`,
-    globalFilterFn: (row, _columnId, value) =>
-      chartMatchesSearch(row.original, String(value)),
     state: {
       columnFilters,
-      globalFilter: isArtifactHubSource ? '' : searchQuery,
+      globalFilter: '',
       columnVisibility,
       pagination,
     },
@@ -472,11 +469,6 @@ export function HelmChartListPage() {
     setPagination((prev) => ({
       ...prev,
       pageIndex: 0,
-      pageSize:
-        value === artifactHubSource &&
-        !artifactHubPageSizeOptions.includes(prev.pageSize)
-          ? defaultPagination.pageSize
-          : prev.pageSize,
     }))
   }
 
@@ -495,9 +487,7 @@ export function HelmChartListPage() {
     setPagination((prev) => ({ ...prev, pageIndex: 0 }))
   }
 
-  const filteredRowCount = isArtifactHubSource
-    ? charts.length
-    : table.getFilteredRowModel().rows.length
+  const filteredRowCount = charts.length
   const emptyState = (() => {
     if (isLoading && charts.length === 0) {
       return (
@@ -621,7 +611,13 @@ export function HelmChartListPage() {
               size="icon"
               disabled={isFetching}
               aria-label={t('common.actions.refresh')}
-              onClick={() => void refetchCharts()}
+              onClick={() => {
+                if (isArtifactHubSource) {
+                  void refetchCharts()
+                } else {
+                  setForceRefresh((prev) => !prev)
+                }
+              }}
             >
               <RefreshCw className="size-4" />
             </Button>
@@ -731,10 +727,8 @@ export function HelmChartListPage() {
           pagination={pagination}
           setPagination={setPagination}
           shrinkFirstColumn={false}
-          showAllPageSize={!isArtifactHubSource}
-          pageSizeOptions={
-            isArtifactHubSource ? artifactHubPageSizeOptions : undefined
-          }
+          showAllPageSize={false}
+          pageSizeOptions={artifactHubPageSizeOptions}
         />
       </div>
 

@@ -1,11 +1,11 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   IconCircleCheckFilled,
   IconExclamationCircle,
 } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import type { Container, Pod } from 'kubernetes-types/core/v1'
-import { Loader2 } from 'lucide-react'
+import { ChevronDown, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -21,6 +21,8 @@ import type {
 } from '@/types/api'
 import {
   dryRunUpgradeHelmRelease,
+  fetchHelmTask,
+  previewUpgradeValues,
   rollbackHelmRelease,
   upgradeHelmRelease,
   useArtifactHubCharts,
@@ -49,6 +51,11 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -65,6 +72,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { HelmChartIcon } from '@/components/helm-chart-icon'
 import { LogViewer } from '@/components/log-viewer'
 import {
@@ -556,6 +564,7 @@ function HelmReleaseHistoryTable({
   const [rollingBackRevision, setRollingBackRevision] = useState<number | null>(
     null
   )
+  const [rollbackTaskID, setRollbackTaskID] = useState<number | null>(null)
   const {
     data,
     isLoading,
@@ -567,15 +576,51 @@ function HelmReleaseHistoryTable({
   const handleRollback = async (revision: number) => {
     setRollingBackRevision(revision)
     try {
-      await rollbackHelmRelease(namespace, name, revision)
-      toast.success(t('helm.messages.rollbackStarted'))
-      await Promise.all([refetchHistory(), onRollbackComplete()])
+      const response = await rollbackHelmRelease(namespace, name, revision)
+      setRollbackTaskID(response.taskId)
     } catch (err) {
       toast.error(translateError(err, t))
-    } finally {
       setRollingBackRevision(null)
     }
   }
+
+  // Poll rollback task status
+  useEffect(() => {
+    if (!rollbackTaskID) {
+      return
+    }
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const task = await fetchHelmTask(rollbackTaskID)
+        if (cancelled) {
+          return
+        }
+        if (task.status === 'succeeded') {
+          setRollbackTaskID(null)
+          setRollingBackRevision(null)
+          toast.success(t('helm.messages.rollbackStarted'))
+          await Promise.all([refetchHistory(), onRollbackComplete()])
+        } else if (task.status === 'failed') {
+          setRollbackTaskID(null)
+          setRollingBackRevision(null)
+          toast.error(task.error || t('common.messages.operationFailed'))
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRollbackTaskID(null)
+          setRollingBackRevision(null)
+          toast.error(translateError(err, t))
+        }
+      }
+    }
+    const interval = setInterval(poll, 2000)
+    poll()
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [rollbackTaskID, refetchHistory, onRollbackComplete, t])
 
   if (isLoading) {
     return (
@@ -973,6 +1018,7 @@ function UpgradeHelmReleaseDialog({
   const [forceConflicts, setForceConflicts] = useState(false)
   const [wait, setWait] = useState(false)
   const [rollbackOnFailure, setRollbackOnFailure] = useState(false)
+  const [setValuesStr, setSetValuesStr] = useState('')
   const [ignoreMetadataChanges, setIgnoreMetadataChanges] = useState(false)
   const releaseDefaultValues = useMemo(
     () => yaml.dump(release.spec?.defaultValues || {}, { indent: 2 }),
@@ -980,9 +1026,13 @@ function UpgradeHelmReleaseDialog({
   )
   const [error, setError] = useState('')
   const [isUpgrading, setIsUpgrading] = useState(false)
+  const [upgradeTaskID, setUpgradeTaskID] = useState<number | null>(null)
   const [isDryRunning, setIsDryRunning] = useState(false)
   const [dryRunPreview, setDryRunPreview] =
     useState<HelmReleaseDryRunResponse | null>(null)
+  const [mergedPreview, setMergedPreview] = useState('')
+  const [isMergedLoading, setIsMergedLoading] = useState(false)
+  const [mergedError, setMergedError] = useState('')
   const chartSelection = useHelmReleaseChartSelection({
     chartName,
     currentVersion,
@@ -1000,7 +1050,9 @@ function UpgradeHelmReleaseDialog({
     activeRepository || undefined,
     chartName,
     undefined,
-    activeChartSource
+    activeChartSource,
+    true,
+    open
   )
   const currentVersionOption = latestChartQuery.data?.versions?.find(
     (version) => isSameHelmVersion(version.version, currentVersion)
@@ -1020,7 +1072,8 @@ function UpgradeHelmReleaseDialog({
     chartName,
     activeVersion || undefined,
     activeChartSource,
-    !canUseCurrentChart
+    !canUseCurrentChart,
+    open
   )
   const defaultValuesQuery = useHelmChartContent(
     activeRepository || undefined,
@@ -1028,7 +1081,8 @@ function UpgradeHelmReleaseDialog({
     'values',
     activeVersion || undefined,
     activeChartSource,
-    open && !!activeChart && !!activeVersion
+    open && !!activeChart && !!activeVersion,
+    open
   )
   const versionOptions = useMemo<HelmChartVersion[]>(() => {
     if (latestChartQuery.data?.versions?.length) {
@@ -1096,6 +1150,11 @@ function UpgradeHelmReleaseDialog({
       }
     }
 
+    const setValues = setValuesStr
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+
     return {
       ...(chartUrl
         ? {
@@ -1105,11 +1164,62 @@ function UpgradeHelmReleaseDialog({
           }
         : {}),
       values,
+      setValues: setValues.length > 0 ? setValues : undefined,
       forceConflicts,
       wait,
       rollbackOnFailure,
     }
   }
+
+  // Fetch merged values preview with debounce
+  useEffect(() => {
+    if (!open || dryRunPreview) {
+      return
+    }
+    const request = buildUpgradeRequest()
+    if (!request) {
+      setMergedPreview('')
+      setMergedError('')
+      return
+    }
+    let cancelled = false
+    setIsMergedLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const result = await previewUpgradeValues(
+          release.metadata.namespace,
+          release.metadata.name,
+          request
+        )
+        if (!cancelled) {
+          setMergedPreview(result.values)
+          setMergedError('')
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setMergedError(translateError(err, t))
+          setMergedPreview('')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsMergedLoading(false)
+        }
+      }
+    }, 500)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    open,
+    dryRunPreview,
+    valuesYaml,
+    setValuesStr,
+    chartUrl,
+    canUseCurrentChart,
+    defaultValuesQuery.data,
+  ])
 
   const handleDryRun = async () => {
     const request = buildUpgradeRequest()
@@ -1140,21 +1250,59 @@ function UpgradeHelmReleaseDialog({
     }
 
     setIsUpgrading(true)
+    setError('')
     try {
-      await upgradeHelmRelease(
+      const response = await upgradeHelmRelease(
         release.metadata.namespace,
         release.metadata.name,
         request
       )
-      onOpenChange(false)
-      await onComplete()
+      setUpgradeTaskID(response.taskId)
     } catch (err) {
       const message = translateError(err, t)
       setError(message)
-    } finally {
       setIsUpgrading(false)
     }
   }
+
+  // Poll upgrade task status
+  useEffect(() => {
+    if (!upgradeTaskID) {
+      return
+    }
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const task = await fetchHelmTask(upgradeTaskID)
+        if (cancelled) {
+          return
+        }
+        if (task.status === 'succeeded') {
+          setIsUpgrading(false)
+          setUpgradeTaskID(null)
+          onOpenChange(false)
+          await onComplete()
+        } else if (task.status === 'failed') {
+          setIsUpgrading(false)
+          setUpgradeTaskID(null)
+          setError(task.error || t('common.messages.operationFailed'))
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setIsUpgrading(false)
+          setUpgradeTaskID(null)
+          setError(translateError(err, t))
+        }
+      }
+    }
+    const interval = setInterval(poll, 2000)
+    // Also poll immediately
+    poll()
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [upgradeTaskID, onOpenChange, onComplete, t])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -1329,7 +1477,7 @@ function UpgradeHelmReleaseDialog({
                 />
               </div>
             ) : (
-              <div className="grid min-h-0 gap-4 lg:grid-cols-2">
+              <div className="grid min-h-0 gap-4 lg:grid-cols-3">
                 <div className="grid min-h-0 gap-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label>{t('helmCharts.fields.defaultValues')}</Label>
@@ -1362,6 +1510,28 @@ function UpgradeHelmReleaseDialog({
                     height="calc(100dvh - 20rem)"
                   />
                 </div>
+
+                <div className="grid min-h-0 gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label>{t('helm.fields.mergedPreview')}</Label>
+                    {isMergedLoading ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Loader2 className="size-3 animate-spin" />
+                        {t('common.messages.loading')}
+                      </span>
+                    ) : null}
+                  </div>
+                  {mergedError ? (
+                    <p className="text-sm text-destructive">{mergedError}</p>
+                  ) : (
+                    <SimpleYamlEditor
+                      value={mergedPreview}
+                      onChange={() => undefined}
+                      disabled
+                      height="calc(100dvh - 20rem)"
+                    />
+                  )}
+                </div>
               </div>
             )}
 
@@ -1372,47 +1542,71 @@ function UpgradeHelmReleaseDialog({
             ) : null}
           </div>
 
+          {!dryRunPreview ? (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                <ChevronDown className="size-4" />
+                {t('helm.fields.advancedSettings')}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 space-y-3">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="helm-upgrade-set-values">
+                    {t('helm.fields.setValues')}
+                  </Label>
+                  <Textarea
+                    id="helm-upgrade-set-values"
+                    value={setValuesStr}
+                    onChange={(e) => setSetValuesStr(e.target.value)}
+                    disabled={isUpgrading || isDryRunning}
+                    placeholder={t('helm.placeholders.setValues')}
+                    className="min-h-[80px] font-mono text-sm"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <Label
+                    htmlFor="helm-upgrade-force-conflicts"
+                    className="flex items-center gap-2 font-normal text-muted-foreground"
+                  >
+                    <Checkbox
+                      id="helm-upgrade-force-conflicts"
+                      checked={forceConflicts}
+                      onCheckedChange={(value) => setForceConflicts(value === true)}
+                      disabled={isUpgrading || isDryRunning}
+                    />
+                    {t('helm.fields.forceConflicts')}
+                  </Label>
+                  <Label
+                    htmlFor="helm-upgrade-wait"
+                    className="flex items-center gap-2 font-normal text-muted-foreground"
+                  >
+                    <Checkbox
+                      id="helm-upgrade-wait"
+                      checked={wait}
+                      onCheckedChange={(value) => setWait(value === true)}
+                      disabled={isUpgrading || isDryRunning}
+                    />
+                    {t('helm.fields.wait')}
+                  </Label>
+                  <Label
+                    htmlFor="helm-upgrade-rollback-on-failure"
+                    className="flex items-center gap-2 font-normal text-muted-foreground"
+                  >
+                    <Checkbox
+                      id="helm-upgrade-rollback-on-failure"
+                      checked={rollbackOnFailure}
+                      onCheckedChange={(value) =>
+                        setRollbackOnFailure(value === true)
+                      }
+                      disabled={isUpgrading || isDryRunning}
+                    />
+                    {t('helm.fields.rollbackOnFailure')}
+                  </Label>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          ) : null}
+
           <DialogFooter className="items-center gap-3">
-            <div className="flex flex-wrap items-center justify-end gap-3 text-sm">
-              <Label
-                htmlFor="helm-upgrade-force-conflicts"
-                className="flex items-center gap-2 font-normal text-muted-foreground"
-              >
-                <Checkbox
-                  id="helm-upgrade-force-conflicts"
-                  checked={forceConflicts}
-                  onCheckedChange={(value) => setForceConflicts(value === true)}
-                  disabled={isUpgrading || isDryRunning}
-                />
-                {t('helm.fields.forceConflicts')}
-              </Label>
-              <Label
-                htmlFor="helm-upgrade-wait"
-                className="flex items-center gap-2 font-normal text-muted-foreground"
-              >
-                <Checkbox
-                  id="helm-upgrade-wait"
-                  checked={wait}
-                  onCheckedChange={(value) => setWait(value === true)}
-                  disabled={isUpgrading || isDryRunning}
-                />
-                {t('helm.fields.wait')}
-              </Label>
-              <Label
-                htmlFor="helm-upgrade-rollback-on-failure"
-                className="flex items-center gap-2 font-normal text-muted-foreground"
-              >
-                <Checkbox
-                  id="helm-upgrade-rollback-on-failure"
-                  checked={rollbackOnFailure}
-                  onCheckedChange={(value) =>
-                    setRollbackOnFailure(value === true)
-                  }
-                  disabled={isUpgrading || isDryRunning}
-                />
-                {t('helm.fields.rollbackOnFailure')}
-              </Label>
-            </div>
             {dryRunPreview ? (
               <Button
                 type="button"

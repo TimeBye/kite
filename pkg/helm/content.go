@@ -3,6 +3,7 @@ package helm
 import (
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,12 +14,26 @@ import (
 	"helm.sh/helm/v4/pkg/chart/common"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
 	repo "helm.sh/helm/v4/pkg/repo/v1"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
 
 func (h *HelmChartHandler) ListCharts(c *gin.Context) {
 	repositoryName := c.Query("repository")
 	query := strings.ToLower(strings.TrimSpace(c.Query("q")))
+	refresh := c.Query("refresh") == "true"
+
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "0"))
+	if err != nil || limit < 0 {
+		limit = 0
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
 
 	var repositories []model.HelmRepository
 	db := model.DB.Order("name")
@@ -32,10 +47,10 @@ func (h *HelmChartHandler) ListCharts(c *gin.Context) {
 
 	items := []helmChart{}
 	for _, repository := range repositories {
-		indexFile, err := h.loadRepositoryIndex(repository)
+		indexFile, err := h.loadRepositoryIndex(repository, refresh)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
+			klog.Warningf("failed to load helm repository index %q: %v", repository.Name, err)
+			continue
 		}
 		for _, versions := range indexFile.Entries {
 			if len(versions) == 0 {
@@ -50,13 +65,33 @@ func (h *HelmChartHandler) ListCharts(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"items": items, "total": len(items)})
+	total := len(items)
+	items = paginate(items, limit, offset)
+
+	c.JSON(http.StatusOK, gin.H{"items": items, "total": total})
+}
+
+func paginate[T any](items []T, limit, offset int) []T {
+	if limit <= 0 {
+		return items
+	}
+	total := len(items)
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	return items[start:end]
 }
 
 func (h *HelmChartHandler) GetChart(c *gin.Context) {
 	repositoryName := c.Param("repository")
 	chartName := c.Param("name")
 	version := c.Query("version")
+	refresh := c.Query("refresh") == "true"
 
 	var repository model.HelmRepository
 	if err := model.DB.Where("name = ?", repositoryName).First(&repository).Error; err != nil {
@@ -64,7 +99,7 @@ func (h *HelmChartHandler) GetChart(c *gin.Context) {
 		return
 	}
 
-	indexFile, err := h.loadRepositoryIndex(repository)
+	indexFile, err := h.loadRepositoryIndex(repository, refresh)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -76,7 +111,7 @@ func (h *HelmChartHandler) GetChart(c *gin.Context) {
 		return
 	}
 
-	content, err := h.loadChartContent(repository, entry)
+	content, err := h.loadChartContent(repository, entry, refresh)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -104,6 +139,7 @@ func (h *HelmChartHandler) GetChartContent(c *gin.Context) {
 	chartName := c.Param("name")
 	contentName := c.Param("content")
 	version := c.Query("version")
+	refresh := c.Query("refresh") == "true"
 
 	if contentName != "values" && contentName != "templates" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported chart content"})
@@ -116,7 +152,7 @@ func (h *HelmChartHandler) GetChartContent(c *gin.Context) {
 		return
 	}
 
-	indexFile, err := h.loadRepositoryIndex(repository)
+	indexFile, err := h.loadRepositoryIndex(repository, refresh)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -128,7 +164,7 @@ func (h *HelmChartHandler) GetChartContent(c *gin.Context) {
 		return
 	}
 
-	content, err := h.loadChartContent(repository, entry)
+	content, err := h.loadChartContent(repository, entry, refresh)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

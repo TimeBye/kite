@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Namespace } from 'kubernetes-types/core/v1'
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 
 import { useResources } from '@/lib/api'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,7 @@ export function NamespaceSelector({
   triggerClassName,
   multiple = false,
   modal = false,
+  allowCreate = false,
 }: {
   selectedNamespace?: string
   handleNamespaceChange: (namespace: string) => void
@@ -36,8 +37,10 @@ export function NamespaceSelector({
   triggerClassName?: string
   multiple?: boolean
   modal?: boolean
+  allowCreate?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
   const { data, isLoading } = useResources('namespaces')
   const selectedNamespaces = useMemo(() => {
     if (!selectedNamespace || selectedNamespace === '_all') return []
@@ -53,6 +56,16 @@ export function NamespaceSelector({
     })
   }, [data])
 
+  const existingNames = useMemo(
+    () => sortedNamespaces.map((ns) => ns.metadata?.name || ''),
+    [sortedNamespaces]
+  )
+  const canCreate =
+    allowCreate &&
+    !multiple &&
+    search.trim().length > 0 &&
+    !existingNames.includes(search.trim())
+
   const triggerLabel =
     selectedNamespace === '_all'
       ? 'All Namespaces'
@@ -63,6 +76,7 @@ export function NamespaceSelector({
   const selectNamespace = (namespace: string) => {
     handleNamespaceChange(namespace)
     setOpen(false)
+    setSearch('')
   }
 
   const toggleNamespace = (namespace: string) => {
@@ -90,7 +104,16 @@ export function NamespaceSelector({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={modal}>
+    <Popover
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value)
+        if (!value) {
+          setSearch('')
+        }
+      }}
+      modal={modal}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -111,8 +134,13 @@ export function NamespaceSelector({
         className="w-[max(var(--radix-popover-trigger-width),18rem)] max-w-[min(300px,calc(100vw-1rem))] p-0"
         align="start"
       >
-        <Command>
-          <CommandInput placeholder="Search..." className="h-9" />
+        <Command shouldFilter={!allowCreate}>
+          <CommandInput
+            placeholder="Search..."
+            className="h-9"
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList className="max-h-[min(50dvh,300px)] overflow-x-hidden overflow-y-auto overscroll-contain">
             {isLoading ? (
               <div className="flex items-center justify-center p-6 text-sm">
@@ -122,6 +150,20 @@ export function NamespaceSelector({
             ) : (
               <>
                 <CommandEmpty>No results.</CommandEmpty>
+                {canCreate ? (
+                  <CommandGroup heading="Create">
+                    <CommandItem
+                      value={`__create__${search.trim()}`}
+                      onSelect={() => selectNamespace(search.trim())}
+                      className="flex items-center"
+                    >
+                      <Plus className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">
+                        {search.trim()}
+                      </span>
+                    </CommandItem>
+                  </CommandGroup>
+                ) : null}
                 <CommandGroup>
                   {showAll && (
                     <CommandItem
@@ -143,43 +185,54 @@ export function NamespaceSelector({
                     </CommandItem>
                   )}
 
-                  {sortedNamespaces.map((ns: Namespace) => {
-                    const name = ns.metadata?.name || ''
-                    const selected = multiple
-                      ? selectedNamespaces.includes(name)
-                      : selectedNamespace === name
+                  {sortedNamespaces
+                    .filter((ns) => {
+                      if (!allowCreate || !search.trim()) return true
+                      const name = ns.metadata?.name || ''
+                      return name
+                        .toLowerCase()
+                        .includes(search.trim().toLowerCase())
+                    })
+                    .map((ns: Namespace) => {
+                      const name = ns.metadata?.name || ''
+                      const selected = multiple
+                        ? selectedNamespaces.includes(name)
+                        : selectedNamespace === name
 
-                    return (
-                      <CommandItem
-                        key={name}
-                        value={name}
-                        onSelect={() => handleNamespaceSelect(name)}
-                        className="flex items-center"
-                      >
-                        {multiple ? (
-                          <Checkbox
-                            checked={selected}
-                            onCheckedChange={() => toggleNamespace(name)}
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => event.stopPropagation()}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            aria-label={`Toggle namespace ${name}`}
-                            className="mr-2"
-                          />
-                        ) : (
-                          <Check
-                            className={cn(
-                              'mr-2 h-4 w-4 shrink-0',
-                              selected ? 'opacity-100' : 'opacity-0'
-                            )}
-                          />
-                        )}
-                        <span className="truncate flex-1 min-w-0" title={name}>
-                          {name}
-                        </span>
-                      </CommandItem>
-                    )
-                  })}
+                      return (
+                        <CommandItem
+                          key={name}
+                          value={name}
+                          onSelect={() => handleNamespaceSelect(name)}
+                          className="flex items-center"
+                        >
+                          {multiple ? (
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={() => toggleNamespace(name)}
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={(event) => event.stopPropagation()}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              aria-label={`Toggle namespace ${name}`}
+                              className="mr-2"
+                            />
+                          ) : (
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4 shrink-0',
+                                selected ? 'opacity-100' : 'opacity-0'
+                              )}
+                            />
+                          )}
+                          <span
+                            className="truncate flex-1 min-w-0"
+                            title={name}
+                          >
+                            {name}
+                          </span>
+                        </CommandItem>
+                      )
+                    })}
                 </CommandGroup>
               </>
             )}

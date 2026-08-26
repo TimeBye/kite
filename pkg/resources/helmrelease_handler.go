@@ -1,11 +1,13 @@
 package resources
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,10 +20,14 @@ import (
 	"github.com/zxh326/kite/pkg/scheduler"
 	"gorm.io/gorm"
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/common/util"
 	release "helm.sh/helm/v4/pkg/release/v1"
+	"helm.sh/helm/v4/pkg/storage/driver"
+	"helm.sh/helm/v4/pkg/strvals"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -35,16 +41,40 @@ type helmReleaseRunResult struct {
 	release *release.Release
 }
 
+// mergeSetValues merges --set style key=value pairs into the values map.
+// Each entry follows Helm --set syntax, e.g. "image.tag=v2", "replicas=3".
+func mergeSetValues(values map[string]interface{}, setValues []string) (map[string]interface{}, error) {
+	if len(setValues) == 0 {
+		return values, nil
+	}
+	if values == nil {
+		values = map[string]interface{}{}
+	}
+	for _, sv := range setValues {
+		sv = strings.TrimSpace(sv)
+		if sv == "" {
+			continue
+		}
+		if err := strvals.ParseInto(sv, values); err != nil {
+			return nil, fmt.Errorf("invalid set value %q: %w", sv, err)
+		}
+	}
+	return values, nil
+}
+
 type helmReleaseInstallRequest struct {
-	ReleaseName     string                 `json:"releaseName" binding:"required"`
-	Namespace       string                 `json:"namespace"`
-	ChartURL        string                 `json:"chartUrl" binding:"required"`
-	RepositoryName  string                 `json:"repositoryName"`
-	Source          string                 `json:"source"`
-	Values          map[string]interface{} `json:"values"`
-	Description     string                 `json:"description"`
-	CreateNamespace bool                   `json:"createNamespace"`
-	Wait            bool                   `json:"wait"`
+	ReleaseName       string                 `json:"releaseName" binding:"required"`
+	Namespace         string                 `json:"namespace"`
+	ChartURL          string                 `json:"chartUrl" binding:"required"`
+	RepositoryName    string                 `json:"repositoryName"`
+	Source            string                 `json:"source"`
+	Values            map[string]interface{} `json:"values"`
+	SetValues         []string               `json:"setValues"`
+	Description       string                 `json:"description"`
+	CreateNamespace   bool                   `json:"createNamespace"`
+	Wait              bool                   `json:"wait"`
+	ForceConflicts    bool                   `json:"forceConflicts"`
+	RollbackOnFailure bool                   `json:"rollbackOnFailure"`
 }
 
 func NewHelmReleaseHandler() *HelmReleaseHandler    { return &HelmReleaseHandler{} }
@@ -64,14 +94,77 @@ func (h *HelmReleaseHandler) ListHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 func (h *HelmReleaseHandler) Create(c *gin.Context) {
-	rel, status, err := h.runInstall(c, false)
-	if err != nil {
-		c.JSON(status, gin.H{"error": err.Error()})
+	namespace := strings.TrimSpace(c.Param("namespace"))
+	if namespace == "" || namespace == common.AllNamespaces {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace is required"})
 		return
 	}
 
-	result := helmutil.ToHelmRelease(rel, true)
-	c.JSON(http.StatusCreated, result)
+	var req helmReleaseInstallRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.ReleaseName = strings.TrimSpace(req.ReleaseName)
+	req.Namespace = strings.TrimSpace(req.Namespace)
+	req.ChartURL = strings.TrimSpace(req.ChartURL)
+	req.RepositoryName = strings.TrimSpace(req.RepositoryName)
+	req.Source = strings.TrimSpace(req.Source)
+	if req.ReleaseName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "releaseName is required"})
+		return
+	}
+	if req.Namespace != "" && req.Namespace != namespace {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "request namespace does not match URL namespace"})
+		return
+	}
+
+	cs := c.MustGet("cluster").(*cluster.ClientSet)
+	user := c.MustGet("user").(model.User)
+
+	taskMgr := helmutil.GetHelmTaskManager()
+	task, err := taskMgr.CreateTask(cs.Name, namespace, req.ReleaseName, model.HelmTaskTypeInstall, user.ID, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	taskMgr.Start(task.ID, helmActionTimeout+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
+		repository, err := helmutil.ResolveChartRepository(req.RepositoryName, req.Source)
+		if err != nil {
+			return "", fmt.Errorf("repository not found")
+		}
+		loadedChart, err := helmutil.LoadArchive(req.ChartURL, repository)
+		if err != nil {
+			return "", err
+		}
+		cfg, err := helmutil.NewActionConfig(cs.K8sClient.Configuration, helmutil.StorageNamespace(namespace))
+		if err != nil {
+			return "", err
+		}
+		values, err := mergeSetValues(req.Values, req.SetValues)
+		if err != nil {
+			return "", err
+		}
+		rel, err := helmutil.InstallRelease(ctx, cfg, loadedChart, values, helmutil.InstallReleaseOptions{
+			ReleaseName:       req.ReleaseName,
+			Namespace:         namespace,
+			Timeout:           helmActionTimeout,
+			Description:       "Install requested from Kite",
+			CreateNamespace:   req.CreateNamespace,
+			Wait:              req.Wait,
+			ForceConflicts:    req.ForceConflicts,
+			RollbackOnFailure: req.RollbackOnFailure,
+		})
+		if err != nil {
+			helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "install", req.ReleaseName, namespace, nil, rel, false, err)
+			return "", err
+		}
+		helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "install", req.ReleaseName, namespace, nil, rel, true, nil)
+		return fmt.Sprintf("helm release %s installed", req.ReleaseName), nil
+	})
+
+	c.JSON(http.StatusAccepted, gin.H{"taskId": task.ID, "status": task.Status})
 }
 
 func (h *HelmReleaseHandler) DryRunInstall(c *gin.Context) {
@@ -125,9 +218,9 @@ func (h *HelmReleaseHandler) runInstall(c *gin.Context, dryRun bool) (rel *relea
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
-	values := req.Values
-	if values == nil {
-		values = map[string]interface{}{}
+	values, err := mergeSetValues(req.Values, req.SetValues)
+	if err != nil {
+		return nil, http.StatusBadRequest, err
 	}
 	description := req.Description
 	if description == "" {
@@ -138,13 +231,15 @@ func (h *HelmReleaseHandler) runInstall(c *gin.Context, dryRun bool) (rel *relea
 	}
 
 	rel, err = helmutil.InstallRelease(ctx, cfg, loadedChart, values, helmutil.InstallReleaseOptions{
-		ReleaseName:     req.ReleaseName,
-		Namespace:       namespace,
-		Timeout:         helmActionTimeout,
-		Description:     description,
-		CreateNamespace: req.CreateNamespace,
-		DryRun:          dryRun,
-		Wait:            req.Wait,
+		ReleaseName:       req.ReleaseName,
+		Namespace:         namespace,
+		Timeout:           helmActionTimeout,
+		Description:       description,
+		CreateNamespace:   req.CreateNamespace,
+		DryRun:            dryRun,
+		Wait:              req.Wait,
+		ForceConflicts:    req.ForceConflicts,
+		RollbackOnFailure: req.RollbackOnFailure,
 	})
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -179,11 +274,14 @@ func (h *HelmReleaseHandler) Describe(c *gin.Context) {
 
 func (h *HelmReleaseHandler) registerCustomRoutes(group *gin.RouterGroup) {
 	group.POST("/:namespace/dry-run", h.DryRunInstall)
+	group.POST("/:namespace/preview-values", h.PreviewInstallValues)
 	group.GET("/:namespace/:name/auto-upgrade", h.GetAutoUpgrade)
 	group.PUT("/:namespace/:name/auto-upgrade", h.UpdateAutoUpgrade)
 	group.PUT("/:namespace/:name/upgrade", h.Upgrade)
 	group.PUT("/:namespace/:name/upgrade/dry-run", h.DryRunUpgrade)
+	group.PUT("/:namespace/:name/upgrade/preview-values", h.PreviewUpgradeValues)
 	group.PUT("/:namespace/:name/rollback", h.Rollback)
+	group.GET("/tasks/:taskID", h.GetTask)
 }
 
 func (h *HelmReleaseHandler) List(c *gin.Context) {
@@ -237,35 +335,40 @@ func (h *HelmReleaseHandler) Search(c *gin.Context, q string, limit int64) ([]co
 
 func (h *HelmReleaseHandler) Delete(c *gin.Context) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
-	cfg, err := h.actionConfig(c, c.Param("namespace"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	current, err := helmutil.GetRelease(cfg, c.Param("name"))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	success := false
-	var runErr error
-	defer func() {
-		h.recordHistory(c, "delete", c.Param("name"), c.Param("namespace"), current, nil, success, runErr)
-	}()
+	user := c.MustGet("user").(model.User)
+	namespace, name := c.Param("namespace"), c.Param("name")
 
-	if err := helmutil.UninstallRelease(cfg, c.Param("name"), helmutil.UninstallReleaseOptions{
-		Timeout:     helmActionTimeout,
-		Description: "Deleted from Kite",
-	}); err != nil {
-		runErr = err
+	taskMgr := helmutil.GetHelmTaskManager()
+	task, err := taskMgr.CreateTask(cs.Name, namespace, name, model.HelmTaskTypeUninstall, user.ID, nil)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if err := deleteHelmReleaseAutoUpgradeTask(cs.Name, current.Namespace, current.Name); err != nil {
-		klog.Errorf("Failed to delete helm release auto upgrade task: %v", err)
-	}
-	success = true
-	c.JSON(http.StatusOK, gin.H{"message": "helm release deleted"})
+
+	taskMgr.Start(task.ID, helmActionTimeout+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
+		cfg, err := helmutil.NewActionConfig(cs.K8sClient.Configuration, helmutil.StorageNamespace(namespace))
+		if err != nil {
+			return "", err
+		}
+		current, err := helmutil.GetRelease(cfg, name)
+		if err != nil {
+			return "", err
+		}
+		if err := helmutil.UninstallRelease(cfg, name, helmutil.UninstallReleaseOptions{
+			Timeout:     helmActionTimeout,
+			Description: "Deleted from Kite",
+		}); err != nil {
+			helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "delete", name, namespace, current, nil, false, err)
+			return "", err
+		}
+		helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "delete", name, namespace, current, nil, true, nil)
+		if err := deleteHelmReleaseAutoUpgradeTask(cs.Name, current.Namespace, current.Name); err != nil {
+			klog.Errorf("Failed to delete helm release auto upgrade task: %v", err)
+		}
+		return fmt.Sprintf("helm release %s deleted", name), nil
+	})
+
+	c.JSON(http.StatusAccepted, gin.H{"taskId": task.ID, "status": task.Status})
 }
 
 type helmReleaseActionRequest struct {
@@ -274,6 +377,7 @@ type helmReleaseActionRequest struct {
 	RepositoryName    string                 `json:"repositoryName"`
 	Source            string                 `json:"source"`
 	Values            map[string]interface{} `json:"values"`
+	SetValues         []string               `json:"setValues"`
 	Description       string                 `json:"description"`
 	ForceConflicts    bool                   `json:"forceConflicts"`
 	Wait              bool                   `json:"wait"`
@@ -281,12 +385,78 @@ type helmReleaseActionRequest struct {
 }
 
 func (h *HelmReleaseHandler) Upgrade(c *gin.Context) {
-	_, status, err := h.runUpgrade(c, false)
-	if err != nil {
-		c.JSON(status, gin.H{"error": err.Error()})
+	namespace, name := c.Param("namespace"), c.Param("name")
+	var req helmReleaseActionRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "helm release upgraded"})
+
+	cs := c.MustGet("cluster").(*cluster.ClientSet)
+	user := c.MustGet("user").(model.User)
+
+	taskMgr := helmutil.GetHelmTaskManager()
+	task, err := taskMgr.CreateTask(cs.Name, namespace, name, model.HelmTaskTypeUpgrade, user.ID, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	taskMgr.Start(task.ID, helmActionTimeout+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
+		cfg, err := helmutil.NewActionConfig(cs.K8sClient.Configuration, helmutil.StorageNamespace(namespace))
+		if err != nil {
+			return "", err
+		}
+		current, err := helmutil.GetRelease(cfg, name)
+		if err != nil {
+			return "", err
+		}
+		if current.Chart == nil {
+			return "", fmt.Errorf("helm release chart is missing")
+		}
+
+		chartToUpgrade := current.Chart
+		if strings.TrimSpace(req.ChartURL) != "" {
+			repository, err := helmutil.ResolveChartRepository(
+				strings.TrimSpace(req.RepositoryName),
+				strings.TrimSpace(req.Source),
+			)
+			if err != nil {
+				return "", fmt.Errorf("repository not found")
+			}
+			chartToUpgrade, err = helmutil.LoadArchive(strings.TrimSpace(req.ChartURL), repository)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		values, err := mergeSetValues(req.Values, req.SetValues)
+		if err != nil {
+			return "", err
+		}
+		description := req.Description
+		if description == "" {
+			description = "Upgrade requested from Kite"
+		}
+
+		rel, err := helmutil.UpgradeRelease(ctx, cfg, name, chartToUpgrade, values, helmutil.UpgradeReleaseOptions{
+			Namespace:         namespace,
+			Timeout:           helmActionTimeout,
+			ReuseValues:       req.Values == nil && len(req.SetValues) == 0,
+			Description:       description,
+			ForceConflicts:    req.ForceConflicts,
+			RollbackOnFailure: req.RollbackOnFailure,
+			Wait:              req.Wait,
+		})
+		if err != nil {
+			helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "upgrade", name, namespace, current, rel, false, err)
+			return "", err
+		}
+		helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "upgrade", name, namespace, current, rel, true, nil)
+		return fmt.Sprintf("helm release %s upgraded", name), nil
+	})
+
+	c.JSON(http.StatusAccepted, gin.H{"taskId": task.ID, "status": task.Status})
 }
 
 func (h *HelmReleaseHandler) DryRunUpgrade(c *gin.Context) {
@@ -341,9 +511,9 @@ func (h *HelmReleaseHandler) runUpgrade(c *gin.Context, dryRun bool) (result hel
 		}
 	}
 
-	values := req.Values
-	if values == nil {
-		values = map[string]interface{}{}
+	values, err := mergeSetValues(req.Values, req.SetValues)
+	if err != nil {
+		return helmReleaseRunResult{}, http.StatusBadRequest, err
 	}
 	description := req.Description
 	if description == "" {
@@ -356,7 +526,7 @@ func (h *HelmReleaseHandler) runUpgrade(c *gin.Context, dryRun bool) (result hel
 	rel, err := helmutil.UpgradeRelease(ctx, cfg, name, chartToUpgrade, values, helmutil.UpgradeReleaseOptions{
 		Namespace:         namespace,
 		Timeout:           helmActionTimeout,
-		ReuseValues:       req.Values == nil,
+		ReuseValues:       req.Values == nil && len(req.SetValues) == 0,
 		Description:       description,
 		ForceConflicts:    req.ForceConflicts,
 		RollbackOnFailure: req.RollbackOnFailure,
@@ -370,7 +540,10 @@ func (h *HelmReleaseHandler) runUpgrade(c *gin.Context, dryRun bool) (result hel
 	return result, http.StatusOK, nil
 }
 
-func (h *HelmReleaseHandler) Rollback(c *gin.Context) {
+// PreviewUpgradeValues computes the coalesced values (chart defaults merged
+// with user-provided values and --set overrides) for an upgrade without
+// actually performing the upgrade.
+func (h *HelmReleaseHandler) PreviewUpgradeValues(c *gin.Context) {
 	namespace, name := c.Param("namespace"), c.Param("name")
 	var req helmReleaseActionRequest
 	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
@@ -388,42 +561,171 @@ func (h *HelmReleaseHandler) Rollback(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	success := false
-	var next *release.Release
-	var runErr error
-	defer func() {
-		h.recordHistory(c, "rollback", name, namespace, current, next, success, runErr)
-	}()
-
-	targetRevision := req.Revision
-	if targetRevision == 0 {
-		targetRevision = current.Version - 1
-	}
-	if targetRevision <= 0 {
-		runErr = fmt.Errorf("no previous helm release revision found")
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no previous helm release revision found"})
+	if current.Chart == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "helm release chart is missing"})
 		return
 	}
 
-	if err := helmutil.RollbackRelease(cfg, name, helmutil.RollbackReleaseOptions{
-		Version: targetRevision,
-		Timeout: helmActionTimeout,
-	}); err != nil {
-		runErr = err
+	chartToUpgrade := current.Chart
+	if strings.TrimSpace(req.ChartURL) != "" {
+		req.ChartURL = strings.TrimSpace(req.ChartURL)
+		repository, err := helmutil.ResolveChartRepository(
+			strings.TrimSpace(req.RepositoryName),
+			strings.TrimSpace(req.Source),
+		)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "repository not found"})
+			return
+		}
+		chartToUpgrade, err = helmutil.LoadArchive(req.ChartURL, repository)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	values, err := mergeSetValues(req.Values, req.SetValues)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	merged, err := util.CoalesceValues(chartToUpgrade, values)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if next, err = helmutil.GetRelease(cfg, name); err != nil {
-		klog.Errorf("Failed to read rolled back helm release: %v", err)
+	yamlStr, err := yaml.Marshal(merged)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
-	success = true
-	c.JSON(http.StatusOK, gin.H{"message": "helm release rolled back", "revision": targetRevision})
+	c.JSON(http.StatusOK, gin.H{"values": string(yamlStr)})
+}
+
+// PreviewInstallValues computes the coalesced values (chart defaults merged
+// with user-provided values and --set overrides) for an install without
+// actually performing the install.
+func (h *HelmReleaseHandler) PreviewInstallValues(c *gin.Context) {
+	namespace := strings.TrimSpace(c.Param("namespace"))
+	if namespace == "" || namespace == common.AllNamespaces {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace is required"})
+		return
+	}
+
+	var req helmReleaseInstallRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.ChartURL = strings.TrimSpace(req.ChartURL)
+	req.RepositoryName = strings.TrimSpace(req.RepositoryName)
+	req.Source = strings.TrimSpace(req.Source)
+
+	repository, err := helmutil.ResolveChartRepository(req.RepositoryName, req.Source)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "repository not found"})
+		return
+	}
+	loadedChart, err := helmutil.LoadArchive(req.ChartURL, repository)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	values, err := mergeSetValues(req.Values, req.SetValues)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	merged, err := util.CoalesceValues(loadedChart, values)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	yamlStr, err := yaml.Marshal(merged)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"values": string(yamlStr)})
+}
+
+func (h *HelmReleaseHandler) Rollback(c *gin.Context) {
+	namespace, name := c.Param("namespace"), c.Param("name")
+	var req helmReleaseActionRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	cs := c.MustGet("cluster").(*cluster.ClientSet)
+	user := c.MustGet("user").(model.User)
+
+	taskMgr := helmutil.GetHelmTaskManager()
+	task, err := taskMgr.CreateTask(cs.Name, namespace, name, model.HelmTaskTypeRollback, user.ID, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	taskMgr.Start(task.ID, helmActionTimeout+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
+		cfg, err := helmutil.NewActionConfig(cs.K8sClient.Configuration, helmutil.StorageNamespace(namespace))
+		if err != nil {
+			return "", err
+		}
+		current, err := helmutil.GetRelease(cfg, name)
+		if err != nil {
+			return "", err
+		}
+
+		targetRevision := req.Revision
+		if targetRevision == 0 {
+			targetRevision = current.Version - 1
+		}
+		if targetRevision <= 0 {
+			return "", fmt.Errorf("no previous helm release revision found")
+		}
+
+		if err := helmutil.RollbackRelease(cfg, name, helmutil.RollbackReleaseOptions{
+			Version: targetRevision,
+			Timeout: helmActionTimeout,
+		}); err != nil {
+			helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "rollback", name, namespace, current, nil, false, err)
+			return "", err
+		}
+		next, _ := helmutil.GetRelease(cfg, name)
+		helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", "rollback", name, namespace, current, next, true, nil)
+		return fmt.Sprintf("helm release %s rolled back to revision %d", name, targetRevision), nil
+	})
+
+	c.JSON(http.StatusAccepted, gin.H{"taskId": task.ID, "status": task.Status})
 }
 
 func (h *HelmReleaseHandler) recordHistory(c *gin.Context, opType, name, namespace string, prev, curr *release.Release, success bool, err error) {
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 	user := c.MustGet("user").(model.User)
 	helmutil.RecordReleaseHistory(cs.Name, user.ID, "manual", opType, name, namespace, prev, curr, success, err)
+}
+
+func (h *HelmReleaseHandler) GetTask(c *gin.Context) {
+	taskIDStr := c.Param("taskID")
+	taskID, err := strconv.ParseUint(taskIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task ID"})
+		return
+	}
+	task, err := helmutil.GetHelmTaskManager().GetTask(uint(taskID))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, task)
 }
 
 func (h *HelmReleaseHandler) list(c *gin.Context, namespace string, details bool) (*helmutil.HelmReleaseList, error) {
@@ -699,6 +1001,9 @@ func (h *HelmReleaseHandler) ensureHelmReleaseAutoUpgradeTarget(cs *cluster.Clie
 			return http.StatusInternalServerError, err
 		}
 		if _, err := helmutil.GetRelease(cfg, name); err != nil {
+			if errors.Is(err, driver.ErrReleaseNotFound) {
+				return http.StatusNotFound, fmt.Errorf("helm release %s/%s not found", namespace, name)
+			}
 			return http.StatusInternalServerError, err
 		}
 	}

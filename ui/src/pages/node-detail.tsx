@@ -18,7 +18,6 @@ import {
   uncordonNode,
   untaintNode,
   updateResource,
-  useRelatedResources,
   useResource,
   useResources,
   useResourcesEvents,
@@ -53,7 +52,6 @@ import { EventTable } from '@/components/event-table'
 import { NodeMonitoring } from '@/components/node-monitoring'
 import {
   CompactEventsCard,
-  CompactRelatedResourcesCard,
   MetadataListCard,
 } from '@/components/pod-overview-sidebar'
 import { PodTable } from '@/components/pod-table'
@@ -510,8 +508,6 @@ function NodeOverview({
     'nodes',
     name
   )
-  const { data: relatedResources, isLoading: isRelatedLoading } =
-    useRelatedResources('nodes', name)
   const sortedEvents = useMemo(() => {
     return (events || []).slice().sort((a, b) => {
       const timeDiff = getEventTime(b).getTime() - getEventTime(a).getTime()
@@ -783,10 +779,6 @@ function NodeOverview({
           <CompactEventsCard
             events={sortedEvents}
             isLoading={isEventsLoading}
-          />
-          <CompactRelatedResourcesCard
-            resources={relatedResources || []}
-            isLoading={isRelatedLoading}
           />
           {Object.keys(labels).length > 0 ? (
             <MetadataListCard title="common.fields.labels" entries={labels} />

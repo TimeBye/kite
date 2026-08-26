@@ -240,9 +240,12 @@ export interface HelmReleaseInstallRequest {
   repositoryName?: string
   source?: 'repository' | 'artifacthub'
   values?: Record<string, unknown>
+  setValues?: string[]
   description?: string
   createNamespace?: boolean
   wait?: boolean
+  forceConflicts?: boolean
+  rollbackOnFailure?: boolean
 }
 
 export interface HelmReleaseUpgradeRequest {
@@ -250,6 +253,7 @@ export interface HelmReleaseUpgradeRequest {
   repositoryName?: string
   source?: 'repository' | 'artifacthub'
   values?: Record<string, unknown>
+  setValues?: string[]
   description?: string
   forceConflicts?: boolean
   wait?: boolean
@@ -284,6 +288,28 @@ export interface HelmReleaseAutoUpgradeRequest {
   source?: 'repository' | 'artifacthub'
   repositoryName?: string
   chartName?: string
+}
+
+export interface HelmTask {
+  id: number
+  clusterName: string
+  namespace: string
+  releaseName: string
+  type: 'install' | 'upgrade' | 'rollback' | 'uninstall'
+  status: 'pending' | 'running' | 'succeeded' | 'failed'
+  creatorId: number
+  payload?: string
+  result?: string
+  error?: string
+  startedAt?: string
+  finishedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HelmTaskResponse {
+  taskId: number
+  status: string
 }
 
 export interface HelmReleaseDryRunResource {
