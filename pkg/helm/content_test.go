@@ -7,13 +7,13 @@ import (
 	repo "helm.sh/helm/v4/pkg/repo/v1"
 )
 
-func newChartVersion(name, version string) *repo.ChartVersion {
+func newChartVersion(version string) *repo.ChartVersion {
 	return &repo.ChartVersion{
 		Metadata: &chart.Metadata{
-			Name:    name,
+			Name:    "myapp",
 			Version: version,
 		},
-		URLs: []string{"https://example.com/charts/" + name + "-" + version + ".tgz"},
+		URLs: []string{"https://example.com/charts/myapp-" + version + ".tgz"},
 	}
 }
 
@@ -28,8 +28,8 @@ func TestGetChartVersion(t *testing.T) {
 		{
 			name: "stable version exists",
 			entries: []*repo.ChartVersion{
-				newChartVersion("myapp", "1.0.0"),
-				newChartVersion("myapp", "2.0.0"),
+				newChartVersion("1.0.0"),
+				newChartVersion("2.0.0"),
 			},
 			version:     "",
 			wantVersion: "2.0.0",
@@ -37,8 +37,8 @@ func TestGetChartVersion(t *testing.T) {
 		{
 			name: "only prerelease versions falls back to latest",
 			entries: []*repo.ChartVersion{
-				newChartVersion("myapp", "2026.5.21-215920-main"),
-				newChartVersion("myapp", "2026.8.24-214415-main"),
+				newChartVersion("2026.5.21-215920-main"),
+				newChartVersion("2026.8.24-214415-main"),
 			},
 			version:     "",
 			wantVersion: "2026.8.24-214415-main",
@@ -52,8 +52,8 @@ func TestGetChartVersion(t *testing.T) {
 		{
 			name: "exact version requested",
 			entries: []*repo.ChartVersion{
-				newChartVersion("myapp", "1.0.0"),
-				newChartVersion("myapp", "2.0.0"),
+				newChartVersion("1.0.0"),
+				newChartVersion("2.0.0"),
 			},
 			version:     "1.0.0",
 			wantVersion: "1.0.0",
@@ -61,7 +61,7 @@ func TestGetChartVersion(t *testing.T) {
 		{
 			name: "nonexistent exact version returns error",
 			entries: []*repo.ChartVersion{
-				newChartVersion("myapp", "1.0.0"),
+				newChartVersion("1.0.0"),
 			},
 			version: "9.9.9",
 			wantErr: true,
