@@ -12,6 +12,7 @@ export interface KubeconfigToken {
   name: string
   ownerId?: number
   owner?: string
+  ownerName?: string
   createdAt: string
   expiresAt: string
   lastUsedAt?: string

@@ -18,6 +18,7 @@ import {
 } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { UserDisplayName } from '@/components/user-display-name'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
@@ -69,7 +70,12 @@ export function KubeconfigTokenManagement() {
         id: 'owner',
         header: t('common.fields.owner', 'Owner'),
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.owner || '-'}</span>
+          <span className="font-medium">
+            <UserDisplayName
+              name={row.original.ownerName}
+              login={row.original.owner || '-'}
+            />
+          </span>
         ),
       },
       {

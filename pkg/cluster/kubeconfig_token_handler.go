@@ -14,6 +14,7 @@ type kubeconfigTokenResponse struct {
 	Name         string  `json:"name"`
 	OwnerID      uint    `json:"ownerId,omitempty"`
 	Owner        string  `json:"owner,omitempty"`
+	OwnerName    string  `json:"ownerName,omitempty"`
 	CreatedAt    string  `json:"createdAt"`
 	ExpiresAt    string  `json:"expiresAt"`
 	LastUsedAt   *string `json:"lastUsedAt,omitempty"`
@@ -30,6 +31,7 @@ func kubeconfigTokenDTO(token model.KubeconfigToken, includeOwner bool) kubeconf
 		result.OwnerID = token.OwnerID
 		if token.Owner != nil {
 			result.Owner = token.Owner.Key()
+			result.OwnerName = token.Owner.Name
 		}
 	}
 	return result

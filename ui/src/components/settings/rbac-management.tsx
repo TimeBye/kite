@@ -24,8 +24,10 @@ import {
   unassignRole,
   updateRole,
   useRoleListPaginated,
+  useUserList,
 } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { UserDisplayName } from '@/components/user-display-name'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DropdownMenu,
@@ -55,6 +57,17 @@ export function RBACManagement() {
     pagination.pageSize
   )
   const roles = roleData?.data ?? []
+
+  const { data: userListData } = useUserList(1, 200)
+  const usernameToName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const u of userListData?.users || []) {
+      if (u.username && u.name) {
+        map.set(u.username, u.name)
+      }
+    }
+    return map
+  }, [userListData])
 
   const [showDialog, setShowDialog] = useState(false)
   const [editingRole, setEditingRole] = useState<Role | null>(null)
@@ -173,9 +186,12 @@ export function RBACManagement() {
                   key={a.id}
                   variant="secondary"
                   className="max-w-52 truncate text-xs"
-                  title={t('common.fields.user') + ': ' + a.subject}
                 >
-                  {t('common.fields.user')}: {a.subject}
+                  {t('common.fields.user')}:{' '}
+                  <UserDisplayName
+                    name={usernameToName.get(a.subject)}
+                    login={a.subject}
+                  />
                 </Badge>
               ))}
               {users.length > maxShow && (
@@ -206,7 +222,7 @@ export function RBACManagement() {
         },
       },
     ],
-    [t]
+    [t, usernameToName]
   )
 
   const actions = useMemo<Action<Role>[]>(

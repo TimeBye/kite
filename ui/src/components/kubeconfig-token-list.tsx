@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { KubeconfigToken } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { UserDisplayName } from '@/components/user-display-name'
 import {
   Dialog,
   DialogContent,
@@ -70,7 +71,14 @@ export function KubeconfigTokenList({
             const expired = new Date(token.expiresAt) <= new Date()
             return (
               <TableRow key={token.id}>
-                {includeOwner && <TableCell>{token.owner || '-'}</TableCell>}
+                {includeOwner && (
+              <TableCell>
+                <UserDisplayName
+                  name={token.ownerName}
+                  login={token.owner || '-'}
+                />
+              </TableCell>
+            )}
                 <TableCell>
                   {new Date(token.createdAt).toLocaleString()}
                 </TableCell>

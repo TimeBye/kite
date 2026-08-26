@@ -740,6 +740,7 @@ export interface ResourceHistory {
   operator: {
     username: string
     provider: string
+    name?: string
   }
   createdAt: string
   updatedAt: string

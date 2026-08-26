@@ -84,7 +84,7 @@ func ListAuditLogs(c *gin.Context) {
 
 	history := []model.ResourceHistory{}
 	if err := query.Preload("Operator", func(db *gorm.DB) *gorm.DB {
-		return db.Select("id", "username", "provider")
+		return db.Select("id", "username", "provider", "name")
 	}).Order("created_at DESC").Offset((page - 1) * size).Limit(size).Find(&history).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

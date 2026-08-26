@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { ResourceHistory, ResourceType, ResourceTypeMap } from '@/types/api'
 import { applyResource, useResourceHistory } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
+import { UserDisplayName } from '@/components/user-display-name'
 
 import { Column, SimpleTable } from './simple-table'
 import { Badge } from './ui/badge'
@@ -151,7 +152,10 @@ export function ResourceHistoryTable<T extends ResourceType>({
           const item = value as ResourceHistory
           return (
             <div className="font-medium">
-              {item.operator.username}
+              <UserDisplayName
+                name={item.operator?.name}
+                login={item.operator?.username || '-'}
+              />
               {item.operator.provider === 'api_key' && (
                 <span className="ml-2 text-xs text-muted-foreground italic">
                   apikey

@@ -13,6 +13,7 @@ import { useAuditLogs, useClusterList, useUserList } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { UserDisplayName } from '@/components/user-display-name'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
@@ -152,7 +153,10 @@ export function AuditLog() {
         header: t('common.fields.operator', 'Operator'),
         cell: ({ row }) => (
           <div className="font-medium">
-            {row.original.operator?.username || '-'}
+            <UserDisplayName
+              name={row.original.operator?.name}
+              login={row.original.operator?.username || '-'}
+            />
             {row.original.operator?.provider === 'api_key' && (
               <span className="ml-2 text-xs text-muted-foreground italic">
                 {t('auditLog.apikey', 'apikey')}
