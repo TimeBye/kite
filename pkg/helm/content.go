@@ -70,7 +70,7 @@ func (h *HelmChartHandler) GetChart(c *gin.Context) {
 		return
 	}
 
-	entry, err := indexFile.Get(chartName, version)
+	entry, err := getChartVersion(indexFile, chartName, version)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -122,7 +122,7 @@ func (h *HelmChartHandler) GetChartContent(c *gin.Context) {
 		return
 	}
 
-	entry, err := indexFile.Get(chartName, version)
+	entry, err := getChartVersion(indexFile, chartName, version)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -209,6 +209,31 @@ func compareChartVersions(a, b string) int {
 		return -1
 	}
 	return strings.Compare(a, b)
+}
+
+// getChartVersion returns the requested ChartVersion. When version is empty and
+// the Chart only has prerelease versions, Helm's IndexFile.Get skips them and
+// returns ErrNoChartVersion. In that case we fall back to the latest entry so
+// internal repositories that publish only prerelease versions remain usable.
+func getChartVersion(indexFile *repo.IndexFile, name, version string) (*repo.ChartVersion, error) {
+	entry, err := indexFile.Get(name, version)
+	if err == nil {
+		return entry, nil
+	}
+	if version != "" {
+		return nil, err
+	}
+	entries := indexFile.Entries[name]
+	if len(entries) == 0 {
+		return nil, err
+	}
+	latest := entries[0]
+	for _, candidate := range entries[1:] {
+		if compareChartVersions(candidate.Version, latest.Version) > 0 {
+			latest = candidate
+		}
+	}
+	return latest, nil
 }
 
 func chartUpdatedAt(generated time.Time, entry *repo.ChartVersion) *time.Time {
