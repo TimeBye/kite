@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('admin can create a password user from settings', async ({ page }) => {
   const username = `e2e-user-${Date.now()}`
-  const displayName = 'E2E User'
+  const displayName = `E2E User ${Date.now()}`
   const password = 'E2Epass!2345'
 
   await page.goto('/settings?tab=users')

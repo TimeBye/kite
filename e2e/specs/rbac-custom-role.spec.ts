@@ -10,7 +10,7 @@ test('custom role grants namespaces and denies nodes', async ({
 }) => {
   const roleName = `e2e-rbac-${Date.now()}`
   const username = `e2e-rbac-user-${Date.now()}`
-  const displayName = 'E2E RBAC User'
+  const displayName = `E2E RBAC User ${Date.now()}`
   const password = 'E2Epass!2345'
 
   await page.goto('/settings?tab=users')

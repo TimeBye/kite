@@ -68,7 +68,7 @@ async function assignViewerRole(page: Page, name: string) {
   )
 }
 
-async function deleteUser(page: Page, username: string, name: string) {
+async function deleteUser(page: Page, name: string) {
   const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
@@ -77,7 +77,7 @@ async function deleteUser(page: Page, username: string, name: string) {
 
   const dialog = page.getByRole('dialog').last()
   await expect(dialog).toBeVisible()
-  await dialog.getByPlaceholder(username).fill(username)
+  await dialog.getByPlaceholder(name).fill(name)
   await dialog.getByRole('button', { name: 'Delete' }).click()
 
   await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(0)
@@ -120,7 +120,7 @@ test('password reset updates login credentials', async ({ page, browser }) => {
   const suffix = Date.now().toString(36)
   const user = {
     username: `e2e-reset-${suffix}`,
-    name: 'E2E Reset User',
+    name: `E2E Reset User ${suffix}`,
     originalPassword: 'E2Epass!2345',
     newPassword: 'E2Epass!6789',
   }
@@ -172,5 +172,5 @@ test('password reset updates login credentials', async ({ page, browser }) => {
   await newPasswordSession.context.close()
 
   await openUsersPage(page)
-  await deleteUser(page, user.username, user.name)
+  await deleteUser(page, user.name)
 })

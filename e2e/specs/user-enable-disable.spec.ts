@@ -72,7 +72,7 @@ async function toggleUserEnabled(
   await expect(row).toContainText(actionName === 'Disable' ? 'Disabled' : 'Enabled')
 }
 
-async function deleteUser(page: Page, username: string, name: string) {
+async function deleteUser(page: Page, name: string) {
   const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
@@ -88,7 +88,7 @@ async function deleteUser(page: Page, username: string, name: string) {
 
   const dialog = page.getByRole('dialog').last()
   await expect(dialog).toBeVisible()
-  await dialog.getByPlaceholder(username).fill(username)
+  await dialog.getByPlaceholder(name).fill(name)
   await dialog.getByRole('button', { name: 'Delete' }).click()
 
   await responsePromise
@@ -156,7 +156,7 @@ test('password user can be disabled, re-enabled, and deleted', async ({
   const suffix = Date.now().toString(36)
   const user = {
     username: `e2e-disabled-${suffix}`,
-    name: 'E2E Disabled',
+    name: `E2E Disabled ${suffix}`,
     password: 'E2Epass!2345',
   }
 
@@ -197,5 +197,5 @@ test('password user can be disabled, re-enabled, and deleted', async ({
   await secondSession.context.close()
 
   await openUsersPage(page)
-  await deleteUser(page, user.username, user.name)
+  await deleteUser(page, user.name)
 })

@@ -59,7 +59,7 @@ async function assignBuiltInRole(
   ).toContainText(roleName);
 }
 
-async function deleteUser(page: Page, username: string, name: string) {
+async function deleteUser(page: Page, name: string) {
   const row = page.getByRole("row").filter({ hasText: name }).first();
   await expect(row).toBeVisible();
 
@@ -68,7 +68,7 @@ async function deleteUser(page: Page, username: string, name: string) {
 
   const dialog = page.getByRole("dialog").last();
   await expect(dialog).toBeVisible();
-  await dialog.getByPlaceholder(username).fill(username);
+  await dialog.getByPlaceholder(name).fill(name);
   await dialog.getByRole("button", { name: "Delete" }).click();
 
   await expect(page.getByRole("row").filter({ hasText: name })).toHaveCount(
@@ -128,17 +128,17 @@ test("password user lifecycle and built-in roles", async ({
   const suffix = Date.now().toString(36);
   const noRoleUser = {
     username: `e2e-norole-${suffix}`,
-    name: "E2E No Role",
+    name: `E2E No Role ${suffix}`,
     password: "E2Epass!2345",
   };
   const viewerUser = {
     username: `e2e-viewer-${suffix}`,
-    name: "E2E Viewer",
+    name: `E2E Viewer ${suffix}`,
     password: "E2Epass!2345",
   };
   const managedAdminUser = {
     username: `e2e-admin-${suffix}`,
-    name: "E2E Admin",
+    name: `E2E Admin ${suffix}`,
     password: "E2Epass!2345",
   };
 
@@ -229,7 +229,7 @@ test("password user lifecycle and built-in roles", async ({
   await adminSession.context.close();
 
   await openUsersPage(page);
-  await deleteUser(page, noRoleUser.username, noRoleUser.name);
-  await deleteUser(page, viewerUser.username, viewerUser.name);
-  await deleteUser(page, managedAdminUser.username, managedAdminUser.name);
+  await deleteUser(page, noRoleUser.name);
+  await deleteUser(page, viewerUser.name);
+  await deleteUser(page, managedAdminUser.name);
 });
