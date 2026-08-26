@@ -410,7 +410,9 @@ export function AuditLog() {
                 </SelectItem>
                 {(usersData?.users ?? []).map((user) => (
                   <SelectItem key={user.id} value={String(user.id)}>
-                    {user.username}
+                    {user.name && user.name !== user.username
+                      ? `${user.name} (${user.username})`
+                      : user.username}
                   </SelectItem>
                 ))}
               </SelectContent>

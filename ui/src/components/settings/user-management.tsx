@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/select'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { ResourceTableView } from '@/components/resource-table-view'
+import { UserDisplayName } from '@/components/user-display-name'
 
 import { Action } from '../action-table'
 import { Badge } from '../ui/badge'
@@ -220,12 +221,12 @@ export function UserManagement() {
                   {row.original.avatar_url ? (
                     <Avatar.Image
                       src={row.original.avatar_url}
-                      alt={row.original.username}
+                      alt={row.original.name || row.original.username}
                       className="h-8 w-8 rounded-full object-cover"
                     />
                   ) : (
                     <Avatar.Fallback className="h-8 w-8 rounded-full bg-muted-foreground text-white flex items-center justify-center">
-                      {row.original.username
+                      {(row.original.name || row.original.username)
                         .split(' ')
                         .map((part) => part[0])
                         .join('')
@@ -237,13 +238,11 @@ export function UserManagement() {
               </button>
               <div className="flex flex-col min-w-0">
                 <span className="font-medium truncate">
-                  {row.original.username}
+                  <UserDisplayName
+                    name={row.original.name}
+                    login={row.original.username}
+                  />
                 </span>
-                {row.original.name && (
-                  <span className="text-sm text-muted-foreground truncate">
-                    {row.original.name}
-                  </span>
-                )}
               </div>
             </div>
           </div>
@@ -798,7 +797,7 @@ export function UserManagement() {
         open={!!deletingUser}
         onOpenChange={() => setDeletingUser(null)}
         onConfirm={handleDelete}
-        resourceName={deletingUser?.username || ''}
+        resourceName={deletingUser?.name || deletingUser?.username || ''}
         resourceType={t('common.fields.user')}
       />
     </div>

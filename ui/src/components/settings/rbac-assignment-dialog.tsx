@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { IconX } from '@tabler/icons-react'
 import { AlertTriangle, ChevronsUpDown, Loader2 } from 'lucide-react'
@@ -10,6 +10,12 @@ import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { UserDisplayName } from '@/components/user-display-name'
 import {
   Command,
   CommandEmpty,
@@ -84,6 +90,16 @@ export function RBACAssignmentDialog({
     50,
     subjectType === 'user' ? userSearch : ''
   )
+  const { data: allUsersData } = useUserList(1, 200)
+  const usernameToName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const u of allUsersData?.users || []) {
+      if (u.username && u.name) {
+        map.set(u.username, u.name)
+      }
+    }
+    return map
+  }, [allUsersData])
 
   useEffect(() => {
     if (open) {
@@ -171,10 +187,12 @@ export function RBACAssignmentDialog({
                             key={a.id}
                             variant="secondary"
                             className="max-w-full gap-1 pl-2 pr-1"
-                            title={a.subject}
                           >
                             <span className="min-w-0 truncate">
-                              {a.subject}
+                              <UserDisplayName
+                                name={usernameToName.get(a.subject)}
+                                login={a.subject}
+                              />
                             </span>
                             <button
                               onClick={() =>
@@ -365,17 +383,21 @@ export function RBACAssignmentDialog({
                                     <div className="flex min-w-0 flex-1 flex-col">
                                       <span
                                         className="truncate text-sm font-semibold"
-                                        title={u.username}
+                                        title={u.name || undefined}
                                       >
-                                        {u.username}
+                                        {u.name || u.username}
                                       </span>
-                                      {u.name && (
-                                        <span
-                                          className="truncate text-xs font-medium text-muted-foreground"
-                                          title={u.name}
-                                        >
-                                          {u.name}
-                                        </span>
+                                      {u.name && u.name !== u.username && (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="truncate text-xs font-medium text-muted-foreground">
+                                              {u.username}
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            {u.username}
+                                          </TooltipContent>
+                                        </Tooltip>
                                       )}
                                     </div>
                                   </CommandItem>
