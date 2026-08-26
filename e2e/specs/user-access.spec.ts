@@ -28,16 +28,16 @@ async function createPasswordUser(
 
   await expect(dialog).toBeHidden();
   await expect(
-    page.getByRole("row").filter({ hasText: username }),
+    page.getByRole("row").filter({ hasText: name }),
   ).toBeVisible();
 }
 
 async function assignBuiltInRole(
   page: Page,
-  username: string,
+  name: string,
   roleName: "viewer" | "admin",
 ) {
-  const row = page.getByRole("row").filter({ hasText: username }).first();
+  const row = page.getByRole("row").filter({ hasText: name }).first();
   await expect(row).toBeVisible();
 
   await row.getByRole("button", { name: "Actions" }).click();
@@ -55,12 +55,12 @@ async function assignBuiltInRole(
   await dialog.getByRole("button", { name: "Close" }).first().click();
   await expect(dialog).toBeHidden();
   await expect(
-    page.getByRole("row").filter({ hasText: username }),
+    page.getByRole("row").filter({ hasText: name }),
   ).toContainText(roleName);
 }
 
-async function deleteUser(page: Page, username: string) {
-  const row = page.getByRole("row").filter({ hasText: username }).first();
+async function deleteUser(page: Page, username: string, name: string) {
+  const row = page.getByRole("row").filter({ hasText: name }).first();
   await expect(row).toBeVisible();
 
   await row.getByRole("button", { name: "Actions" }).click();
@@ -71,7 +71,7 @@ async function deleteUser(page: Page, username: string) {
   await dialog.getByPlaceholder(username).fill(username);
   await dialog.getByRole("button", { name: "Delete" }).click();
 
-  await expect(page.getByRole("row").filter({ hasText: username })).toHaveCount(
+  await expect(page.getByRole("row").filter({ hasText: name })).toHaveCount(
     0,
   );
 }
@@ -184,8 +184,8 @@ test("password user lifecycle and built-in roles", async ({
     managedAdminUser.password,
   );
 
-  await assignBuiltInRole(page, viewerUser.username, "viewer");
-  await assignBuiltInRole(page, managedAdminUser.username, "admin");
+  await assignBuiltInRole(page, viewerUser.name, "viewer");
+  await assignBuiltInRole(page, managedAdminUser.name, "admin");
 
   const viewerSession = await loginFreshContext(
     browser,
@@ -229,7 +229,7 @@ test("password user lifecycle and built-in roles", async ({
   await adminSession.context.close();
 
   await openUsersPage(page);
-  await deleteUser(page, noRoleUser.username);
-  await deleteUser(page, viewerUser.username);
-  await deleteUser(page, managedAdminUser.username);
+  await deleteUser(page, noRoleUser.username, noRoleUser.name);
+  await deleteUser(page, viewerUser.username, viewerUser.name);
+  await deleteUser(page, managedAdminUser.username, managedAdminUser.name);
 });

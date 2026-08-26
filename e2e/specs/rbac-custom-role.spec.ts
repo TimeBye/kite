@@ -27,7 +27,7 @@ test('custom role grants namespaces and denies nodes', async ({
   await userDialog.locator('input').nth(2).fill(password)
   await userDialog.getByRole('button', { name: 'Create' }).click()
 
-  await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: displayName })).toBeVisible()
 
   await page.goto('/settings?tab=rbac')
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()

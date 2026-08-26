@@ -23,15 +23,15 @@ async function createPasswordUser(
   await dialog.getByRole('button', { name: 'Create' }).click()
 
   await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible()
 }
 
 async function resetPassword(
   page: Page,
-  username: string,
+  name: string,
   password: string
 ) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
+  const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
   await row.getByRole('button', { name: 'Actions' }).click()
@@ -46,8 +46,8 @@ async function resetPassword(
   await expect(dialog).toBeHidden()
 }
 
-async function assignViewerRole(page: Page, username: string) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
+async function assignViewerRole(page: Page, name: string) {
+  const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
   await row.getByRole('button', { name: 'Actions' }).click()
@@ -63,13 +63,13 @@ async function assignViewerRole(page: Page, username: string) {
 
   await dialog.getByRole('button', { name: 'Close' }).first().click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toContainText(
+  await expect(page.getByRole('row').filter({ hasText: name })).toContainText(
     'viewer'
   )
 }
 
-async function deleteUser(page: Page, username: string) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
+async function deleteUser(page: Page, username: string, name: string) {
+  const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
   await row.getByRole('button', { name: 'Actions' }).click()
@@ -80,7 +80,7 @@ async function deleteUser(page: Page, username: string) {
   await dialog.getByPlaceholder(username).fill(username)
   await dialog.getByRole('button', { name: 'Delete' }).click()
 
-  await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(0)
+  await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(0)
 }
 
 async function loginWithPasswordUi(
@@ -134,7 +134,7 @@ test('password reset updates login credentials', async ({ page, browser }) => {
     user.name,
     user.originalPassword
   )
-  await assignViewerRole(page, user.username)
+  await assignViewerRole(page, user.name)
 
   const originalSession = await loginFreshContext(
     browser,
@@ -145,7 +145,7 @@ test('password reset updates login credentials', async ({ page, browser }) => {
   await originalSession.context.close()
 
   await openUsersPage(page)
-  await resetPassword(page, user.username, user.newPassword)
+  await resetPassword(page, user.name, user.newPassword)
 
   const oldPasswordSession = await browser.newContext({
     storageState: { cookies: [], origins: [] },
@@ -172,5 +172,5 @@ test('password reset updates login credentials', async ({ page, browser }) => {
   await newPasswordSession.context.close()
 
   await openUsersPage(page)
-  await deleteUser(page, user.username)
+  await deleteUser(page, user.username, user.name)
 })

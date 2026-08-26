@@ -23,11 +23,11 @@ async function createPasswordUser(
   await dialog.getByRole('button', { name: 'Create' }).click()
 
   await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible()
 }
 
-async function assignViewerRole(page: Page, username: string) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
+async function assignViewerRole(page: Page, name: string) {
+  const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
   await row.getByRole('button', { name: 'Actions' }).click()
@@ -43,17 +43,17 @@ async function assignViewerRole(page: Page, username: string) {
 
   await dialog.getByRole('button', { name: 'Close' }).first().click()
   await expect(dialog).toBeHidden()
-  await expect(page.getByRole('row').filter({ hasText: username })).toContainText(
+  await expect(page.getByRole('row').filter({ hasText: name })).toContainText(
     'viewer'
   )
 }
 
 async function toggleUserEnabled(
   page: Page,
-  username: string,
+  name: string,
   actionName: 'Disable' | 'Enable'
 ) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
+  const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
   const responsePromise = page.waitForResponse(
@@ -72,8 +72,8 @@ async function toggleUserEnabled(
   await expect(row).toContainText(actionName === 'Disable' ? 'Disabled' : 'Enabled')
 }
 
-async function deleteUser(page: Page, username: string) {
-  const row = page.getByRole('row').filter({ hasText: username }).first()
+async function deleteUser(page: Page, username: string, name: string) {
+  const row = page.getByRole('row').filter({ hasText: name }).first()
   await expect(row).toBeVisible()
 
   const responsePromise = page.waitForResponse(
@@ -92,7 +92,7 @@ async function deleteUser(page: Page, username: string) {
   await dialog.getByRole('button', { name: 'Delete' }).click()
 
   await responsePromise
-  await expect(page.getByRole('row').filter({ hasText: username })).toHaveCount(
+  await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(
     0
   )
 }
@@ -164,7 +164,7 @@ test('password user can be disabled, re-enabled, and deleted', async ({
   const origin = new URL(page.url()).origin
 
   await createPasswordUser(page, user.username, user.name, user.password)
-  await assignViewerRole(page, user.username)
+  await assignViewerRole(page, user.name)
 
   const firstSession = await loginFreshContext(
     browser,
@@ -175,7 +175,7 @@ test('password user can be disabled, re-enabled, and deleted', async ({
   await firstSession.context.close()
 
   await openUsersPage(page)
-  await toggleUserEnabled(page, user.username, 'Disable')
+  await toggleUserEnabled(page, user.name, 'Disable')
 
   const disabledSession = await loginFreshContextExpectFailure(
     browser,
@@ -186,7 +186,7 @@ test('password user can be disabled, re-enabled, and deleted', async ({
   await disabledSession.context.close()
 
   await openUsersPage(page)
-  await toggleUserEnabled(page, user.username, 'Enable')
+  await toggleUserEnabled(page, user.name, 'Enable')
 
   const secondSession = await loginFreshContext(
     browser,
@@ -197,5 +197,5 @@ test('password user can be disabled, re-enabled, and deleted', async ({
   await secondSession.context.close()
 
   await openUsersPage(page)
-  await deleteUser(page, user.username)
+  await deleteUser(page, user.username, user.name)
 })
