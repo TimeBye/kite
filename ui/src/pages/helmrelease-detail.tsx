@@ -1021,6 +1021,10 @@ function UpgradeHelmReleaseDialog({
     () => yaml.dump(release.spec?.defaultValues || {}, { indent: 2 }),
     [release.spec?.defaultValues]
   )
+  const releaseCurrentValues = useMemo(
+    () => yaml.dump(release.spec?.values || {}, { indent: 2 }),
+    [release.spec?.values]
+  )
   const [error, setError] = useState('')
   const [isUpgrading, setIsUpgrading] = useState(false)
   const [upgradeTaskID, setUpgradeTaskID] = useState<number | null>(null)
@@ -1482,8 +1486,11 @@ function UpgradeHelmReleaseDialog({
                     <TabsTrigger value="merged">
                       {t('helm.fields.mergedPreview')}
                     </TabsTrigger>
-                    <TabsTrigger value="diff">
-                      {t('helm.fields.valuesDiff')}
+                    <TabsTrigger value="diff-current">
+                      {t('helm.fields.valuesDiffCurrent')}
+                    </TabsTrigger>
+                    <TabsTrigger value="diff-default">
+                      {t('helm.fields.valuesDiffDefault')}
                     </TabsTrigger>
                   </TabsList>
                   <TabsContent value="merged" className="min-h-0 flex-1">
@@ -1498,7 +1505,35 @@ function UpgradeHelmReleaseDialog({
                       />
                     )}
                   </TabsContent>
-                  <TabsContent value="diff" className="min-h-0 flex-1">
+                  <TabsContent value="diff-current" className="min-h-0 flex-1">
+                    {mergedError ? (
+                      <p className="text-sm text-destructive">{mergedError}</p>
+                    ) : (
+                      <div className="h-[calc(100dvh-22rem)] overflow-hidden rounded-md border">
+                        <MonacoDiffEditor
+                          height="100%"
+                          language="yaml"
+                          original={releaseCurrentValues}
+                          modified={mergedPreview}
+                          theme="vs"
+                          options={{
+                            readOnly: true,
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            wordWrap: 'on',
+                            lineNumbers: 'on',
+                            folding: true,
+                            fontSize: 14,
+                            renderSideBySide: true,
+                            enableSplitViewResizing: true,
+                            ignoreTrimWhitespace: false,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </TabsContent>
+                  <TabsContent value="diff-default" className="min-h-0 flex-1">
                     {mergedError ? (
                       <p className="text-sm text-destructive">{mergedError}</p>
                     ) : (

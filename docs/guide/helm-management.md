@@ -57,12 +57,16 @@ Both install and upgrade dialogs display two columns:
 - **Default Values**: The chart's built-in `values.yaml` (read-only).
 - **Custom Values**: Your overrides, editable as YAML.
 
-Click the **Preview** button to open a preview view with two tabs:
+Click the **Preview** button to open a preview view with tabs:
 
 - **Merged Values**: The result of merging chart defaults with your custom values, computed using Helm's coalesce logic. This shows exactly what values will be applied to the release.
-- **Values Diff**: A side-by-side diff comparing the chart's default values (or current release values for upgrades) with the merged values, rendered in a Monaco diff editor. This helps you quickly spot what your overrides change.
+- **Values Diff** (install): A side-by-side diff comparing the chart's default values with the merged values, rendered in a Monaco diff editor. This helps you quickly spot what your overrides change.
 
-For upgrades, the diff compares the current release values against the merged values so you can see the net effect of your changes before applying them. Click the **Preview** button after editing custom values to refresh the preview.
+For upgrades, the preview view has three tabs:
+
+- **Merged Values**: Same as above.
+- **Diff vs current**: Compares the current release values against the merged values, so you can see the net effect of your changes before applying them.
+- **Diff vs defaults**: Compares the new chart version's default values against the merged values, showing how your configuration differs from the chart's built-in defaults.
 
 ### Version Selection in Install Dialog
 

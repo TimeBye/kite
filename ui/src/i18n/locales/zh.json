@@ -1685,6 +1685,8 @@
       "dryRunPreview": "Dry Run 预览",
       "mergedPreview": "合并值预览",
       "valuesDiff": "值差异",
+      "valuesDiffCurrent": "对比当前值",
+      "valuesDiffDefault": "对比默认值",
       "ignoreLabelsAnnotationsChanges": "忽略标签/注解变更（仅 Diff）",
       "forceConflicts": "force-conflicts",
       "wait": "wait",

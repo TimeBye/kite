@@ -982,6 +982,99 @@ podLabels:
     }
   })
 
+  test('upgrade preview has 3 tabs: merged, diff vs current, diff vs defaults', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-upg-diff-${suffix}`
+    const releaseName = `e2e-upg-diff-${suffix}`
+
+    try {
+      // Setup: add repository and install a release
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+      await installDialog
+        .locator('#helm-install-release-name')
+        .fill(releaseName)
+      await installDialog.getByRole('button', { name: 'Install' }).click()
+      await expect(installDialog).toBeHidden({ timeout: 120_000 })
+
+      // Navigate to release detail and open upgrade dialog
+      await page.goto(`/helmrelease/default/${releaseName}`)
+      await page.getByRole('button', { name: 'Upgrade', exact: true }).click()
+      const upgradeDialog = page.getByRole('dialog', { name: 'Upgrade' })
+      await expect(upgradeDialog).toBeVisible()
+
+      // Fill custom values to trigger the merge preview
+      await fillMonacoEditor(page, upgradeDialog, 1, 'replicaCount: 3\n')
+
+      // Wait for preview to load
+      await page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/helmrelease/') &&
+          response.url().includes('/upgrade/preview-values'),
+        { timeout: 60_000 }
+      )
+
+      // Click Preview button to enter preview mode
+      await upgradeDialog.getByRole('button', { name: 'Preview' }).click()
+
+      // Verify 3 tabs are visible
+      await expect(
+        upgradeDialog.getByRole('tab', { name: 'Merged values preview' })
+      ).toBeVisible()
+      await expect(
+        upgradeDialog.getByRole('tab', { name: 'Diff vs current' })
+      ).toBeVisible()
+      await expect(
+        upgradeDialog.getByRole('tab', { name: 'Diff vs defaults' })
+      ).toBeVisible()
+
+      // Click Diff vs current tab and verify diff editor
+      await upgradeDialog.getByRole('tab', { name: 'Diff vs current' }).click()
+      await expect(
+        upgradeDialog.locator('.monaco-diff-editor')
+      ).toBeVisible({ timeout: 60_000 })
+
+      // Click Diff vs defaults tab and verify diff editor
+      await upgradeDialog.getByRole('tab', { name: 'Diff vs defaults' }).click()
+      await expect(
+        upgradeDialog.locator('.monaco-diff-editor')
+      ).toBeVisible({ timeout: 60_000 })
+
+      await upgradeDialog.getByRole('button', { name: 'Back' }).click()
+      await upgradeDialog.getByRole('button', { name: 'Cancel' }).click()
+    } finally {
+      await cleanupReleaseFromUI(page, releaseName)
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
   test('timeout input appears when wait is checked during install', async ({
     page,
   }) => {

@@ -1651,6 +1651,8 @@
       "dryRunPreview": "Dry run preview",
       "mergedPreview": "Merged values preview",
       "valuesDiff": "Values diff",
+      "valuesDiffCurrent": "Diff vs current",
+      "valuesDiffDefault": "Diff vs defaults",
       "ignoreLabelsAnnotationsChanges": "Ignore labels/annotations changes (diff only)",
       "forceConflicts": "force-conflicts",
       "wait": "wait",

@@ -57,12 +57,16 @@ Release 详情页会展示状态、Chart 版本、values、资源、历史记录
 - **Default Values**：Chart 内置的 `values.yaml`（只读）。
 - **Custom Values**：你的自定义覆盖值，可编辑 YAML。
 
-点击**Preview**按钮可切换到预览视图，包含两个标签页：
+点击**Preview**按钮可切换到预览视图，包含以下标签页：
 
 - **Merged Values**：Chart 默认值与自定义值合并后的结果，使用 Helm 的 coalesce 逻辑计算，展示最终将应用到 Release 的值。
-- **Values Diff**：Chart 默认值（升级时为当前 Release 的值）与合并值的并排差异对比，使用 Monaco diff 编辑器渲染，帮助你快速发现覆盖值带来的变化。
+- **Values Diff**（安装）：Chart 默认值与合并值的并排差异对比，使用 Monaco diff 编辑器渲染，帮助你快速发现覆盖值带来的变化。
 
-对于升级操作，差异对比会将当前 Release 的值与合并值进行比较，让你在应用前查看更改的净效果。编辑自定义值后点击**Preview**按钮即可刷新预览。
+对于升级操作，预览视图包含三个标签页：
+
+- **Merged Values**：同上。
+- **对比当前值**：将当前 Release 的值与合并值进行比较，让你在应用前查看更改的净效果。
+- **对比默认值**：将新版本 Chart 的默认值与合并值进行比较，展示你的配置与 Chart 出厂值的差异。
 
 ### 安装弹窗中的版本选择
 
