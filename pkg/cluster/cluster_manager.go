@@ -120,8 +120,10 @@ func newClientSet(name string, k8sConfig *rest.Config, prometheusURL string) (*C
 	}
 	klog.Infof("Loaded K8s client for cluster: %s, version: %s", name, cs.Version)
 
-	// Fetch and cache OpenAPI schema defaults for neat YAML download
-	cs.OpenAPIDefaults = fetchOpenAPIDefaults(cs)
+	// Fetch and cache OpenAPI schema defaults for neat YAML download (async to avoid blocking cluster connection)
+	go func() {
+		cs.OpenAPIDefaults = fetchOpenAPIDefaults(cs)
+	}()
 
 	return cs, nil
 }

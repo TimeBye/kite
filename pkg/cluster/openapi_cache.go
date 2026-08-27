@@ -1,9 +1,7 @@
 package cluster
 
 import (
-	"context"
 	"strings"
-	"time"
 
 	openapi_v2 "github.com/google/gnostic-models/openapiv2"
 	"k8s.io/klog/v2"
@@ -57,11 +55,6 @@ func GVKToDefinitionName(group, version, kind string) string {
 // extracting only the default values for each definition. The raw schema document
 // is discarded after extraction to minimize memory usage.
 func fetchOpenAPIDefaults(cs *ClientSet) *OpenAPIDefaultCache {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	_ = ctx // discovery client uses its own context internally
-
 	doc, err := cs.K8sClient.ClientSet.Discovery().OpenAPISchema()
 	if err != nil {
 		klog.Warningf("Failed to fetch OpenAPI schema for cluster %s: %v", cs.Name, err)
