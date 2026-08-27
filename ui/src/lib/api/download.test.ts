@@ -68,6 +68,42 @@ describe('downloadSingleYAML', () => {
     )
   })
 
+  it('constructs CRD namespace-scoped URL correctly', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce(
+      makeMockResponse(true, 'apiVersion: example.com/v1\nkind: MyApp\n')
+    )
+
+    await downloadSingleYAML(
+      'myapps.example.com',
+      'my-instance',
+      'default',
+      false
+    )
+
+    expect(apiClient.request).toHaveBeenCalledWith(
+      '/myapps.example.com/default/my-instance/download?neat=false',
+      { method: 'GET' }
+    )
+  })
+
+  it('constructs CRD cluster-scoped URL correctly', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce(
+      makeMockResponse(true, 'apiVersion: example.com/v1\nkind: MyApp\n')
+    )
+
+    await downloadSingleYAML(
+      'myapps.example.com',
+      'my-instance',
+      undefined,
+      false
+    )
+
+    expect(apiClient.request).toHaveBeenCalledWith(
+      '/myapps.example.com/_all/my-instance/download?neat=false',
+      { method: 'GET' }
+    )
+  })
+
   it('passes neat=true query parameter', async () => {
     vi.mocked(apiClient.request).mockResolvedValueOnce(
       makeMockResponse(true, 'apiVersion: v1\n')
@@ -134,6 +170,39 @@ describe('downloadBatchYAML', () => {
 
     expect(apiClient.request).toHaveBeenCalledWith(
       '/nodes/_all/download?neat=false',
+      { method: 'POST', body: JSON.stringify(items) }
+    )
+  })
+
+  it('constructs CRD namespace-scoped batch URL', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce(
+      makeMockResponse(true, 'PK\x03\x04', 'application/zip')
+    )
+
+    const items = [
+      { name: 'my-instance', namespace: 'default' },
+      { name: 'my-instance-2', namespace: 'default' },
+    ]
+
+    await downloadBatchYAML('myapps.example.com', items, true, false)
+
+    expect(apiClient.request).toHaveBeenCalledWith(
+      '/myapps.example.com/download?neat=true',
+      { method: 'POST', body: JSON.stringify(items) }
+    )
+  })
+
+  it('constructs CRD cluster-scoped batch URL', async () => {
+    vi.mocked(apiClient.request).mockResolvedValueOnce(
+      makeMockResponse(true, 'PK\x03\x04', 'application/zip')
+    )
+
+    const items = [{ name: 'my-instance', namespace: undefined }]
+
+    await downloadBatchYAML('myapps.example.com', items, false, true)
+
+    expect(apiClient.request).toHaveBeenCalledWith(
+      '/myapps.example.com/_all/download?neat=false',
       { method: 'POST', body: JSON.stringify(items) }
     )
   })

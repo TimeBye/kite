@@ -10,6 +10,19 @@ Kite allows you to download Kubernetes resource definitions as YAML files, eithe
   - **Raw YAML**: Preserves all fields returned by the Kubernetes API (except `managedFields` and the `kubectl.kubernetes.io/last-applied-configuration` annotation, which are always removed).
   - **Neat YAML**: Additionally removes Kubernetes-managed fields, default values, and other noise to produce a clean, portable manifest.
 
+## Supported Resource Types
+
+YAML download works with all resource types in Kite:
+
+| Resource Type | Scope | Notes |
+|---------------|-------|-------|
+| Built-in resources (Pods, Deployments, Services, ConfigMaps, etc.) | Namespace / Cluster | All built-in Kubernetes resources are supported |
+| Versioned resources (Ingresses, CronJobs, HPAs, etc.) | Namespace / Cluster | Resources with multiple API versions are automatically resolved |
+| Custom Resource Definitions (CRDs) | Namespace / Cluster | Custom resources are downloaded as-is via unstructured retrieval |
+| Helm Releases | Namespace | Helm releases are serialized as pseudo-Kubernetes objects with `kind: HelmRelease` |
+
+For cluster-scoped resources (Nodes, Namespaces, ClusterRoles, etc.), the namespace is omitted from the download filename. For namespace-scoped resources, the filename includes the namespace (e.g., `Pod-default-nginx.yaml`).
+
 ## Neat Mode
 
 Neat mode cleans up the YAML by removing fields that are automatically populated by Kubernetes and are not useful when exporting a resource definition. This is similar to the [kubectl-neat](https://github.com/itaysk/kubectl-neat) tool.

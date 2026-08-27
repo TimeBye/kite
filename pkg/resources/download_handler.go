@@ -46,9 +46,9 @@ func buildYAMLFileName(kind, namespace, name string) string {
 
 // DownloadSingle handles downloading a single resource as YAML.
 func DownloadSingle(c *gin.Context) {
-	resource := c.Param("resource")
+	resource := c.GetString("resource")
 	if resource == "" {
-		// Try CRD param
+		// Try CRD param (for CRD routes which use :crd)
 		resource = c.Param("crd")
 	}
 	if resource == "" {
@@ -103,7 +103,7 @@ func DownloadSingle(c *gin.Context) {
 
 // DownloadBatch handles downloading multiple resources as a ZIP file.
 func DownloadBatch(c *gin.Context) {
-	resource := c.Param("resource")
+	resource := c.GetString("resource")
 	if resource == "" {
 		resource = c.Param("crd")
 	}

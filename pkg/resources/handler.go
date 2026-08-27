@@ -210,9 +210,9 @@ func RegisterRoutes(group *gin.RouterGroup) {
 		}
 		handler.registerCustomRoutes(g)
 		if handler.IsClusterScoped() {
-			registerClusterScopeRoutes(g, handler)
+			registerClusterScopeRoutes(g, handler, name)
 		} else {
-			registerNamespaceScopeRoutes(g, handler)
+			registerNamespaceScopeRoutes(g, handler, name)
 		}
 	}
 
@@ -261,7 +261,16 @@ func RegisterRoutes(group *gin.RouterGroup) {
 	}
 }
 
-func registerClusterScopeRoutes(group *gin.RouterGroup, handler resourceHandler) {
+// setResourceType is a middleware that stores the resource type in the gin context
+// so that download handlers can access it.
+func setResourceType(resourceType string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("resource", resourceType)
+		c.Next()
+	}
+}
+
+func registerClusterScopeRoutes(group *gin.RouterGroup, handler resourceHandler, resourceType string) {
 	group.GET("", handler.List)
 	group.GET("/_all", handler.List)
 	group.GET("/_all/:name", handler.Get)
@@ -271,11 +280,11 @@ func registerClusterScopeRoutes(group *gin.RouterGroup, handler resourceHandler)
 	group.PATCH("/_all/:name", handler.Patch)
 	group.GET("/_all/:name/history", handler.ListHistory)
 	group.GET("/_all/:name/describe", handler.Describe)
-	group.GET("/_all/:name/download", DownloadSingle)
-	group.POST("/_all/download", DownloadBatch)
+	group.GET("/_all/:name/download", setResourceType(resourceType), DownloadSingle)
+	group.POST("/_all/download", setResourceType(resourceType), DownloadBatch)
 }
 
-func registerNamespaceScopeRoutes(group *gin.RouterGroup, handler resourceHandler) {
+func registerNamespaceScopeRoutes(group *gin.RouterGroup, handler resourceHandler, resourceType string) {
 	group.GET("", handler.List)
 	group.GET("/:namespace", handler.List)
 	group.GET("/:namespace/:name", handler.Get)
@@ -285,8 +294,8 @@ func registerNamespaceScopeRoutes(group *gin.RouterGroup, handler resourceHandle
 	group.PATCH("/:namespace/:name", handler.Patch)
 	group.GET("/:namespace/:name/history", handler.ListHistory)
 	group.GET("/:namespace/:name/describe", handler.Describe)
-	group.GET("/:namespace/:name/download", DownloadSingle)
-	group.POST("/download", DownloadBatch)
+	group.GET("/:namespace/:name/download", setResourceType(resourceType), DownloadSingle)
+	group.POST("/download", setResourceType(resourceType), DownloadBatch)
 }
 
 func GetResource(c *gin.Context, resource, namespace, name string) (interface{}, error) {

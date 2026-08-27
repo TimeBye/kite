@@ -10,6 +10,19 @@ Kite 支持将 Kubernetes 资源定义下载为 YAML 文件，支持单选和多
   - **原始 YAML**：保留 Kubernetes API 返回的所有字段（`managedFields` 和 `kubectl.kubernetes.io/last-applied-configuration` 注解始终会被移除）。
   - **精简 YAML**：额外移除 Kubernetes 管理的字段、默认值和其他无关注释，生成干净、可移植的清单文件。
 
+## 支持的资源类型
+
+YAML 下载功能支持 Kite 中的所有资源类型：
+
+| 资源类型 | 作用域 | 说明 |
+|---------|--------|------|
+| 内置资源（Pods、Deployments、Services、ConfigMaps 等） | 命名空间 / 集群 | 支持所有 Kubernetes 内置资源 |
+| 多版本资源（Ingresses、CronJobs、HPAs 等） | 命名空间 / 集群 | 自动解析集群支持的 API 版本 |
+| 自定义资源定义（CRD） | 命名空间 / 集群 | 通过 unstructured 方式获取并下载自定义资源 |
+| Helm Releases | 命名空间 | Helm 发布以伪 Kubernetes 对象形式序列化，`kind: HelmRelease` |
+
+集群级资源（Nodes、Namespaces、ClusterRoles 等）的文件名不包含命名空间。命名空间级资源的文件名包含命名空间（如 `Pod-default-nginx.yaml`）。
+
 ## 精简模式
 
 精简模式会移除由 Kubernetes 自动填充的字段，这些字段在导出资源定义时没有实际用途。这类似于 [kubectl-neat](https://github.com/itaysk/kubectl-neat) 工具。
