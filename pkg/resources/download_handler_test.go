@@ -282,7 +282,8 @@ func TestDownloadBatch_NamespaceScopedResources(t *testing.T) {
 		{Name: "pod-1", Namespace: "default"},
 		{Name: "pod-2", Namespace: "default"},
 	}
-	body, _ := json.Marshal(items)
+	body, err := json.Marshal(items)
+	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/pods/download?neat=false", bytes.NewReader(body))
@@ -326,7 +327,8 @@ func TestDownloadBatch_ClusterScopedResources(t *testing.T) {
 		{Name: "node-1"},
 		{Name: "node-2"},
 	}
-	body, _ := json.Marshal(items)
+	body, err := json.Marshal(items)
+	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/nodes/_all/download?neat=true", bytes.NewReader(body))
@@ -366,7 +368,8 @@ func TestDownloadBatch_WithFailures(t *testing.T) {
 		{Name: "pod-1", Namespace: "default"},
 		{Name: "pod-2", Namespace: "default"},
 	}
-	body, _ := json.Marshal(items)
+	body, err := json.Marshal(items)
+	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/pods/download?neat=false", bytes.NewReader(body))
@@ -392,7 +395,7 @@ func TestDownloadBatch_WithFailures(t *testing.T) {
 			rc, err := f.Open()
 			require.NoError(t, err)
 			content, _ := io.ReadAll(rc)
-			rc.Close()
+			_ = rc.Close()
 			assert.Contains(t, string(content), "pod-2")
 		}
 	}
