@@ -176,11 +176,13 @@ func DownloadBatch(c *gin.Context) {
 		summary := fmt.Sprintf("Failed to download %d resource(s):\n%s\n", len(failedItems), strings.Join(failedItems, "\n"))
 		w, err := zipWriter.Create("_download_errors.txt")
 		if err == nil {
-			w.Write([]byte(summary))
+			_, _ = w.Write([]byte(summary))
 		}
 	}
 
-	zipWriter.Close()
+	if err := zipWriter.Close(); err != nil {
+		klog.Warningf("Failed to close zip writer: %v", err)
+	}
 
 	zipFileName := fmt.Sprintf("%s-%s.zip", resource, time.Now().Format("20060102-150405"))
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, zipFileName))
