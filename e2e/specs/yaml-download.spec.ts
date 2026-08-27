@@ -4,19 +4,13 @@ import { kindClusterName } from '../env'
 
 const controlPlaneNodeName = `${kindClusterName}-control-plane`
 
+// Use shorter per-test timeout to avoid exceeding the 30-min CI limit
 test.describe('YAML download', () => {
+  test.use({ timeout: 60_000 })
   test('downloads a single cluster-scoped resource as raw YAML from the detail page', async ({
     page,
   }) => {
-    await page.goto('/nodes')
-
-    // Navigate to the control-plane node detail page
-    const nodeLink = page.getByRole('link', { name: controlPlaneNodeName })
-    await expect(nodeLink).toBeVisible()
-    await nodeLink.click()
-    await page.waitForURL(`**/nodes/${controlPlaneNodeName}`)
-
-    // Intercept the download API call
+    // Register route before navigation to avoid race conditions
     const yamlContent = `apiVersion: v1\nkind: Node\nmetadata:\n  name: ${controlPlaneNodeName}\n`
     await page.route(
       `**/api/v1/nodes/_all/${controlPlaneNodeName}/download*`,
@@ -35,6 +29,14 @@ test.describe('YAML download', () => {
       }
     )
 
+    await page.goto('/nodes')
+
+    // Navigate to the control-plane node detail page
+    const nodeLink = page.getByRole('link', { name: controlPlaneNodeName })
+    await expect(nodeLink).toBeVisible()
+    await nodeLink.click()
+    await page.waitForURL(`**/nodes/${controlPlaneNodeName}`)
+
     // Click the Download button and select "Raw YAML"
     const downloadButton = page.getByRole('button', { name: 'Download' })
     await expect(downloadButton).toBeVisible()
@@ -49,13 +51,6 @@ test.describe('YAML download', () => {
   test('downloads a single cluster-scoped resource as neat YAML from the detail page', async ({
     page,
   }) => {
-    await page.goto('/nodes')
-
-    const nodeLink = page.getByRole('link', { name: controlPlaneNodeName })
-    await expect(nodeLink).toBeVisible()
-    await nodeLink.click()
-    await page.waitForURL(`**/nodes/${controlPlaneNodeName}`)
-
     const yamlContent = `apiVersion: v1\nkind: Node\nmetadata:\n  name: ${controlPlaneNodeName}\n`
     await page.route(
       `**/api/v1/nodes/_all/${controlPlaneNodeName}/download*`,
@@ -74,6 +69,13 @@ test.describe('YAML download', () => {
       }
     )
 
+    await page.goto('/nodes')
+
+    const nodeLink = page.getByRole('link', { name: controlPlaneNodeName })
+    await expect(nodeLink).toBeVisible()
+    await nodeLink.click()
+    await page.waitForURL(`**/nodes/${controlPlaneNodeName}`)
+
     const downloadButton = page.getByRole('button', { name: 'Download' })
     await expect(downloadButton).toBeVisible()
     await downloadButton.click()
@@ -87,14 +89,6 @@ test.describe('YAML download', () => {
   test('downloads a single namespace-scoped resource as raw YAML from the detail page', async ({
     page,
   }) => {
-    await page.goto('/configmaps')
-
-    // Navigate to the kube-root-ca.crt configmap detail page
-    const cmLink = page.getByRole('link', { name: 'kube-root-ca.crt' })
-    await expect(cmLink).toBeVisible()
-    await cmLink.click()
-    await page.waitForURL('**/configmaps/default/kube-root-ca.crt')
-
     const yamlContent = `apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: kube-root-ca.crt\n  namespace: default\n`
     await page.route(
       '**/api/v1/configmaps/default/kube-root-ca.crt/download*',
@@ -114,6 +108,14 @@ test.describe('YAML download', () => {
       }
     )
 
+    await page.goto('/configmaps')
+
+    // Navigate to the kube-root-ca.crt configmap detail page
+    const cmLink = page.getByRole('link', { name: 'kube-root-ca.crt' })
+    await expect(cmLink).toBeVisible()
+    await cmLink.click()
+    await page.waitForURL('**/configmaps/default/kube-root-ca.crt')
+
     const downloadButton = page.getByRole('button', { name: 'Download' })
     await expect(downloadButton).toBeVisible()
     await downloadButton.click()
@@ -127,9 +129,7 @@ test.describe('YAML download', () => {
   test('downloads multiple cluster-scoped resources as a ZIP from the list page', async ({
     page,
   }) => {
-    await page.goto('/namespaces')
-
-    // Intercept the batch download API call
+    // Register route before navigation
     await page.route('**/api/v1/namespaces/_all/download*', async (route) => {
       expect(route.request().method()).toBe('POST')
       const url = new URL(route.request().url())
@@ -143,6 +143,8 @@ test.describe('YAML download', () => {
         body: 'PK\x03\x04',
       })
     })
+
+    await page.goto('/namespaces')
 
     // Select multiple namespaces via row checkboxes
     const kubeSystemRow = page
@@ -171,9 +173,7 @@ test.describe('YAML download', () => {
   test('downloads multiple namespace-scoped resources as a ZIP from the list page', async ({
     page,
   }) => {
-    await page.goto('/configmaps')
-
-    // Intercept the batch download API call
+    // Register route before navigation
     await page.route('**/api/v1/configmaps/download*', async (route) => {
       expect(route.request().method()).toBe('POST')
       const url = new URL(route.request().url())
@@ -187,6 +187,8 @@ test.describe('YAML download', () => {
         body: 'PK\x03\x04',
       })
     })
+
+    await page.goto('/configmaps')
 
     // Select multiple configmaps via row checkboxes
     const firstRow = page.getByRole('row').nth(1)
