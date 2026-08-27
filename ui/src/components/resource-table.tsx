@@ -14,7 +14,13 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { ResourceType } from '@/types/api'
-import { deleteResource } from '@/lib/api'
+import {
+  deleteResource,
+  downloadBatchYAML,
+  downloadSingleYAML,
+  triggerBrowserDownload,
+  type DownloadYAMLItem,
+} from '@/lib/api'
 import { getResourceMetadata } from '@/lib/resource-catalog'
 import { useCluster } from '@/hooks/use-cluster'
 import { useResourceTableData } from '@/hooks/use-resource-table-data'
@@ -155,6 +161,60 @@ function ResourceTableContent<T>({
     }
     return resource.shortLabel || resource.pluralLabel || resourceName
   })()
+
+  const [isDownloading, setIsDownloading] = useState(false)
+
+  const handleBatchDownload = useCallback(
+    async (rows: T[], neat: boolean) => {
+      if (rows.length === 0) return
+      setIsDownloading(true)
+      try {
+        const items: DownloadYAMLItem[] = rows.map((row) => {
+          const metadata = (
+            row as { metadata?: { name?: string; namespace?: string } }
+          ).metadata
+          return {
+            name: metadata?.name || '',
+            namespace: clusterScope ? undefined : metadata?.namespace,
+          }
+        })
+
+        if (items.length === 1) {
+          const blob = await downloadSingleYAML(
+            resolvedResourceType,
+            items[0].name,
+            items[0].namespace,
+            neat
+          )
+          const filename = items[0].namespace
+            ? `${resolvedResourceType}-${items[0].namespace}-${items[0].name}.yaml`
+            : `${resolvedResourceType}-${items[0].name}.yaml`
+          triggerBrowserDownload(blob, filename)
+        } else {
+          const blob = await downloadBatchYAML(
+            resolvedResourceType,
+            items,
+            neat,
+            clusterScope
+          )
+          const timestamp = new Date()
+            .toISOString()
+            .replace(/[-:T]/g, '')
+            .slice(0, 14)
+          triggerBrowserDownload(
+            blob,
+            `${resolvedResourceType}-${timestamp}.zip`
+          )
+        }
+        setRowSelection({})
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Download failed')
+      } finally {
+        setIsDownloading(false)
+      }
+    },
+    [resolvedResourceType, clusterScope, setRowSelection]
+  )
 
   // Add namespace column when showing all namespaces
   const enhancedColumns = useMemo(() => {
@@ -481,6 +541,8 @@ function ResourceTableContent<T>({
         selectedRowCount={table.getSelectedRowModel().rows.length}
         onOpenDeleteDialog={() => setDeleteDialogOpen(true)}
         batchActions={batchActions}
+        onDownload={handleBatchDownload}
+        isDownloading={isDownloading}
       />
 
       <ResourceTableView

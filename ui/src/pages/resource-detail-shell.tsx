@@ -1,6 +1,7 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   IconCopy,
+  IconDownload,
   IconLoader,
   IconRefresh,
   IconTrash,
@@ -11,10 +12,17 @@ import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { type ResourceType } from '@/types/api'
+import { downloadSingleYAML, triggerBrowserDownload } from '@/lib/api'
 import { cn, translateError } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ResponsiveTabs } from '@/components/ui/responsive-tabs'
 import { CloneResourceDialog } from '@/components/clone-resource-dialog'
 import { DescribeDialog } from '@/components/describe-dialog'
@@ -90,6 +98,7 @@ export function ResourceDetailShell<T>({
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isCloneDialogOpen, setIsCloneDialogOpen] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [searchParams] = useSearchParams()
   const isIframe = searchParams.get('iframe') === 'true'
 
@@ -110,6 +119,29 @@ export function ResourceDetailShell<T>({
       setIsRefreshing(false)
     }
   }, [onRefresh])
+
+  const handleDownload = useCallback(
+    async (neat: boolean) => {
+      setIsDownloading(true)
+      try {
+        const blob = await downloadSingleYAML(
+          resourceType,
+          name,
+          namespace,
+          neat
+        )
+        const filename = namespace
+          ? `${resourceType}-${namespace}-${name}.yaml`
+          : `${resourceType}-${name}.yaml`
+        triggerBrowserDownload(blob, filename)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Download failed')
+      } finally {
+        setIsDownloading(false)
+      }
+    },
+    [resourceType, name, namespace]
+  )
 
   const handleSaveYaml = useCallback(
     async (content: T) => {
@@ -292,6 +324,22 @@ export function ResourceDetailShell<T>({
                   {t('common.actions.clone')}
                 </Button>
               ) : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={isDownloading}>
+                    <IconDownload className="size-4" />
+                    {t('common.actions.download')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleDownload(false)}>
+                    {t('resourceTable.downloadRawYAML')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownload(true)}>
+                    {t('resourceTable.downloadNeatYAML')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {headerActions}
               {showDelete && (
                 <Button

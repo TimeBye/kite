@@ -113,6 +113,7 @@ export default defineConfig({
             { text: "Custom Sidebar", link: "/guide/custom-sidebar" },
             { text: "Kube Proxy", link: "/guide/kube-proxy" },
             { text: "Download a kubeconfig", link: "/guide/kubeconfig-download" },
+            { text: "YAML Download", link: "/guide/yaml-download" },
           ],
         },
         {
@@ -182,6 +183,7 @@ export default defineConfig({
             { text: "自定义侧边栏", link: "/zh/guide/custom-sidebar" },
             { text: "Kube Proxy", link: "/zh/guide/kube-proxy" },
             { text: "下载 kubeconfig", link: "/zh/guide/kubeconfig-download" },
+            { text: "YAML 下载", link: "/zh/guide/yaml-download" },
           ],
         },
         {

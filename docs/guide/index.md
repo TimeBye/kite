@@ -29,6 +29,7 @@ Kite is a lightweight, modern Kubernetes dashboard that unifies real-time observ
 - Create, update, delete, scale, and restart operations
 - Custom Resource Definitions (CRDs) support
 - Quick image tag selector using Docker and container registry APIs
+- YAML download (raw or neat mode) for single or multiple resources
 - Customizable sidebar with CRD shortcuts
 - Kube proxy for direct pod/service access (no more `kubectl port-forward`)
 

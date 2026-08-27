@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/zxh326/kite/pkg/model"
-	repo "helm.sh/helm/v4/pkg/repo/v1"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	repo "helm.sh/helm/v4/pkg/repo/v1"
 )
 
 func setupHelmTestDB(t *testing.T) {

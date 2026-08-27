@@ -245,15 +245,19 @@ func RegisterRoutes(group *gin.RouterGroup) {
 		otherGroup.GET("/_all/:name", crHandler.Get)
 		otherGroup.GET("/_all/:name/history", crHandler.ListHistory)
 		otherGroup.GET("/_all/:name/describe", crHandler.Describe)
+		otherGroup.GET("/_all/:name/download", DownloadSingle)
 		otherGroup.PUT("/_all/:name", crHandler.Update)
 		otherGroup.DELETE("/_all/:name", crHandler.Delete)
+		otherGroup.POST("/_all/download", DownloadBatch)
 
 		otherGroup.GET("/:namespace", crHandler.List)
 		otherGroup.GET("/:namespace/:name", crHandler.Get)
 		otherGroup.GET("/:namespace/:name/history", crHandler.ListHistory)
 		otherGroup.GET("/:namespace/:name/describe", crHandler.Describe)
+		otherGroup.GET("/:namespace/:name/download", DownloadSingle)
 		otherGroup.PUT("/:namespace/:name", crHandler.Update)
 		otherGroup.DELETE("/:namespace/:name", crHandler.Delete)
+		otherGroup.POST("/download", DownloadBatch)
 	}
 }
 
@@ -267,6 +271,8 @@ func registerClusterScopeRoutes(group *gin.RouterGroup, handler resourceHandler)
 	group.PATCH("/_all/:name", handler.Patch)
 	group.GET("/_all/:name/history", handler.ListHistory)
 	group.GET("/_all/:name/describe", handler.Describe)
+	group.GET("/_all/:name/download", DownloadSingle)
+	group.POST("/_all/download", DownloadBatch)
 }
 
 func registerNamespaceScopeRoutes(group *gin.RouterGroup, handler resourceHandler) {
@@ -279,6 +285,8 @@ func registerNamespaceScopeRoutes(group *gin.RouterGroup, handler resourceHandle
 	group.PATCH("/:namespace/:name", handler.Patch)
 	group.GET("/:namespace/:name/history", handler.ListHistory)
 	group.GET("/:namespace/:name/describe", handler.Describe)
+	group.GET("/:namespace/:name/download", DownloadSingle)
+	group.POST("/download", DownloadBatch)
 }
 
 func GetResource(c *gin.Context, resource, namespace, name string) (interface{}, error) {

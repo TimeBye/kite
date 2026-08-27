@@ -58,14 +58,14 @@ func TestCollectProxyAuditInfo(t *testing.T) {
 	user := model.User{Model: model.Model{ID: 1}, Username: "alice"}
 
 	tests := []struct {
-		name       string
-		method     string
-		path       string
-		wantNil    bool
-		wantVerb   string
-		wantRes    string
-		wantNs     string
-		wantName   string
+		name     string
+		method   string
+		path     string
+		wantNil  bool
+		wantVerb string
+		wantRes  string
+		wantNs   string
+		wantName string
 	}{
 		{
 			name:     "POST create pod",

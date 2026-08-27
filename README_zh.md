@@ -49,6 +49,7 @@ Kite是一款轻量级、现代化的Kubernetes仪表板工具，它将实时可
 - 支持创建、更新、删除、扩缩容和重启操作
 - 支持 CRD（Custom Resource Definitions）
 - 基于 Docker 和容器镜像仓库 API 的镜像标签快速选择器
+- YAML 下载（原始/精简模式），支持单选和多选下载
 - 支持 Helm Chart 发现、安装、升级、回滚和 Release 管理
 - 可自定义侧边栏并添加 CRD 快捷入口
 - 通过 Kube Proxy 直接访问 Pod/Service（无需 `kubectl port-forward`）

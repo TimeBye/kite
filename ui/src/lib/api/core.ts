@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import i18n from '@/i18n'
 import { useQuery } from '@tanstack/react-query'
 import { Pod } from 'kubernetes-types/core/v1'
 
@@ -26,12 +27,11 @@ import {
   WorkloadRevisionResourceType,
   WorkloadRevisionsResponse,
 } from '@/types/api'
+import { ApiError } from '@/lib/api-error'
 import { getResourceQueryKey } from '@/lib/resource-metadata'
 import { useCluster } from '@/hooks/use-cluster'
-import i18n from '@/i18n'
 
 import { API_BASE_URL, apiClient } from '../api-client'
-import { ApiError } from '@/lib/api-error'
 import {
   appendCurrentClusterParam,
   withCurrentClusterPath,
@@ -877,7 +877,9 @@ export function useResourcesWatch<T extends ResourceType>(
       es.addEventListener('error', (e: MessageEvent) => {
         try {
           const payload = JSON.parse(e.data)
-          setError(new Error(payload?.error || i18n.t('errors.sseError', 'SSE error')))
+          setError(
+            new Error(payload?.error || i18n.t('errors.sseError', 'SSE error'))
+          )
         } catch {
           setError(new Error(i18n.t('errors.sseError', 'SSE error')))
         }
@@ -1052,9 +1054,12 @@ export const podUploadFile = async (
 }
 
 export const fetchTemplates = async (): Promise<ResourceTemplate[]> => {
-  return fetchAPI<{ data: ResourceTemplate[]; total: number; page: number; size: number }>(
-    '/templates/?page=1&size=200'
-  ).then((response) => response.data)
+  return fetchAPI<{
+    data: ResourceTemplate[]
+    total: number
+    page: number
+    size: number
+  }>('/templates/?page=1&size=200').then((response) => response.data)
 }
 
 export const createTemplate = async (
@@ -1086,10 +1091,18 @@ export const useTemplates = (options?: { staleTime?: number }) => {
 export const fetchTemplatesPaginated = async (
   page: number,
   size: number
-): Promise<{ data: ResourceTemplate[]; total: number; page: number; size: number }> => {
-  return fetchAPI<{ data: ResourceTemplate[]; total: number; page: number; size: number }>(
-    `/templates/?page=${page}&size=${size}`
-  )
+): Promise<{
+  data: ResourceTemplate[]
+  total: number
+  page: number
+  size: number
+}> => {
+  return fetchAPI<{
+    data: ResourceTemplate[]
+    total: number
+    page: number
+    size: number
+  }>(`/templates/?page=${page}&size=${size}`)
 }
 
 export const useTemplatesPaginated = (page: number, size: number) => {
@@ -1233,4 +1246,60 @@ export const usePodFiles = (
     enabled: options?.enabled !== false,
     staleTime: 10000, // 10 seconds cache
   })
+}
+
+// Download YAML API
+
+export interface DownloadYAMLItem {
+  name: string
+  namespace?: string
+}
+
+const readDownloadError = async (response: Response) => {
+  const payload = await response.json().catch(() => ({}))
+  return payload.error || `HTTP error! status: ${response.status}`
+}
+
+export const downloadSingleYAML = async (
+  resource: string,
+  name: string,
+  namespace: string | undefined,
+  neat: boolean
+): Promise<Blob> => {
+  const path = namespace
+    ? `/${resource}/${namespace}/${name}/download`
+    : `/${resource}/_all/${name}/download`
+  const response = await apiClient.request(`${path}?neat=${neat}`, {
+    method: 'GET',
+  })
+  if (!response.ok) throw new Error(await readDownloadError(response))
+  return response.blob()
+}
+
+export const downloadBatchYAML = async (
+  resource: string,
+  items: DownloadYAMLItem[],
+  neat: boolean,
+  clusterScope: boolean
+): Promise<Blob> => {
+  const path = clusterScope
+    ? `/${resource}/_all/download`
+    : `/${resource}/download`
+  const response = await apiClient.request(`${path}?neat=${neat}`, {
+    method: 'POST',
+    body: JSON.stringify(items),
+  })
+  if (!response.ok) throw new Error(await readDownloadError(response))
+  return response.blob()
+}
+
+export const triggerBrowserDownload = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
 }

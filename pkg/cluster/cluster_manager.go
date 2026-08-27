@@ -31,6 +31,7 @@ type ClientSet struct {
 	PromClient *prometheus.Client
 
 	DiscoveredPrometheusURL string
+	OpenAPIDefaults         *OpenAPIDefaultCache
 	config                  string
 	prometheusURL           string
 	clusterAgentGeneration  uint64
@@ -118,6 +119,10 @@ func newClientSet(name string, k8sConfig *rest.Config, prometheusURL string) (*C
 		cs.Version = v.String()
 	}
 	klog.Infof("Loaded K8s client for cluster: %s, version: %s", name, cs.Version)
+
+	// Fetch and cache OpenAPI schema defaults for neat YAML download
+	cs.OpenAPIDefaults = fetchOpenAPIDefaults(cs)
+
 	return cs, nil
 }
 

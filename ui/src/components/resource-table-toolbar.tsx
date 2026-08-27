@@ -2,6 +2,7 @@ import React from 'react'
 import { ColumnDef, Table } from '@tanstack/react-table'
 import {
   ChevronDown,
+  Download,
   Plus,
   RefreshCw,
   Search,
@@ -21,6 +22,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -62,6 +66,8 @@ interface ResourceTableToolbarProps<T> {
   selectedRowCount: number
   onOpenDeleteDialog: () => void
   batchActions: ResourceTableBatchAction<T>[]
+  onDownload?: (rows: T[], neat: boolean) => void
+  isDownloading?: boolean
 }
 
 export function ResourceTableToolbar<T>({
@@ -84,6 +90,8 @@ export function ResourceTableToolbar<T>({
   selectedRowCount,
   onOpenDeleteDialog,
   batchActions,
+  onDownload,
+  isDownloading,
 }: ResourceTableToolbarProps<T>) {
   const { t } = useTranslation()
 
@@ -235,6 +243,32 @@ export function ResourceTableToolbar<T>({
                     {action.label} ({selectedRowCount})
                   </Button>
                 ))}
+                {onDownload && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        disabled={isDownloading}
+                        className="gap-2 tabular-nums"
+                      >
+                        <Download className="size-4" />
+                        {t('common.actions.download')} ({selectedRowCount})
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => onDownload(getSelectedRows(), false)}
+                      >
+                        {t('resourceTable.downloadRawYAML')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => onDownload(getSelectedRows(), true)}
+                      >
+                        {t('resourceTable.downloadNeatYAML')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <Button
                   variant="destructive"
                   onClick={onOpenDeleteDialog}
@@ -271,6 +305,31 @@ export function ResourceTableToolbar<T>({
                       {action.label}
                     </DropdownMenuItem>
                   ))}
+                  {onDownload && (
+                    <>
+                      {batchActions.length > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <Download className="size-4" />
+                          {t('common.actions.download')}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              onDownload(getSelectedRows(), false)
+                            }
+                          >
+                            {t('resourceTable.downloadRawYAML')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => onDownload(getSelectedRows(), true)}
+                          >
+                            {t('resourceTable.downloadNeatYAML')}
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    </>
+                  )}
                   {batchActions.length > 0 && <DropdownMenuSeparator />}
                   <DropdownMenuItem
                     variant="destructive"
