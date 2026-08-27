@@ -587,7 +587,7 @@ test.describe('helm kite lifecycle', () => {
     }
   })
 
-  test('install and upgrade with --set values', async ({ page }) => {
+  test('custom values are applied during install and upgrade', async ({ page }) => {
     test.setTimeout(8 * 60 * 1000)
     const suffix = Date.now().toString(36)
     const repositoryName = `e2e-set-${suffix}`
@@ -628,22 +628,20 @@ test.describe('helm kite lifecycle', () => {
         page.getByRole('heading', { name: chartName }).first()
       ).toBeVisible({ timeout: 60_000 })
 
-      // Install with --set values
+      // Install with custom values
       await page.getByRole('button', { name: 'Install' }).click()
       const installDialog = page.getByRole('dialog', { name: 'Install' })
       await expect(installDialog).toBeVisible()
       await installDialog.getByLabel('Release Name').fill(releaseName)
 
-      // Fill base values in YAML editor
-      await fillMonacoEditor(page, installDialog, 1, baseValues)
-
-      // Expand Advanced settings and fill --set values
-      await installDialog.getByText('Advanced settings').click()
-      const setValuesTextarea = installDialog.locator(
-        '#helm-install-set-values'
-      )
-      await expect(setValuesTextarea).toBeVisible()
-      await setValuesTextarea.fill('podLabels.e2e-set-mode=install')
+      // Fill custom values in YAML editor (includes e2e-set-mode: install)
+      const installValues = `replicaCount: 1
+anonymousUserEnabled: true
+podLabels:
+  e2e-mode: base
+  e2e-set-mode: install
+`
+      await fillMonacoEditor(page, installDialog, 1, installValues)
 
       await expect(
         installDialog.getByRole('button', { name: 'Install' })
@@ -656,7 +654,7 @@ test.describe('helm kite lifecycle', () => {
       )
       await expectReleaseSummary(page, releaseName, installVersion, 1)
 
-      // Verify --set value was applied to the pod labels
+      // Verify custom value was applied to the pod labels
       await expect
         .poll(
           async () => {
@@ -692,19 +690,17 @@ test.describe('helm kite lifecycle', () => {
         )
         .toBe('install')
 
-      // Upgrade with different --set values
+      // Upgrade with different custom values
       await page.getByRole('button', { name: 'Upgrade', exact: true }).click()
       const upgradeDialog = page.getByRole('dialog', { name: 'Upgrade' })
       await expect(upgradeDialog).toBeVisible()
-      await fillMonacoEditor(page, upgradeDialog, 1, upgradedValues)
-
-      // Expand Advanced settings and fill --set values
-      await upgradeDialog.getByText('Advanced settings').click()
-      const upgradeSetValuesTextarea = upgradeDialog.locator(
-        '#helm-upgrade-set-values'
-      )
-      await expect(upgradeSetValuesTextarea).toBeVisible()
-      await upgradeSetValuesTextarea.fill('podLabels.e2e-set-mode=upgrade')
+      const upgradeValues = `replicaCount: 1
+anonymousUserEnabled: true
+podLabels:
+  e2e-mode: upgraded
+  e2e-set-mode: upgrade
+`
+      await fillMonacoEditor(page, upgradeDialog, 1, upgradeValues)
 
       await expect(
         upgradeDialog.getByRole('button', { name: 'Upgrade' })
@@ -712,7 +708,7 @@ test.describe('helm kite lifecycle', () => {
       await upgradeDialog.getByRole('button', { name: 'Upgrade' }).click()
       await expect(upgradeDialog).toBeHidden({ timeout: 120_000 })
 
-      // Verify --set value was updated
+      // Verify custom value was updated
       await expect
         .poll(
           async () => {
@@ -818,11 +814,15 @@ test.describe('helm kite lifecycle', () => {
       const previewBody = (await previewResponse.json()) as { values?: string }
       expect(previewBody.values).toContain('replicaCount:')
 
-      // Verify the merged preview panel is visible
+      // Click Preview button to enter preview mode
+      await installDialog.getByRole('button', { name: 'Preview' }).click()
+
+      // Verify the merged preview is visible
       await expect(
         installDialog.getByText('Merged values preview')
       ).toBeVisible({ timeout: 60_000 })
 
+      await installDialog.getByRole('button', { name: 'Back' }).click()
       await installDialog.getByRole('button', { name: 'Cancel' }).click()
     } finally {
       await cleanupRepositoryFromUI(page, repositoryName)
@@ -897,14 +897,144 @@ test.describe('helm kite lifecycle', () => {
       const previewBody = (await previewResponse.json()) as { values?: string }
       expect(previewBody.values).toContain('replicaCount:')
 
-      // Verify the merged preview panel is visible
+      // Click Preview button to enter preview mode
+      await upgradeDialog.getByRole('button', { name: 'Preview' }).click()
+
+      // Verify the merged preview is visible
       await expect(
         upgradeDialog.getByText('Merged values preview')
       ).toBeVisible({ timeout: 60_000 })
 
+      await upgradeDialog.getByRole('button', { name: 'Back' }).click()
       await upgradeDialog.getByRole('button', { name: 'Cancel' }).click()
     } finally {
       await cleanupReleaseFromUI(page, releaseName)
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('values diff is displayed in preview mode during install', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-diff-${suffix}`
+
+    try {
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+      await page.waitForURL(
+        `**/charts/${encodeURIComponent(repositoryName)}/${chartName}`
+      )
+
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+
+      // Fill custom values to trigger the merge preview
+      await fillMonacoEditor(page, installDialog, 1, 'replicaCount: 3\n')
+
+      // Wait for preview to load
+      await page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/helmrelease/') &&
+          response.url().includes('/preview-values'),
+        { timeout: 60_000 }
+      )
+
+      // Click Preview button to enter preview mode
+      await installDialog.getByRole('button', { name: 'Preview' }).click()
+
+      // Click the Values diff tab
+      await installDialog.getByRole('tab', { name: 'Values diff' }).click()
+
+      // Verify the diff editor is visible
+      await expect(
+        installDialog.locator('.monaco-diff-editor')
+      ).toBeVisible({ timeout: 60_000 })
+
+      await installDialog.getByRole('button', { name: 'Back' }).click()
+      await installDialog.getByRole('button', { name: 'Cancel' }).click()
+    } finally {
+      await cleanupRepositoryFromUI(page, repositoryName)
+    }
+  })
+
+  test('timeout input appears when wait is checked during install', async ({
+    page,
+  }) => {
+    const suffix = Date.now().toString(36)
+    const repositoryName = `e2e-timeout-${suffix}`
+
+    try {
+      await page.goto('/charts')
+      await switchToRepositories(page)
+      await page.getByRole('button', { name: 'Add Repository' }).first().click()
+
+      const addRepositoryDialog = page.getByRole('dialog', {
+        name: 'Add Repository',
+      })
+      await expect(addRepositoryDialog).toBeVisible()
+      await addRepositoryDialog
+        .locator('#helm-repository-name')
+        .fill(repositoryName)
+      await addRepositoryDialog
+        .locator('#helm-repository-url')
+        .fill(repositoryURL)
+      await addRepositoryDialog.getByRole('button', { name: 'Add' }).click()
+      await expect(addRepositoryDialog).toBeHidden({ timeout: 60_000 })
+
+      await selectRepositoryFilter(page, repositoryName)
+      await page.getByPlaceholder('Search charts...').fill(chartName)
+      const chartLink = page.getByRole('link', {
+        name: chartName,
+        exact: true,
+      })
+      await expect(chartLink).toBeVisible({ timeout: 60_000 })
+      await chartLink.click()
+
+      await page.getByRole('button', { name: 'Install' }).click()
+      const installDialog = page.getByRole('dialog', { name: 'Install' })
+      await expect(installDialog).toBeVisible()
+
+      // Check the Wait checkbox
+      await installDialog.locator('#helm-install-wait').check()
+
+      // Verify the timeout input appears
+      await expect(
+        installDialog.locator('#helm-install-timeout')
+      ).toBeVisible()
+
+      // Uncheck Wait and verify timeout disappears
+      await installDialog.locator('#helm-install-wait').uncheck()
+      await expect(
+        installDialog.locator('#helm-install-timeout')
+      ).toBeHidden()
+
+      await installDialog.getByRole('button', { name: 'Cancel' }).click()
+    } finally {
       await cleanupRepositoryFromUI(page, repositoryName)
     }
   })

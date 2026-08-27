@@ -50,38 +50,39 @@ Release 详情页会展示状态、Chart 版本、values、资源、历史记录
 
 安装和升级前支持 dry-run 预览。你可以在详情页升级 Release，在历史记录中回滚，也可以删除 Release 来从集群中卸载。
 
-### Values 合并预览
+### Values 编辑器
 
-安装和升级弹窗均展示三栏：
+安装和升级弹窗均展示两栏：
 
 - **Default Values**：Chart 内置的 `values.yaml`（只读）。
 - **Custom Values**：你的自定义覆盖值，可编辑 YAML。
-- **Merged Values Preview**：Chart 默认值与自定义值、`--set` 覆盖合并后的结果，使用 Helm 的 coalesce 逻辑计算，展示最终将应用到 Release 的值。
 
-合并预览会在你编辑自定义值或 `--set` 参数时自动更新（有短暂防抖延迟），方便在执行 dry-run 或安装前验证覆盖效果。
+点击**Preview**按钮可切换到预览视图，包含两个标签页：
+
+- **Merged Values**：Chart 默认值与自定义值合并后的结果，使用 Helm 的 coalesce 逻辑计算，展示最终将应用到 Release 的值。
+- **Values Diff**：Chart 默认值（升级时为当前 Release 的值）与合并值的并排差异对比，使用 Monaco diff 编辑器渲染，帮助你快速发现覆盖值带来的变化。
+
+对于升级操作，差异对比会将当前 Release 的值与合并值进行比较，让你在应用前查看更改的净效果。编辑自定义值后点击**Preview**按钮即可刷新预览。
 
 ### 安装弹窗中的版本选择
 
-安装弹窗中包含版本选择器，列出所有可用的 Chart 版本。默认选中最新版本，你可以从下拉列表中选择其他版本——Kite 会获取所选版本的 Chart 详情和默认值，合并预览也会相应更新。
+安装弹窗中包含版本选择器，列出所有可用的 Chart 版本。默认选中最新版本，你可以从下拉列表中选择其他版本——Kite 会获取所选版本的 Chart 详情和默认值，点击**Preview**按钮即可查看更新后的合并值。
 
 版本下拉列表中每一项显示版本号、AppVersion 和发布日期，当前（默认）版本会标记"Current"标签。
 
 ### 安装弹窗中的 Namespace 选择
 
-安装弹窗使用统一的 Namespace 选择器，将浏览已有 Namespace 和创建新 Namespace 合并为一个控件。你可以按名称搜索已有的 Namespace，也可以输入新名称并选择出现的"Create"选项。当选中的 Namespace 不存在时，下方会内联显示"创建 Namespace"复选框，允许 Helm 在安装时自动创建该 Namespace。选择已有 Namespace 时复选框会自动隐藏。
+安装弹窗使用统一的 Namespace 选择器，将浏览已有 Namespace 和创建新 Namespace 合并为一个控件。你可以按名称搜索已有的 Namespace，也可以输入新名称并选择出现的"Create"选项。当选中的 Namespace 不存在时，Kite 会自动设置 `createNamespace: true`，允许 Helm 在安装时自动创建该 Namespace。选择已有 Namespace 时不会触发创建。
 
-### Set Values 和高级选项
+### 高级选项
 
-安装和升级弹窗均支持 Helm `--set` 参数，用于快速覆盖值而无需编辑 YAML。点击弹窗中的**高级设置**展开该区域：
+安装和升级弹窗在底部操作按钮上方内联展示以下 Helm 选项：
 
-- **Set values (--set)**：每行一个 `key=value`，使用 Helm `--set` 语法（如 `image.tag=v2.0.0`、`replicas=3`、`servers[0].port=8080`）。这些值会合并到 YAML values 之上。
-- **force-conflicts**：强制覆盖冲突字段（服务端 Apply）。
-- **wait**：等待所有 Kubernetes 资源就绪后再完成操作。
-- **失败时回滚**：操作失败时自动回滚 Release。
+- **Force Conflicts**：强制覆盖冲突字段（服务端 Apply）。
+- **Wait**：等待所有 Kubernetes 资源就绪后再完成操作。勾选后会出现超时输入框，可配置 Helm 操作超时时间，单位为分钟，默认 5。
+- **Rollback On Failure**：操作失败时自动回滚 Release。
 
-::: tip
-Set values 的优先级高于 YAML values。适合用于快速覆盖少量值，无需修改整个 values 文件。
-:::
+这些选项始终在弹窗中可见，无需展开折叠区域。
 
 ### 异步操作
 

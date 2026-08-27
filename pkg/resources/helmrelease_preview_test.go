@@ -33,7 +33,6 @@ func TestCoalescePreviewBasics(t *testing.T) {
 	tests := []struct {
 		name       string
 		userValues map[string]interface{}
-		setValues  []string
 		wantKey    string
 		wantValue  interface{}
 	}{
@@ -56,46 +55,40 @@ func TestCoalescePreviewBasics(t *testing.T) {
 			wantValue:  80,
 		},
 		{
-			name:       "set values override",
-			userValues: nil,
-			setValues:  []string{"replicaCount=5"},
+			name:       "user override scalar over default",
+			userValues: map[string]interface{}{"replicaCount": 5},
 			wantKey:    "replicaCount",
-			wantValue:  int64(5),
+			wantValue:  5,
 		},
 		{
-			name:       "set values nested override",
-			userValues: nil,
-			setValues:  []string{"image.tag=v3.0.0"},
+			name:       "user override nested over default",
+			userValues: map[string]interface{}{"image": map[string]interface{}{"tag": "v3.0.0"}},
 			wantKey:    "image.tag",
 			wantValue:  "v3.0.0",
 		},
 		{
-			name:       "set values merge with user values",
-			userValues: map[string]interface{}{"replicaCount": 2},
-			setValues:  []string{"image.tag=v4.0.0"},
+			name:       "user values merge scalar and nested",
+			userValues: map[string]interface{}{"replicaCount": 2, "image": map[string]interface{}{"tag": "v4.0.0"}},
 			wantKey:    "image.tag",
 			wantValue:  "v4.0.0",
 		},
 		{
-			name:       "set values override user YAML value",
-			userValues: map[string]interface{}{"replicaCount": 2},
-			setValues:  []string{"replicaCount=7"},
+			name:       "user override replaces previous user value",
+			userValues: map[string]interface{}{"replicaCount": 7},
 			wantKey:    "replicaCount",
-			wantValue:  int64(7),
+			wantValue:  7,
 		},
 		{
-			name:       "user values preserved when set values target different key",
-			userValues: map[string]interface{}{"replicaCount": 4},
-			setValues:  []string{"image.tag=v5.0.0"},
+			name:       "user values preserved when overriding different key",
+			userValues: map[string]interface{}{"replicaCount": 4, "image": map[string]interface{}{"tag": "v5.0.0"}},
 			wantKey:    "replicaCount",
 			wantValue:  4,
 		},
 		{
-			name:       "multiple set values with nested paths",
-			userValues: nil,
-			setValues:  []string{"image.tag=v6.0.0", "service.port=443"},
+			name:       "multiple nested user overrides",
+			userValues: map[string]interface{}{"image": map[string]interface{}{"tag": "v6.0.0"}, "service": map[string]interface{}{"port": 443}},
 			wantKey:    "service.port",
-			wantValue:  int64(443),
+			wantValue:  443,
 		},
 		{
 			name:       "empty user values returns defaults",
@@ -107,10 +100,7 @@ func TestCoalescePreviewBasics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			values, err := mergeSetValues(tt.userValues, tt.setValues)
-			if err != nil {
-				t.Fatalf("mergeSetValues error: %v", err)
-			}
+			values := tt.userValues
 			if values == nil {
 				values = map[string]interface{}{}
 			}

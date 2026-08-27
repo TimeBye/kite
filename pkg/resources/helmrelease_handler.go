@@ -23,7 +23,6 @@ import (
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	release "helm.sh/helm/v4/pkg/release/v1"
 	"helm.sh/helm/v4/pkg/storage/driver"
-	"helm.sh/helm/v4/pkg/strvals"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2"
@@ -41,25 +40,11 @@ type helmReleaseRunResult struct {
 	release *release.Release
 }
 
-// mergeSetValues merges --set style key=value pairs into the values map.
-// Each entry follows Helm --set syntax, e.g. "image.tag=v2", "replicas=3".
-func mergeSetValues(values map[string]interface{}, setValues []string) (map[string]interface{}, error) {
-	if len(setValues) == 0 {
-		return values, nil
+func resolveHelmTimeout(minutes int) time.Duration {
+	if minutes > 0 {
+		return time.Duration(minutes) * time.Minute
 	}
-	if values == nil {
-		values = map[string]interface{}{}
-	}
-	for _, sv := range setValues {
-		sv = strings.TrimSpace(sv)
-		if sv == "" {
-			continue
-		}
-		if err := strvals.ParseInto(sv, values); err != nil {
-			return nil, fmt.Errorf("invalid set value %q: %w", sv, err)
-		}
-	}
-	return values, nil
+	return helmActionTimeout
 }
 
 type helmReleaseInstallRequest struct {
@@ -69,12 +54,12 @@ type helmReleaseInstallRequest struct {
 	RepositoryName    string                 `json:"repositoryName"`
 	Source            string                 `json:"source"`
 	Values            map[string]interface{} `json:"values"`
-	SetValues         []string               `json:"setValues"`
 	Description       string                 `json:"description"`
 	CreateNamespace   bool                   `json:"createNamespace"`
 	Wait              bool                   `json:"wait"`
 	ForceConflicts    bool                   `json:"forceConflicts"`
 	RollbackOnFailure bool                   `json:"rollbackOnFailure"`
+	TimeoutMinutes    int                    `json:"timeoutMinutes"`
 }
 
 func NewHelmReleaseHandler() *HelmReleaseHandler    { return &HelmReleaseHandler{} }
@@ -129,7 +114,7 @@ func (h *HelmReleaseHandler) Create(c *gin.Context) {
 		return
 	}
 
-	taskMgr.Start(task.ID, helmActionTimeout+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
+	taskMgr.Start(task.ID, resolveHelmTimeout(req.TimeoutMinutes)+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
 		repository, err := helmutil.ResolveChartRepository(req.RepositoryName, req.Source)
 		if err != nil {
 			return "", fmt.Errorf("repository not found")
@@ -142,14 +127,11 @@ func (h *HelmReleaseHandler) Create(c *gin.Context) {
 		if err != nil {
 			return "", err
 		}
-		values, err := mergeSetValues(req.Values, req.SetValues)
-		if err != nil {
-			return "", err
-		}
+		values := req.Values
 		rel, err := helmutil.InstallRelease(ctx, cfg, loadedChart, values, helmutil.InstallReleaseOptions{
 			ReleaseName:       req.ReleaseName,
 			Namespace:         namespace,
-			Timeout:           helmActionTimeout,
+			Timeout:           resolveHelmTimeout(req.TimeoutMinutes),
 			Description:       "Install requested from Kite",
 			CreateNamespace:   req.CreateNamespace,
 			Wait:              req.Wait,
@@ -218,10 +200,7 @@ func (h *HelmReleaseHandler) runInstall(c *gin.Context, dryRun bool) (rel *relea
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
-	values, err := mergeSetValues(req.Values, req.SetValues)
-	if err != nil {
-		return nil, http.StatusBadRequest, err
-	}
+	values := req.Values
 	description := req.Description
 	if description == "" {
 		description = "Install requested from Kite"
@@ -233,7 +212,7 @@ func (h *HelmReleaseHandler) runInstall(c *gin.Context, dryRun bool) (rel *relea
 	rel, err = helmutil.InstallRelease(ctx, cfg, loadedChart, values, helmutil.InstallReleaseOptions{
 		ReleaseName:       req.ReleaseName,
 		Namespace:         namespace,
-		Timeout:           helmActionTimeout,
+		Timeout:           resolveHelmTimeout(req.TimeoutMinutes),
 		Description:       description,
 		CreateNamespace:   req.CreateNamespace,
 		DryRun:            dryRun,
@@ -377,11 +356,11 @@ type helmReleaseActionRequest struct {
 	RepositoryName    string                 `json:"repositoryName"`
 	Source            string                 `json:"source"`
 	Values            map[string]interface{} `json:"values"`
-	SetValues         []string               `json:"setValues"`
 	Description       string                 `json:"description"`
 	ForceConflicts    bool                   `json:"forceConflicts"`
 	Wait              bool                   `json:"wait"`
 	RollbackOnFailure bool                   `json:"rollbackOnFailure"`
+	TimeoutMinutes    int                    `json:"timeoutMinutes"`
 }
 
 func (h *HelmReleaseHandler) Upgrade(c *gin.Context) {
@@ -402,7 +381,7 @@ func (h *HelmReleaseHandler) Upgrade(c *gin.Context) {
 		return
 	}
 
-	taskMgr.Start(task.ID, helmActionTimeout+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
+	taskMgr.Start(task.ID, resolveHelmTimeout(req.TimeoutMinutes)+time.Minute, func(ctx context.Context, t model.HelmTask) (string, error) {
 		cfg, err := helmutil.NewActionConfig(cs.K8sClient.Configuration, helmutil.StorageNamespace(namespace))
 		if err != nil {
 			return "", err
@@ -430,10 +409,7 @@ func (h *HelmReleaseHandler) Upgrade(c *gin.Context) {
 			}
 		}
 
-		values, err := mergeSetValues(req.Values, req.SetValues)
-		if err != nil {
-			return "", err
-		}
+		values := req.Values
 		description := req.Description
 		if description == "" {
 			description = "Upgrade requested from Kite"
@@ -441,8 +417,8 @@ func (h *HelmReleaseHandler) Upgrade(c *gin.Context) {
 
 		rel, err := helmutil.UpgradeRelease(ctx, cfg, name, chartToUpgrade, values, helmutil.UpgradeReleaseOptions{
 			Namespace:         namespace,
-			Timeout:           helmActionTimeout,
-			ReuseValues:       req.Values == nil && len(req.SetValues) == 0,
+			Timeout:           resolveHelmTimeout(req.TimeoutMinutes),
+			ReuseValues:       req.Values == nil,
 			Description:       description,
 			ForceConflicts:    req.ForceConflicts,
 			RollbackOnFailure: req.RollbackOnFailure,
@@ -511,10 +487,7 @@ func (h *HelmReleaseHandler) runUpgrade(c *gin.Context, dryRun bool) (result hel
 		}
 	}
 
-	values, err := mergeSetValues(req.Values, req.SetValues)
-	if err != nil {
-		return helmReleaseRunResult{}, http.StatusBadRequest, err
-	}
+	values := req.Values
 	description := req.Description
 	if description == "" {
 		description = "Dry run upgrade requested from Kite"
@@ -525,8 +498,8 @@ func (h *HelmReleaseHandler) runUpgrade(c *gin.Context, dryRun bool) (result hel
 
 	rel, err := helmutil.UpgradeRelease(ctx, cfg, name, chartToUpgrade, values, helmutil.UpgradeReleaseOptions{
 		Namespace:         namespace,
-		Timeout:           helmActionTimeout,
-		ReuseValues:       req.Values == nil && len(req.SetValues) == 0,
+		Timeout:           resolveHelmTimeout(req.TimeoutMinutes),
+		ReuseValues:       req.Values == nil,
 		Description:       description,
 		ForceConflicts:    req.ForceConflicts,
 		RollbackOnFailure: req.RollbackOnFailure,
@@ -541,7 +514,7 @@ func (h *HelmReleaseHandler) runUpgrade(c *gin.Context, dryRun bool) (result hel
 }
 
 // PreviewUpgradeValues computes the coalesced values (chart defaults merged
-// with user-provided values and --set overrides) for an upgrade without
+// with user-provided values) for an upgrade without
 // actually performing the upgrade.
 func (h *HelmReleaseHandler) PreviewUpgradeValues(c *gin.Context) {
 	namespace, name := c.Param("namespace"), c.Param("name")
@@ -584,11 +557,7 @@ func (h *HelmReleaseHandler) PreviewUpgradeValues(c *gin.Context) {
 		}
 	}
 
-	values, err := mergeSetValues(req.Values, req.SetValues)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	values := req.Values
 
 	merged, err := util.CoalesceValues(chartToUpgrade, values)
 	if err != nil {
@@ -604,7 +573,7 @@ func (h *HelmReleaseHandler) PreviewUpgradeValues(c *gin.Context) {
 }
 
 // PreviewInstallValues computes the coalesced values (chart defaults merged
-// with user-provided values and --set overrides) for an install without
+// with user-provided values) for an install without
 // actually performing the install.
 func (h *HelmReleaseHandler) PreviewInstallValues(c *gin.Context) {
 	namespace := strings.TrimSpace(c.Param("namespace"))
@@ -633,11 +602,7 @@ func (h *HelmReleaseHandler) PreviewInstallValues(c *gin.Context) {
 		return
 	}
 
-	values, err := mergeSetValues(req.Values, req.SetValues)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+	values := req.Values
 
 	merged, err := util.CoalesceValues(loadedChart, values)
 	if err != nil {

@@ -1669,6 +1669,7 @@
     "actions": {
       "backToValues": "上一步",
       "dryRun": "Dry Run",
+      "preview": "预览",
       "upgrade": "升级",
       "rollback": "回滚",
       "autoUpgrade": "自动升级"
@@ -1683,6 +1684,7 @@
       "createNamespace": "创建 Namespace",
       "dryRunPreview": "Dry Run 预览",
       "mergedPreview": "合并值预览",
+      "valuesDiff": "值差异",
       "ignoreLabelsAnnotationsChanges": "忽略标签/注解变更（仅 Diff）",
       "forceConflicts": "force-conflicts",
       "wait": "wait",

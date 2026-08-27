@@ -240,12 +240,12 @@ export interface HelmReleaseInstallRequest {
   repositoryName?: string
   source?: 'repository' | 'artifacthub'
   values?: Record<string, unknown>
-  setValues?: string[]
   description?: string
   createNamespace?: boolean
   wait?: boolean
   forceConflicts?: boolean
   rollbackOnFailure?: boolean
+  timeoutMinutes?: number
 }
 
 export interface HelmReleaseUpgradeRequest {
@@ -253,11 +253,11 @@ export interface HelmReleaseUpgradeRequest {
   repositoryName?: string
   source?: 'repository' | 'artifacthub'
   values?: Record<string, unknown>
-  setValues?: string[]
   description?: string
   forceConflicts?: boolean
   wait?: boolean
   rollbackOnFailure?: boolean
+  timeoutMinutes?: number
 }
 
 export interface HelmReleaseAutoUpgrade {

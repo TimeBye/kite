@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import * as yaml from 'js-yaml'
-import { ChevronDown, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -25,11 +25,6 @@ import { formatDate, translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -46,9 +41,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { MonacoDiffEditor } from '@/lib/monaco-loader'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
-import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { YamlFileTreeViewerNative as YamlFileTreeViewer } from '@/components/yaml-file-tree-viewer-native'
 
 function defaultReleaseName(name: string) {
@@ -75,9 +71,8 @@ export function HelmInstallDialog({
     defaultReleaseName(chart.name)
   )
   const [namespace, setNamespace] = useState('default')
-  const [createNamespace, setCreateNamespace] = useState(true)
   const [valuesYaml, setValuesYaml] = useState('')
-  const [setValuesStr, setSetValuesStr] = useState('')
+  const [timeoutMinutes, setTimeoutMinutes] = useState('')
   const [wait, setWait] = useState(false)
   const [forceConflicts, setForceConflicts] = useState(false)
   const [rollbackOnFailure, setRollbackOnFailure] = useState(false)
@@ -87,6 +82,7 @@ export function HelmInstallDialog({
   const [isDryRunning, setIsDryRunning] = useState(false)
   const [dryRunPreview, setDryRunPreview] =
     useState<HelmReleaseDryRunResponse | null>(null)
+  const [valuesPreview, setValuesPreview] = useState(false)
   const [mergedPreview, setMergedPreview] = useState('')
   const [isMergedLoading, setIsMergedLoading] = useState(false)
   const [mergedError, setMergedError] = useState('')
@@ -137,7 +133,6 @@ export function HelmInstallDialog({
       (ns) => ns.metadata?.name === namespace.trim()
     )
   }, [namespaces, namespace])
-  const showCreateNamespace = !dryRunPreview && !namespaceExists && !!namespace.trim()
   const readableError = error.replace(/\s&&\s/g, '\n')
 
   const buildInstallRequest = (): {
@@ -175,22 +170,18 @@ export function HelmInstallDialog({
     }
 
     const targetNamespace = namespace.trim()
-    const setValues = setValuesStr
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
     const request = {
       releaseName: releaseName.trim(),
       namespace: targetNamespace,
       chartUrl: activeChartUrl,
       repositoryName: chart.repositoryName,
       source: chart.source,
-      createNamespace: !namespaceExists && createNamespace,
+      createNamespace: !namespaceExists,
       values,
-      setValues: setValues.length > 0 ? setValues : undefined,
       wait,
       forceConflicts,
       rollbackOnFailure,
+      timeoutMinutes: timeoutMinutes ? Number(timeoutMinutes) : undefined,
     }
 
     return { targetNamespace, request }
@@ -235,7 +226,7 @@ export function HelmInstallDialog({
       clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, dryRunPreview, valuesYaml, setValuesStr, activeChartUrl])
+  }, [open, dryRunPreview, valuesYaml, activeChartUrl])
 
   const handleDryRun = async () => {
     const payload = buildInstallRequest()
@@ -371,7 +362,7 @@ export function HelmInstallDialog({
 
           <div
             className={
-              dryRunPreview
+              dryRunPreview || valuesPreview
                 ? 'flex min-h-0 flex-1 flex-col gap-4 overflow-hidden pr-1'
                 : 'min-h-0 flex-1 space-y-4 overflow-y-auto pr-1'
             }
@@ -388,7 +379,9 @@ export function HelmInstallDialog({
                     setReleaseName(event.target.value)
                     setDryRunPreview(null)
                   }}
-                  disabled={isInstalling || isDryRunning || !!dryRunPreview}
+                  disabled={
+                    isInstalling || isDryRunning || !!dryRunPreview || valuesPreview
+                  }
                   required
                 />
               </div>
@@ -404,31 +397,14 @@ export function HelmInstallDialog({
                       setNamespace(value)
                       setDryRunPreview(null)
                     }}
-                    disabled={isInstalling || isDryRunning || !!dryRunPreview}
+                    disabled={
+                      isInstalling || isDryRunning || !!dryRunPreview || valuesPreview
+                    }
                     triggerClassName="w-full sm:w-48 sm:min-w-0"
                     modal
                     allowCreate
                   />
                 </div>
-                {showCreateNamespace ? (
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="helm-create-namespace"
-                      checked={createNamespace}
-                      onCheckedChange={(value) => {
-                        setCreateNamespace(value === true)
-                        setDryRunPreview(null)
-                      }}
-                      disabled={isInstalling || isDryRunning}
-                    />
-                    <Label
-                      htmlFor="helm-create-namespace"
-                      className="text-sm font-normal text-muted-foreground"
-                    >
-                      {t('helm.fields.createNamespace')}
-                    </Label>
-                  </div>
-                ) : null}
               </div>
 
               <div className="grid gap-2">
@@ -440,7 +416,9 @@ export function HelmInstallDialog({
                       setSelectedVersion(value)
                       setDryRunPreview(null)
                     }}
-                    disabled={isInstalling || isDryRunning || !!dryRunPreview}
+                    disabled={
+                      isInstalling || isDryRunning || !!dryRunPreview || valuesPreview
+                    }
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -512,8 +490,61 @@ export function HelmInstallDialog({
                 emptyMessage={t('helm.messages.noDryRunResources')}
                 fillHeight
               />
+            ) : valuesPreview ? (
+              <div className="flex min-h-0 flex-1 flex-col gap-2">
+                <Tabs defaultValue="merged">
+                  <TabsList>
+                    <TabsTrigger value="merged">
+                      {t('helm.fields.mergedPreview')}
+                    </TabsTrigger>
+                    <TabsTrigger value="diff">
+                      {t('helm.fields.valuesDiff')}
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="merged" className="min-h-0 flex-1">
+                    {mergedError ? (
+                      <p className="text-sm text-destructive">{mergedError}</p>
+                    ) : (
+                      <SimpleYamlEditor
+                        value={mergedPreview}
+                        onChange={() => undefined}
+                        disabled
+                        height="calc(100dvh - 22rem)"
+                      />
+                    )}
+                  </TabsContent>
+                  <TabsContent value="diff" className="min-h-0 flex-1">
+                    {mergedError ? (
+                      <p className="text-sm text-destructive">{mergedError}</p>
+                    ) : (
+                      <div className="h-[calc(100dvh-22rem)] overflow-hidden rounded-md border">
+                        <MonacoDiffEditor
+                          height="100%"
+                          language="yaml"
+                          original={defaultValues}
+                          modified={mergedPreview}
+                          theme="vs"
+                          options={{
+                            readOnly: true,
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            wordWrap: 'on',
+                            lineNumbers: 'on',
+                            folding: true,
+                            fontSize: 14,
+                            renderSideBySide: true,
+                            enableSplitViewResizing: true,
+                            ignoreTrimWhitespace: false,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </div>
             ) : (
-              <div className="grid min-h-0 gap-4 lg:grid-cols-3">
+              <div className="grid min-h-0 gap-4 lg:grid-cols-2">
                 <div className="grid min-h-0 gap-2">
                   <Label>{t('helmCharts.fields.defaultValues')}</Label>
                   <SimpleYamlEditor
@@ -536,28 +567,6 @@ export function HelmInstallDialog({
                     height="calc(100dvh - 20rem)"
                   />
                 </div>
-
-                <div className="grid min-h-0 gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>{t('helm.fields.mergedPreview')}</Label>
-                    {isMergedLoading ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                        <Loader2 className="size-3 animate-spin" />
-                        {t('common.messages.loading')}
-                      </span>
-                    ) : null}
-                  </div>
-                  {mergedError ? (
-                    <p className="text-sm text-destructive">{mergedError}</p>
-                  ) : (
-                    <SimpleYamlEditor
-                      value={mergedPreview}
-                      onChange={() => undefined}
-                      disabled
-                      height="calc(100dvh - 20rem)"
-                    />
-                  )}
-                </div>
               </div>
             )}
 
@@ -568,68 +577,59 @@ export function HelmInstallDialog({
             ) : null}
           </div>
 
-          {!dryRunPreview ? (
-            <Collapsible>
-              <CollapsibleTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-                <ChevronDown className="size-4" />
-                {t('helm.fields.advancedSettings')}
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-3 space-y-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="helm-install-set-values">
-                    {t('helm.fields.setValues')}
-                  </Label>
-                  <Textarea
-                    id="helm-install-set-values"
-                    value={setValuesStr}
-                    onChange={(e) => setSetValuesStr(e.target.value)}
-                    disabled={isInstalling || isDryRunning}
-                    placeholder={t('helm.placeholders.setValues')}
-                    className="min-h-[80px] font-mono text-sm"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <Label
-                    htmlFor="helm-install-force-conflicts"
-                    className="flex items-center gap-2 font-normal text-muted-foreground"
-                  >
-                    <Checkbox
-                      id="helm-install-force-conflicts"
-                      checked={forceConflicts}
-                      onCheckedChange={(value) => setForceConflicts(value === true)}
-                      disabled={isInstalling || isDryRunning}
-                    />
-                    {t('helm.fields.forceConflicts')}
-                  </Label>
-                  <Label
-                    htmlFor="helm-install-wait"
-                    className="flex items-center gap-2 font-normal text-muted-foreground"
-                  >
-                    <Checkbox
-                      id="helm-install-wait"
-                      checked={wait}
-                      onCheckedChange={(value) => setWait(value === true)}
-                      disabled={isInstalling || isDryRunning}
-                    />
-                    {t('helm.fields.wait')}
-                  </Label>
-                  <Label
-                    htmlFor="helm-install-rollback-on-failure"
-                    className="flex items-center gap-2 font-normal text-muted-foreground"
-                  >
-                    <Checkbox
-                      id="helm-install-rollback-on-failure"
-                      checked={rollbackOnFailure}
-                      onCheckedChange={(value) =>
-                        setRollbackOnFailure(value === true)
-                      }
-                      disabled={isInstalling || isDryRunning}
-                    />
-                    {t('helm.fields.rollbackOnFailure')}
-                  </Label>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+          {!dryRunPreview && !valuesPreview ? (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+              <Label
+                htmlFor="helm-install-force-conflicts"
+                className="flex items-center gap-2 font-normal text-muted-foreground"
+              >
+                <Checkbox
+                  id="helm-install-force-conflicts"
+                  checked={forceConflicts}
+                  onCheckedChange={(value) => setForceConflicts(value === true)}
+                  disabled={isInstalling || isDryRunning}
+                />
+                {t('helm.fields.forceConflicts')}
+              </Label>
+              <Label
+                htmlFor="helm-install-wait"
+                className="flex items-center gap-2 font-normal text-muted-foreground"
+              >
+                <Checkbox
+                  id="helm-install-wait"
+                  checked={wait}
+                  onCheckedChange={(value) => setWait(value === true)}
+                  disabled={isInstalling || isDryRunning}
+                />
+                {t('helm.fields.wait')}
+              </Label>
+              {wait ? (
+                <Input
+                  id="helm-install-timeout"
+                  type="number"
+                  min={1}
+                  value={timeoutMinutes}
+                  onChange={(e) => setTimeoutMinutes(e.target.value)}
+                  disabled={isInstalling || isDryRunning}
+                  placeholder="5"
+                  className="h-8 w-20"
+                />
+              ) : null}
+              <Label
+                htmlFor="helm-install-rollback-on-failure"
+                className="flex items-center gap-2 font-normal text-muted-foreground"
+              >
+                <Checkbox
+                  id="helm-install-rollback-on-failure"
+                  checked={rollbackOnFailure}
+                  onCheckedChange={(value) =>
+                    setRollbackOnFailure(value === true)
+                  }
+                  disabled={isInstalling || isDryRunning}
+                />
+                {t('helm.fields.rollbackOnFailure')}
+              </Label>
+            </div>
           ) : null}
 
           <DialogFooter className="items-center gap-3 sm:justify-end">
@@ -639,6 +639,15 @@ export function HelmInstallDialog({
                   type="button"
                   variant="outline"
                   onClick={() => setDryRunPreview(null)}
+                  disabled={isInstalling || isDryRunning}
+                >
+                  {t('helm.actions.backToValues')}
+                </Button>
+              ) : valuesPreview ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setValuesPreview(false)}
                   disabled={isInstalling || isDryRunning}
                 >
                   {t('helm.actions.backToValues')}
@@ -653,11 +662,33 @@ export function HelmInstallDialog({
                   {t('common.actions.cancel')}
                 </Button>
               )}
+              {!dryRunPreview && !valuesPreview ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setValuesPreview(true)}
+                  disabled={
+                    !releaseName.trim() ||
+                    !namespace.trim() ||
+                    !activeChartUrl ||
+                    isInstalling ||
+                    isDryRunning ||
+                    isMergedLoading
+                  }
+                >
+                  {t('helm.actions.preview')}
+                </Button>
+              ) : null}
               {!dryRunPreview ? (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => void handleDryRun()}
+                  onClick={() => {
+                    if (valuesPreview) {
+                      setValuesPreview(false)
+                    }
+                    void handleDryRun()
+                  }}
                   disabled={
                     !releaseName.trim() ||
                     !namespace.trim() ||

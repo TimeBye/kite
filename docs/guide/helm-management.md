@@ -50,38 +50,39 @@ The release detail page shows release status, chart version, values, resources, 
 
 Kite supports dry-run previews before install and upgrade. You can upgrade a release from the detail page, roll back from the history tab, or delete a release to uninstall it from the cluster.
 
-### Values Merge Preview
+### Values Editor
 
-Both install and upgrade dialogs display three columns:
+Both install and upgrade dialogs display two columns:
 
 - **Default Values**: The chart's built-in `values.yaml` (read-only).
 - **Custom Values**: Your overrides, editable as YAML.
-- **Merged Values Preview**: The result of merging chart defaults with your custom values and `--set` overrides, computed using Helm's coalesce logic. This shows exactly what values will be applied to the release.
 
-The merged preview updates automatically (with a short debounce) as you edit custom values or `--set` parameters, so you can verify overrides before running a dry run or install.
+Click the **Preview** button to open a preview view with two tabs:
+
+- **Merged Values**: The result of merging chart defaults with your custom values, computed using Helm's coalesce logic. This shows exactly what values will be applied to the release.
+- **Values Diff**: A side-by-side diff comparing the chart's default values (or current release values for upgrades) with the merged values, rendered in a Monaco diff editor. This helps you quickly spot what your overrides change.
+
+For upgrades, the diff compares the current release values against the merged values so you can see the net effect of your changes before applying them. Click the **Preview** button after editing custom values to refresh the preview.
 
 ### Version Selection in Install Dialog
 
-The install dialog includes a version selector that lists all available chart versions. By default, the latest version is selected. You can choose a different version from the dropdown — Kite will fetch the chart details and default values for the selected version, and the merged values preview updates accordingly.
+The install dialog includes a version selector that lists all available chart versions. By default, the latest version is selected. You can choose a different version from the dropdown — Kite will fetch the chart details and default values for the selected version, and you can click the **Preview** button to view the updated merged values.
 
 The version dropdown shows the version number, AppVersion, and publication date for each entry. The current (default) version is marked with a "Current" label.
 
 ### Namespace Selection in Install Dialog
 
-The install dialog uses a unified namespace selector that combines browsing existing namespaces with creating new ones. You can search for an existing namespace by name, or type a new name and select the "Create" option that appears. When a non-existent namespace is selected, a "Create namespace" checkbox appears inline, allowing Helm to create the namespace during installation. Selecting an existing namespace hides the checkbox since creation is unnecessary.
+The install dialog uses a unified namespace selector that combines browsing existing namespaces with creating new ones. You can search for an existing namespace by name, or type a new name and select the "Create" option that appears. When a non-existent namespace is selected, Kite automatically sets `createNamespace: true` so Helm creates the namespace during installation. Selecting an existing namespace does not trigger namespace creation.
 
-### Set Values and Advanced Options
+### Advanced Options
 
-Both install and upgrade dialogs support Helm `--set` values for quick overrides without editing YAML. Click **Advanced settings** in the dialog to expand the section:
+Both install and upgrade dialogs expose the following Helm options inline at the bottom of the dialog, above the action buttons:
 
-- **Set values (--set)**: Enter one `key=value` per line, using Helm `--set` syntax (e.g. `image.tag=v2.0.0`, `replicas=3`, `servers[0].port=8080`). These are merged on top of the YAML values.
-- **force-conflicts**: Force-apply changes by overwriting conflicting fields (server-side apply).
-- **wait**: Wait for all Kubernetes resources to be ready before completing.
-- **Rollback on failure**: Automatically roll back the release if the operation fails.
+- **Force Conflicts**: Force-apply changes by overwriting conflicting fields (server-side apply).
+- **Wait**: Wait for all Kubernetes resources to be ready before completing. When checked, a timeout input field appears where you can configure the Helm action timeout in minutes (default 5).
+- **Rollback On Failure**: Automatically roll back the release if the operation fails.
 
-::: tip
-Set values take precedence over YAML values. Use them for quick overrides without modifying the full values file.
-:::
+These options are always visible in the dialog without needing to expand a collapsible section.
 
 ### Asynchronous Operations
 

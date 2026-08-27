@@ -1635,6 +1635,7 @@
     "actions": {
       "backToValues": "Back",
       "dryRun": "Dry Run",
+      "preview": "Preview",
       "upgrade": "Upgrade",
       "rollback": "Rollback",
       "autoUpgrade": "Auto upgrade"
@@ -1649,6 +1650,7 @@
       "createNamespace": "Create namespace",
       "dryRunPreview": "Dry run preview",
       "mergedPreview": "Merged values preview",
+      "valuesDiff": "Values diff",
       "ignoreLabelsAnnotationsChanges": "Ignore labels/annotations changes (diff only)",
       "forceConflicts": "force-conflicts",
       "wait": "wait",
