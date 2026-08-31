@@ -13,6 +13,7 @@ import (
 	"github.com/zxh326/kite/pkg/model"
 	"helm.sh/helm/v4/pkg/chart/common"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
+	"helm.sh/helm/v4/pkg/registry"
 	repo "helm.sh/helm/v4/pkg/repo/v1"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
@@ -115,6 +116,14 @@ func (h *HelmChartHandler) GetChart(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if content.Metadata != nil && registry.IsOCI(repository.URL) {
+		metadata := *content.Metadata
+		metadata.Name = entry.Name
+		metadata.Version = entry.Version
+		clone := *entry
+		clone.Metadata = &metadata
+		entry = &clone
 	}
 
 	versions := []helmChartVersion{}
