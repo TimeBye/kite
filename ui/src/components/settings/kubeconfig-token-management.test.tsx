@@ -16,9 +16,16 @@ const { deleteAdminKubeconfigToken, useAdminKubeconfigTokens } = vi.hoisted(
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, defaultValueOrOptions?: string | Record<string, unknown>) => {
-      if (typeof defaultValueOrOptions === 'string') return defaultValueOrOptions
-      if (typeof defaultValueOrOptions === 'object' && defaultValueOrOptions !== null) {
+    t: (
+      key: string,
+      defaultValueOrOptions?: string | Record<string, unknown>
+    ) => {
+      if (typeof defaultValueOrOptions === 'string')
+        return defaultValueOrOptions
+      if (
+        typeof defaultValueOrOptions === 'object' &&
+        defaultValueOrOptions !== null
+      ) {
         const opts = defaultValueOrOptions as Record<string, unknown>
         let result = (opts.defaultValue as string) ?? key
         for (const [k, v] of Object.entries(opts)) {
@@ -139,21 +146,13 @@ describe('KubeconfigTokenManagement', () => {
     renderManagement()
     const user = userEvent.setup()
 
-    expect(
-      screen.getByRole('button', { name: /previousPage/ })
-    ).toBeDisabled()
-    expect(
-      screen.getByRole('button', { name: /nextPage/ })
-    ).toBeEnabled()
+    expect(screen.getByRole('button', { name: /previousPage/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /nextPage/ })).toBeEnabled()
 
     await user.click(screen.getByRole('button', { name: /nextPage/ }))
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /previousPage/ })
-      ).toBeEnabled()
-      expect(
-        screen.getByRole('button', { name: /nextPage/ })
-      ).toBeDisabled()
+      expect(screen.getByRole('button', { name: /previousPage/ })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /nextPage/ })).toBeDisabled()
       expect(screen.getByText('resourceTable.page')).toBeInTheDocument()
     })
   })

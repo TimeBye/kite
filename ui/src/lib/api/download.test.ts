@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { apiClient } from '../api-client'
+import {
+  downloadBatchYAML,
+  downloadSingleYAML,
+  triggerBrowserDownload,
+} from './core'
+
 vi.mock('../api-client', () => ({
   apiClient: {
     get: vi.fn(),
@@ -19,13 +26,6 @@ vi.mock('@/hooks/use-cluster', () => ({
 vi.mock('@/i18n', () => ({
   default: { t: (key: string) => key },
 }))
-
-import { apiClient } from '../api-client'
-import {
-  downloadSingleYAML,
-  downloadBatchYAML,
-  triggerBrowserDownload,
-} from './core'
 
 function makeMockResponse(
   ok: boolean,

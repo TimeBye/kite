@@ -116,7 +116,9 @@ export function CRListPage() {
   }
 
   if (!crdData) {
-    return <div>{t('errors.crdNameRequired', 'Error: CRD name is required')}</div>
+    return (
+      <div>{t('errors.crdNameRequired', 'Error: CRD name is required')}</div>
+    )
   }
 
   return (

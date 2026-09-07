@@ -18,7 +18,6 @@ import {
 } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { UserDisplayName } from '@/components/user-display-name'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import {
@@ -28,8 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { ResourceTableView } from '@/components/resource-table-view'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
+import { ResourceTableView } from '@/components/resource-table-view'
+import { UserDisplayName } from '@/components/user-display-name'
 
 export function KubeconfigTokenManagement() {
   const { t } = useTranslation()
@@ -136,7 +136,10 @@ export function KubeconfigTokenManagement() {
             <Button
               variant="ghost"
               size="icon"
-              disabled={deleteMutation.isPending && tokenToDelete?.id === row.original.id}
+              disabled={
+                deleteMutation.isPending &&
+                tokenToDelete?.id === row.original.id
+              }
               aria-label={t('kubeconfigTokens.delete', 'Delete')}
               onClick={() => setTokenToDelete(row.original)}
             >

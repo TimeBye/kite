@@ -35,6 +35,7 @@ import {
   useResourcesWatch,
 } from '@/lib/api'
 import { getCRDResourcePath } from '@/lib/k8s'
+import { MonacoDiffEditor } from '@/lib/monaco-loader'
 import {
   getResourceDetailPath,
   resourceMetadataList,
@@ -68,6 +69,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { HelmChartIcon } from '@/components/helm-chart-icon'
 import { LogViewer } from '@/components/log-viewer'
 import {
@@ -78,8 +80,6 @@ import { PodStatusIcon } from '@/components/pod-status-icon'
 import { ResourceIframeDialogContent } from '@/components/resource-iframe-dialog-content'
 import { SimpleTable } from '@/components/simple-table'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
-import { MonacoDiffEditor } from '@/lib/monaco-loader'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WorkloadSummaryCard } from '@/components/workload-overview-parts'
 import { WorkloadPodsCard } from '@/components/workload-pods-card'
 import { YamlEditor } from '@/components/yaml-editor'
@@ -1356,7 +1356,10 @@ function UpgradeHelmReleaseDialog({
               <HelmReleaseChartSelector
                 selection={chartSelection}
                 disabled={
-                  isUpgrading || isDryRunning || !!dryRunPreview || valuesPreview
+                  isUpgrading ||
+                  isDryRunning ||
+                  !!dryRunPreview ||
+                  valuesPreview
                 }
                 detailVersion={activeVersion}
                 className="md:max-w-xl"

@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type SubmitEvent,
-} from 'react'
+import { useEffect, useMemo, useRef, useState, type SubmitEvent } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import {
   ColumnFiltersState,
@@ -661,13 +655,18 @@ export function HelmChartListPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    aria-label={t('helmCharts.actions.toggleColumns', 'Toggle columns')}
+                    aria-label={t(
+                      'helmCharts.actions.toggleColumns',
+                      'Toggle columns'
+                    )}
                   >
                     <Settings2 className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>{t('helmCharts.actions.toggleColumns', 'Toggle columns')}</DropdownMenuLabel>
+                  <DropdownMenuLabel>
+                    {t('helmCharts.actions.toggleColumns', 'Toggle columns')}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {table
                     .getAllLeafColumns()

@@ -60,16 +60,17 @@ export function SiteHeader() {
                 <TerminalSquare className="h-5 w-5" />
               </button>
             )}
-            {user && clusters.some((cluster) => cluster.enabled && cluster.uuid) && (
-              <button
-                onClick={() => setKubeconfigDialogOpen(true)}
-                title="Download Kubeconfig"
-                aria-label="Download Kubeconfig"
-                className="flex items-center justify-center rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Download className="h-5 w-5" />
-              </button>
-            )}
+            {user &&
+              clusters.some((cluster) => cluster.enabled && cluster.uuid) && (
+                <button
+                  onClick={() => setKubeconfigDialogOpen(true)}
+                  title="Download Kubeconfig"
+                  aria-label="Download Kubeconfig"
+                  className="flex items-center justify-center rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Download className="h-5 w-5" />
+                </button>
+              )}
             {!isMobile && (
               <>
                 <Separator

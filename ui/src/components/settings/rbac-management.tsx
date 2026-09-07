@@ -27,7 +27,6 @@ import {
   useUserList,
 } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { UserDisplayName } from '@/components/user-display-name'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DropdownMenu,
@@ -37,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { DeleteConfirmationDialog } from '@/components/delete-confirmation-dialog'
 import { ResourceTableView } from '@/components/resource-table-view'
+import { UserDisplayName } from '@/components/user-display-name'
 
 import { Action } from '../action-table'
 import { Badge } from '../ui/badge'
@@ -52,10 +52,11 @@ export function RBACManagement() {
     pageSize: 20,
   })
 
-  const { data: roleData, isLoading, error } = useRoleListPaginated(
-    pagination.pageIndex + 1,
-    pagination.pageSize
-  )
+  const {
+    data: roleData,
+    isLoading,
+    error,
+  } = useRoleListPaginated(pagination.pageIndex + 1, pagination.pageSize)
   const roles = roleData?.data ?? []
 
   const { data: userListData } = useUserList(1, 200)
@@ -416,10 +417,7 @@ export function RBACManagement() {
       if (assigningRole?.id === roleId && resp?.assignment) {
         setAssigningRole({
           ...assigningRole,
-          assignments: [
-            ...(assigningRole.assignments || []),
-            resp.assignment,
-          ],
+          assignments: [...(assigningRole.assignments || []), resp.assignment],
         })
       }
 
@@ -451,11 +449,7 @@ export function RBACManagement() {
         setAssigningRole({
           ...assigningRole,
           assignments: (assigningRole.assignments || []).filter(
-            (a) =>
-              !(
-                a.subjectType === subjectType &&
-                a.subject === subject
-              )
+            (a) => !(a.subjectType === subjectType && a.subject === subject)
           ),
         })
       }

@@ -634,7 +634,10 @@ export function UserManagement() {
               />
               {editingUser?.nameSource && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {t('userManagement.managedByProvider', 'Managed by authentication provider')}
+                  {t(
+                    'userManagement.managedByProvider',
+                    'Managed by authentication provider'
+                  )}
                 </p>
               )}
             </div>
@@ -655,7 +658,10 @@ export function UserManagement() {
               />
               {editingUser?.emailSource && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {t('userManagement.managedByProvider', 'Managed by authentication provider')}
+                  {t(
+                    'userManagement.managedByProvider',
+                    'Managed by authentication provider'
+                  )}
                 </p>
               )}
             </div>
@@ -675,7 +681,10 @@ export function UserManagement() {
               />
               {editingUser?.avatarUrlSource && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {t('userManagement.managedByProvider', 'Managed by authentication provider')}
+                  {t(
+                    'userManagement.managedByProvider',
+                    'Managed by authentication provider'
+                  )}
                 </p>
               )}
             </div>

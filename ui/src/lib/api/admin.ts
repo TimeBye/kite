@@ -30,9 +30,12 @@ export interface ClusterUpdateRequest extends ClusterCreateRequest {
 
 // Get cluster list for management
 export const fetchClusterList = (): Promise<Cluster[]> => {
-  return fetchAPI<{ data: Cluster[]; total: number; page: number; size: number }>(
-    '/admin/clusters/?page=1&size=200'
-  ).then((response) => response.data)
+  return fetchAPI<{
+    data: Cluster[]
+    total: number
+    page: number
+    size: number
+  }>('/admin/clusters/?page=1&size=200').then((response) => response.data)
 }
 
 export const useClusterList = (options?: {
@@ -60,9 +63,12 @@ export const fetchClusterListPaginated = async (
   if (search) {
     params.set('search', search)
   }
-  return fetchAPI<{ data: Cluster[]; total: number; page: number; size: number }>(
-    `/admin/clusters/?${params.toString()}`
-  )
+  return fetchAPI<{
+    data: Cluster[]
+    total: number
+    page: number
+    size: number
+  }>(`/admin/clusters/?${params.toString()}`)
 }
 
 export const useClusterListPaginated = (
@@ -163,9 +169,14 @@ export interface OAuthProviderUpdateRequest extends Omit<
 
 // Get OAuth provider list for management
 export const fetchOAuthProviderList = (): Promise<OAuthProvider[]> => {
-  return fetchAPI<{ data: OAuthProvider[]; total: number; page: number; size: number }>(
-    '/admin/oauth-providers/?page=1&size=200'
-  ).then((response) => response.data)
+  return fetchAPI<{
+    data: OAuthProvider[]
+    total: number
+    page: number
+    size: number
+  }>('/admin/oauth-providers/?page=1&size=200').then(
+    (response) => response.data
+  )
 }
 
 export const useOAuthProviderList = (options?: { staleTime?: number }) => {
@@ -643,9 +654,12 @@ export const updateLDAPSetting = async (
 }
 
 export const fetchAPIKeyList = async (): Promise<APIKey[]> => {
-  return fetchAPI<{ data: APIKey[]; total: number; page: number; size: number }>(
-    '/admin/apikeys/?page=1&size=200'
-  ).then((response) => response.data)
+  return fetchAPI<{
+    data: APIKey[]
+    total: number
+    page: number
+    size: number
+  }>('/admin/apikeys/?page=1&size=200').then((response) => response.data)
 }
 
 export const useAPIKeyList = (options?: { staleTime?: number }) => {

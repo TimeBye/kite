@@ -343,298 +343,298 @@ export function AuthenticationManagement() {
                 <div className="space-y-1">
                   <Label className="text-sm font-medium">
                     {t('authenticationManagement.ldap.title', 'LDAP')}
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {t(
-                    'authenticationManagement.ldap.description',
-                    'Enable LDAP username/password login and sync groups into RBAC.'
-                  )}
-                </p>
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t(
+                      'authenticationManagement.ldap.description',
+                      'Enable LDAP username/password login and sync groups into RBAC.'
+                    )}
+                  </p>
+                </div>
+                <Switch
+                  disabled={ldapManaged}
+                  checked={formData.enabled}
+                  onCheckedChange={(checked) =>
+                    setFormData((prev) => ({ ...prev, enabled: checked }))
+                  }
+                />
               </div>
-              <Switch
-                disabled={ldapManaged}
-                checked={formData.enabled}
-                onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, enabled: checked }))
-                }
-              />
-            </div>
 
-            {formData.enabled && (
-              <div className="space-y-4 border-t p-3">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="ldap-server-url">
-                      {t(
-                        'authenticationManagement.ldap.form.serverUrl',
-                        'Server URL'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-server-url"
-                      value={formData.serverUrl}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          serverUrl: e.target.value,
-                        }))
-                      }
-                      placeholder="ldaps://ldap.example.com:636"
-                    />
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                      <div>
-                        <Label htmlFor="ldap-starttls" className="text-sm">
-                          {t(
-                            'authenticationManagement.ldap.form.useStartTLS',
-                            'Use StartTLS'
-                          )}
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          {t(
-                            'authenticationManagement.ldap.form.useStartTLSHint',
-                            'Enable StartTLS when using ldap:// endpoints.'
-                          )}
-                        </p>
-                      </div>
-                      <Switch
-                        id="ldap-starttls"
-                        checked={formData.useStartTLS}
-                        onCheckedChange={(checked) =>
+              {formData.enabled && (
+                <div className="space-y-4 border-t p-3">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="ldap-server-url">
+                        {t(
+                          'authenticationManagement.ldap.form.serverUrl',
+                          'Server URL'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-server-url"
+                        value={formData.serverUrl}
+                        onChange={(e) =>
                           setFormData((prev) => ({
                             ...prev,
-                            useStartTLS: checked,
+                            serverUrl: e.target.value,
+                          }))
+                        }
+                        placeholder="ldaps://ldap.example.com:636"
+                      />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                        <div>
+                          <Label htmlFor="ldap-starttls" className="text-sm">
+                            {t(
+                              'authenticationManagement.ldap.form.useStartTLS',
+                              'Use StartTLS'
+                            )}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            {t(
+                              'authenticationManagement.ldap.form.useStartTLSHint',
+                              'Enable StartTLS when using ldap:// endpoints.'
+                            )}
+                          </p>
+                        </div>
+                        <Switch
+                          id="ldap-starttls"
+                          checked={formData.useStartTLS}
+                          onCheckedChange={(checked) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              useStartTLS: checked,
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-bind-dn">
+                        {t(
+                          'authenticationManagement.ldap.form.bindDn',
+                          'Bind DN'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-bind-dn"
+                        value={formData.bindDn}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            bindDn: e.target.value,
+                          }))
+                        }
+                        placeholder="cn=svc-kite,ou=services,dc=example,dc=com"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-bind-password">
+                        {t(
+                          'authenticationManagement.ldap.form.bindPassword',
+                          'Bind Password'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-bind-password"
+                        type="password"
+                        value={formData.bindPassword}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            bindPassword: e.target.value,
+                          }))
+                        }
+                        placeholder={
+                          formData.bindPasswordConfigured
+                            ? t(
+                                'authenticationManagement.ldap.form.bindPasswordPlaceholder',
+                                'Leave empty to keep current bind password'
+                              )
+                            : ''
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-user-base-dn">
+                        {t(
+                          'authenticationManagement.ldap.form.userBaseDn',
+                          'User Base DN'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-user-base-dn"
+                        value={formData.userBaseDn}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            userBaseDn: e.target.value,
+                          }))
+                        }
+                        placeholder="ou=users,dc=example,dc=com"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-user-filter">
+                        {t(
+                          'authenticationManagement.ldap.form.userFilter',
+                          'User Filter'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-user-filter"
+                        value={formData.userFilter}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            userFilter: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-username-attribute">
+                        {t(
+                          'authenticationManagement.ldap.form.usernameAttribute',
+                          'Username Attribute'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-username-attribute"
+                        value={formData.usernameAttribute}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            usernameAttribute: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-display-name-attribute">
+                        {t(
+                          'authenticationManagement.ldap.form.displayNameAttribute',
+                          'Display Name Attribute'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-display-name-attribute"
+                        value={formData.displayNameAttribute}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            displayNameAttribute: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-email-attribute">
+                        {t(
+                          'authenticationManagement.ldap.form.emailAttribute',
+                          'Email Attribute'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-email-attribute"
+                        value={formData.emailAttribute}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            emailAttribute: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-avatar-url-attribute">
+                        {t(
+                          'authenticationManagement.ldap.form.avatarUrlAttribute',
+                          'Avatar URL Attribute'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-avatar-url-attribute"
+                        value={formData.avatarUrlAttribute}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            avatarUrlAttribute: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-group-base-dn">
+                        {t(
+                          'authenticationManagement.ldap.form.groupBaseDn',
+                          'Group Base DN'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-group-base-dn"
+                        value={formData.groupBaseDn}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            groupBaseDn: e.target.value,
+                          }))
+                        }
+                        placeholder="ou=groups,dc=example,dc=com"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-group-filter">
+                        {t(
+                          'authenticationManagement.ldap.form.groupFilter',
+                          'Group Filter'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-group-filter"
+                        value={formData.groupFilter}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            groupFilter: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="ldap-group-name-attribute">
+                        {t(
+                          'authenticationManagement.ldap.form.groupNameAttribute',
+                          'Group Name Attribute'
+                        )}
+                      </Label>
+                      <Input
+                        id="ldap-group-name-attribute"
+                        value={formData.groupNameAttribute}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            groupNameAttribute: e.target.value,
                           }))
                         }
                       />
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-bind-dn">
-                      {t(
-                        'authenticationManagement.ldap.form.bindDn',
-                        'Bind DN'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-bind-dn"
-                      value={formData.bindDn}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          bindDn: e.target.value,
-                        }))
-                      }
-                      placeholder="cn=svc-kite,ou=services,dc=example,dc=com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-bind-password">
-                      {t(
-                        'authenticationManagement.ldap.form.bindPassword',
-                        'Bind Password'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-bind-password"
-                      type="password"
-                      value={formData.bindPassword}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          bindPassword: e.target.value,
-                        }))
-                      }
-                      placeholder={
-                        formData.bindPasswordConfigured
-                          ? t(
-                              'authenticationManagement.ldap.form.bindPasswordPlaceholder',
-                              'Leave empty to keep current bind password'
-                            )
-                          : ''
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-user-base-dn">
-                      {t(
-                        'authenticationManagement.ldap.form.userBaseDn',
-                        'User Base DN'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-user-base-dn"
-                      value={formData.userBaseDn}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          userBaseDn: e.target.value,
-                        }))
-                      }
-                      placeholder="ou=users,dc=example,dc=com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-user-filter">
-                      {t(
-                        'authenticationManagement.ldap.form.userFilter',
-                        'User Filter'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-user-filter"
-                      value={formData.userFilter}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          userFilter: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-username-attribute">
-                      {t(
-                        'authenticationManagement.ldap.form.usernameAttribute',
-                        'Username Attribute'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-username-attribute"
-                      value={formData.usernameAttribute}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          usernameAttribute: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-display-name-attribute">
-                      {t(
-                        'authenticationManagement.ldap.form.displayNameAttribute',
-                        'Display Name Attribute'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-display-name-attribute"
-                      value={formData.displayNameAttribute}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          displayNameAttribute: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-email-attribute">
-                      {t(
-                        'authenticationManagement.ldap.form.emailAttribute',
-                        'Email Attribute'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-email-attribute"
-                      value={formData.emailAttribute}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          emailAttribute: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-avatar-url-attribute">
-                      {t(
-                        'authenticationManagement.ldap.form.avatarUrlAttribute',
-                        'Avatar URL Attribute'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-avatar-url-attribute"
-                      value={formData.avatarUrlAttribute}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          avatarUrlAttribute: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-group-base-dn">
-                      {t(
-                        'authenticationManagement.ldap.form.groupBaseDn',
-                        'Group Base DN'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-group-base-dn"
-                      value={formData.groupBaseDn}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          groupBaseDn: e.target.value,
-                        }))
-                      }
-                      placeholder="ou=groups,dc=example,dc=com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-group-filter">
-                      {t(
-                        'authenticationManagement.ldap.form.groupFilter',
-                        'Group Filter'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-group-filter"
-                      value={formData.groupFilter}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          groupFilter: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ldap-group-name-attribute">
-                      {t(
-                        'authenticationManagement.ldap.form.groupNameAttribute',
-                        'Group Name Attribute'
-                      )}
-                    </Label>
-                    <Input
-                      id="ldap-group-name-attribute"
-                      value={formData.groupNameAttribute}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          groupNameAttribute: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
                 </div>
-              </div>
-            )}
+              )}
             </div>
           </fieldset>
 

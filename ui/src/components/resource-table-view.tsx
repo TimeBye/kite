@@ -311,9 +311,7 @@ export function ResourceTableView<T>({
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
                 >
-                  <span className="sr-only">
-                    {t('resourceTable.nextPage')}
-                  </span>
+                  <span className="sr-only">{t('resourceTable.nextPage')}</span>
                   →
                 </Button>
               </div>

@@ -263,7 +263,10 @@ export function useAIChat() {
             tool_result.tool_name,
             (message) => ({
               ...message,
-              content: t(`aiChat.toolStatus.${denied ? 'cancelled' : tool_result.is_error ? 'failed' : 'completed'}`, { name: tool_result.tool_name }),
+              content: t(
+                `aiChat.toolStatus.${denied ? 'cancelled' : tool_result.is_error ? 'failed' : 'completed'}`,
+                { name: tool_result.tool_name }
+              ),
               toolResult: tool_result.content,
               actionStatus: denied
                 ? 'denied'
@@ -291,7 +294,9 @@ export function useAIChat() {
           }
           updateToolMessage(tool_call.id, tool_call.name, (message) => ({
             ...message,
-            content: t('aiChat.toolStatus.requiresConfirmation', { name: tool_call.name }),
+            content: t('aiChat.toolStatus.requiresConfirmation', {
+              name: tool_call.name,
+            }),
             pendingAction: {
               tool: tool_call.name,
               args: tool_call.arguments || {},
@@ -334,19 +339,25 @@ export function useAIChat() {
           }
           if (!session_id) {
             appendAssistantError(
-              t('aiChat.toolStatus.missingSessionInput', { name: tool_call.name })
+              t('aiChat.toolStatus.missingSessionInput', {
+                name: tool_call.name,
+              })
             )
             break
           }
           const inputKind = input.kind
           if (inputKind !== 'choice' && inputKind !== 'form') {
-            appendAssistantError(t('aiChat.toolStatus.unsupportedInput', { kind: inputKind }))
+            appendAssistantError(
+              t('aiChat.toolStatus.unsupportedInput', { kind: inputKind })
+            )
             break
           }
 
           updateToolMessage(tool_call.id, tool_call.name, (message) => ({
             ...message,
-            content: t('aiChat.toolStatus.requiresInput', { name: tool_call.name }),
+            content: t('aiChat.toolStatus.requiresInput', {
+              name: tool_call.name,
+            }),
             inputRequest: {
               sessionId: session_id,
               kind: inputKind,
@@ -597,7 +608,9 @@ export function useAIChat() {
                 inputRequest: undefined,
                 pendingAction: undefined,
                 toolResult: t('aiChat.toolStatus.userDenied'),
-                content: t('aiChat.toolStatus.cancelled', { name: message.toolName || t('aiChat.toolStatus.inputRequest') }),
+                content: t('aiChat.toolStatus.cancelled', {
+                  name: message.toolName || t('aiChat.toolStatus.inputRequest'),
+                }),
               }
             : message
         )
@@ -670,7 +683,10 @@ export function useAIChat() {
         ...m,
         actionStatus: 'pending' as const,
         ...opts.clearFields,
-        content: t('aiChat.toolStatus.statusText', { name: opts.toolName || m.toolName, status: opts.statusText }),
+        content: t('aiChat.toolStatus.statusText', {
+          name: opts.toolName || m.toolName,
+          status: opts.statusText,
+        }),
       }))
 
       commitLoading(true)
@@ -705,7 +721,9 @@ export function useAIChat() {
             actionStatus: 'error' as const,
             ...opts.errorFields,
             toolResult: streamError,
-            content: t('aiChat.toolStatus.failed', { name: opts.toolName || m.toolName }),
+            content: t('aiChat.toolStatus.failed', {
+              name: opts.toolName || m.toolName,
+            }),
           }))
         }
       } catch (error) {
@@ -716,7 +734,9 @@ export function useAIChat() {
             actionStatus: 'error' as const,
             ...opts.errorFields,
             toolResult: (error as Error).message,
-            content: t('aiChat.toolStatus.failed', { name: opts.toolName || m.toolName }),
+            content: t('aiChat.toolStatus.failed', {
+              name: opts.toolName || m.toolName,
+            }),
           }))
         }
       } finally {
@@ -748,8 +768,7 @@ export function useAIChat() {
           ...m,
           actionStatus: 'error' as const,
           pendingAction: undefined,
-          toolResult:
-            t('aiChat.toolStatus.pendingExpired'),
+          toolResult: t('aiChat.toolStatus.pendingExpired'),
           content: t('aiChat.toolStatus.failed', { name: msg.toolName }),
         }))
         return
@@ -780,8 +799,7 @@ export function useAIChat() {
           ...m,
           actionStatus: 'error' as const,
           inputRequest: undefined,
-          toolResult:
-            t('aiChat.toolStatus.inputExpired'),
+          toolResult: t('aiChat.toolStatus.inputExpired'),
           content: t('aiChat.toolStatus.failed', { name: msg.toolName }),
         }))
         return

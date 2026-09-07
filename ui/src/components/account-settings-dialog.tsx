@@ -40,8 +40,8 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { KubeconfigTokenList } from '@/components/kubeconfig-token-list'
 import { EmailVerificationDialog } from '@/components/email-verification-dialog'
+import { KubeconfigTokenList } from '@/components/kubeconfig-token-list'
 import { SecurityOTPDialog } from '@/components/security-otp-dialog'
 
 interface AccountSettingsDialogProps {
@@ -50,10 +50,7 @@ interface AccountSettingsDialogProps {
 }
 
 type SecurityAction =
-  | 'mfa-setup'
-  | 'mfa-disable'
-  | 'passkey-add'
-  | 'passkey-delete'
+  'mfa-setup' | 'mfa-disable' | 'passkey-add' | 'passkey-delete'
 
 export function AccountSettingsDialog({
   open,
@@ -105,8 +102,9 @@ export function AccountSettingsDialog({
   const [savingPasskey, setSavingPasskey] = useState(false)
 
   // Security OTP dialog state
-  const [securityAction, setSecurityAction] =
-    useState<SecurityAction | null>(null)
+  const [securityAction, setSecurityAction] = useState<SecurityAction | null>(
+    null
+  )
   const [securityMethod, setSecurityMethod] =
     useState<SecurityMethod>('email_otp')
   const [passkeyToDelete, setPasskeyToDelete] = useState<number | null>(null)
@@ -246,7 +244,10 @@ export function AccountSettingsDialog({
       : { email_otp: value }
   }
 
-  const openSecurityOTP = async (action: SecurityAction, passkeyID?: number) => {
+  const openSecurityOTP = async (
+    action: SecurityAction,
+    passkeyID?: number
+  ) => {
     const purpose =
       action === 'mfa-setup'
         ? 'setup_mfa'
@@ -460,7 +461,10 @@ export function AccountSettingsDialog({
                     <Button type="submit" disabled={savingProfile}>
                       {savingProfile
                         ? t('common.actions.saving', 'Saving...')
-                        : t('accountSettings.profile.saveButton', 'Save Profile')}
+                        : t(
+                            'accountSettings.profile.saveButton',
+                            'Save Profile'
+                          )}
                     </Button>
                   </div>
                 )}
@@ -501,7 +505,10 @@ export function AccountSettingsDialog({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="account-new-password">
-                      {t('accountSettings.password.newPassword', 'New Password')}
+                      {t(
+                        'accountSettings.password.newPassword',
+                        'New Password'
+                      )}
                     </Label>
                     <Input
                       id="account-new-password"
@@ -555,7 +562,9 @@ export function AccountSettingsDialog({
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <ShieldCheck className="h-4 w-4" />
-                      <span>{t('authenticationManagement.mfa.title', 'MFA')}</span>
+                      <span>
+                        {t('authenticationManagement.mfa.title', 'MFA')}
+                      </span>
                     </div>
                     <Badge variant={user.mfa_enabled ? 'default' : 'secondary'}>
                       {user.mfa_enabled
@@ -640,10 +649,7 @@ export function AccountSettingsDialog({
                       </div>
                     </form>
                   ) : mfaSetup ? (
-                    <form
-                      onSubmit={handleEnableMFA}
-                      className="space-y-4"
-                    >
+                    <form onSubmit={handleEnableMFA} className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="account-mfa-enable-code">
                           {t(

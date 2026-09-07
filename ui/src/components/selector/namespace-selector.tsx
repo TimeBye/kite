@@ -158,9 +158,7 @@ export function NamespaceSelector({
                       className="flex items-center"
                     >
                       <Plus className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">
-                        {search.trim()}
-                      </span>
+                      <span className="truncate">{search.trim()}</span>
                     </CommandItem>
                   </CommandGroup>
                 ) : null}

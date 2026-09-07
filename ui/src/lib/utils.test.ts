@@ -264,10 +264,7 @@ describe('RBAC helpers', () => {
     const tf = t as unknown as TFunction
 
     expect(
-      translateError(
-        new ApiError('something unexpected', 'unknown_code'),
-        tf
-      )
+      translateError(new ApiError('something unexpected', 'unknown_code'), tf)
     ).toBe('something unexpected')
   })
 

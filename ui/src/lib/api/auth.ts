@@ -112,12 +112,13 @@ export type SecurityOTPPurpose =
 
 export type SecurityMethod = 'email_otp' | 'password' | 'none'
 
-export const getCurrentUserSecurityMethod = async (): Promise<SecurityMethod> => {
-  const result = await authApiClient.get<{ method: SecurityMethod }>(
-    '/users/me/security-method'
-  )
-  return result.method
-}
+export const getCurrentUserSecurityMethod =
+  async (): Promise<SecurityMethod> => {
+    const result = await authApiClient.get<{ method: SecurityMethod }>(
+      '/users/me/security-method'
+    )
+    return result.method
+  }
 
 export const requestCurrentUserSecurityOTP = async (
   purpose: SecurityOTPPurpose
@@ -149,7 +150,10 @@ export interface SecurityVerification {
 export const setupCurrentUserMFA = async (
   verification: SecurityVerification
 ): Promise<MFASetupResponse> => {
-  return authApiClient.post<MFASetupResponse>('/users/me/mfa/setup', verification)
+  return authApiClient.post<MFASetupResponse>(
+    '/users/me/mfa/setup',
+    verification
+  )
 }
 
 export const enableCurrentUserMFA = async (code: string): Promise<AuthUser> => {

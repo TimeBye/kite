@@ -19,11 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { APIKey } from '@/types/api'
-import {
-  createAPIKey,
-  deleteAPIKey,
-  useAPIKeyListPaginated,
-} from '@/lib/api'
+import { createAPIKey, deleteAPIKey, useAPIKeyListPaginated } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -49,10 +45,11 @@ export function APIKeyManagement() {
     pageSize: 20,
   })
 
-  const { data: apiKeyData, isLoading, error } = useAPIKeyListPaginated(
-    pagination.pageIndex + 1,
-    pagination.pageSize
-  )
+  const {
+    data: apiKeyData,
+    isLoading,
+    error,
+  } = useAPIKeyListPaginated(pagination.pageIndex + 1, pagination.pageSize)
   const apiKeys = apiKeyData?.data ?? []
 
   const [showDialog, setShowDialog] = useState(false)

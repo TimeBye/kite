@@ -1,3 +1,5 @@
+import i18n from '@/i18n'
+
 export interface WebAuthnCredentialDescriptorJSON extends Omit<
   PublicKeyCredentialDescriptor,
   'id'
@@ -52,8 +54,6 @@ export interface WebAuthnAssertionResponseJSON {
   clientExtensionResults: AuthenticationExtensionsClientOutputs
   authenticatorAttachment?: string
 }
-
-import i18n from '@/i18n'
 
 export async function createPasskeyCredential(
   options: WebAuthnCreationOptionsJSON

@@ -11,12 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { UserDisplayName } from '@/components/user-display-name'
-import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -46,6 +40,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { UserDisplayName } from '@/components/user-display-name'
 
 interface Props {
   open: boolean

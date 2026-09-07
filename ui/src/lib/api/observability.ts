@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import i18n from '@/i18n'
 import { useQuery } from '@tanstack/react-query'
 
 import { OverviewData, PodMetrics, ResourceUsageHistory } from '@/types/api'
 import { useCluster } from '@/hooks/use-cluster'
-import i18n from '@/i18n'
 
 import { API_BASE_URL } from '../api-client'
 import { appendCurrentClusterParam } from '../current-cluster'
@@ -245,7 +245,9 @@ export const createLogsSSEStream = (
       console.log('SSE reconnecting...')
     } else {
       if (onError) {
-        onError(new Error(i18n.t('errors.sseConnection', 'SSE connection error')))
+        onError(
+          new Error(i18n.t('errors.sseConnection', 'SSE connection error'))
+        )
       }
     }
   }

@@ -95,7 +95,11 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
         'kite.kubernetes.io/restartedAt'
       ] = new Date().toISOString()
       await updateResource('daemonsets', name, namespace, updated)
-      toast.success(t('detail.status.restartInitiated', { resource: t('common.fields.daemonSet', 'DaemonSet') }))
+      toast.success(
+        t('detail.status.restartInitiated', {
+          resource: t('common.fields.daemonSet', 'DaemonSet'),
+        })
+      )
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
@@ -351,7 +355,9 @@ export function DaemonSetDetail(props: { namespace: string; name: string }) {
           <PopoverContent className="w-80" align="end">
             <div className="space-y-4">
               <div className="space-y-2">
-                <h4 className="font-medium">{t('detail.dialogs.restartDaemonSet.title')}</h4>
+                <h4 className="font-medium">
+                  {t('detail.dialogs.restartDaemonSet.title')}
+                </h4>
                 <p className="text-sm text-muted-foreground">
                   {t('detail.dialogs.restartDaemonSet.description')}
                 </p>

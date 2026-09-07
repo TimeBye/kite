@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next'
 import { KubeconfigToken } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { UserDisplayName } from '@/components/user-display-name'
 import {
   Dialog,
   DialogContent,
@@ -22,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { UserDisplayName } from '@/components/user-display-name'
 
 interface KubeconfigTokenListProps {
   tokens: KubeconfigToken[]
@@ -72,13 +72,13 @@ export function KubeconfigTokenList({
             return (
               <TableRow key={token.id}>
                 {includeOwner && (
-              <TableCell>
-                <UserDisplayName
-                  name={token.ownerName}
-                  login={token.owner || '-'}
-                />
-              </TableCell>
-            )}
+                  <TableCell>
+                    <UserDisplayName
+                      name={token.ownerName}
+                      login={token.owner || '-'}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>
                   {new Date(token.createdAt).toLocaleString()}
                 </TableCell>

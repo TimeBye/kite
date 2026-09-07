@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/lib/api-error'
 
+import { apiClient } from '../api-client'
+import { getRelatedResources } from './core'
+
 vi.mock('../api-client', () => ({
   apiClient: {
     get: vi.fn(),
@@ -20,9 +23,6 @@ vi.mock('@/hooks/use-cluster', () => ({
 vi.mock('@/i18n', () => ({
   default: { t: (key: string) => key },
 }))
-
-import { apiClient } from '../api-client'
-import { getRelatedResources } from './core'
 
 describe('getRelatedResources', () => {
   it('returns empty array on 404 (route not registered)', async () => {

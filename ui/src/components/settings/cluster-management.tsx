@@ -109,9 +109,8 @@ export function ClusterManagement() {
     'command' | 'yaml' | null
   >(null)
   const clusterAgentYamlRequestID = useRef(0)
-  const [regeneratingCluster, setRegeneratingCluster] = useState<Cluster | null>(
-    null
-  )
+  const [regeneratingCluster, setRegeneratingCluster] =
+    useState<Cluster | null>(null)
 
   const getClusterTypeBadge = useCallback(
     (cluster: Cluster) => {
@@ -248,14 +247,19 @@ export function ClusterManagement() {
           if (!cluster.clusterAgent) {
             return <span className="text-muted-foreground">—</span>
           }
-          if (!cluster.connected || !cluster.clusterAgentVersion || !versionInfo?.version) {
+          if (
+            !cluster.connected ||
+            !cluster.clusterAgentVersion ||
+            !versionInfo?.version
+          ) {
             return (
               <Badge variant="outline">
                 {t('clusterManagement.agentVersion.unknown', 'Unknown')}
               </Badge>
             )
           }
-          const requiresUpgrade = cluster.clusterAgentVersion !== versionInfo.version
+          const requiresUpgrade =
+            cluster.clusterAgentVersion !== versionInfo.version
           return (
             <Badge
               variant="outline"
@@ -268,7 +272,10 @@ export function ClusterManagement() {
               <span className="font-mono">{cluster.clusterAgentVersion}</span>
               <span>
                 {requiresUpgrade
-                  ? t('clusterManagement.agentVersion.upgradeRequired', 'Upgrade required')
+                  ? t(
+                      'clusterManagement.agentVersion.upgradeRequired',
+                      'Upgrade required'
+                    )
                   : t('clusterManagement.agentVersion.upToDate', 'Up to date')}
               </span>
             </Badge>
@@ -350,10 +357,7 @@ export function ClusterManagement() {
                   className="gap-2"
                 >
                   <IconLink className="h-4 w-4" />
-                  {t(
-                    'clusterManagement.actions.connect',
-                    'Connect'
-                  )}
+                  {t('clusterManagement.actions.connect', 'Connect')}
                 </DropdownMenuItem>
               )}
               {actions.map((action, index) => (
@@ -405,7 +409,12 @@ export function ClusterManagement() {
         t('clusterManagement.messages.created', 'Cluster created successfully')
       )
       setShowClusterDialog(false)
-      if (clusterAgentServer && clusterAgentToken && clusterAgentPublicKey && clusterAgentManifestURL) {
+      if (
+        clusterAgentServer &&
+        clusterAgentToken &&
+        clusterAgentPublicKey &&
+        clusterAgentManifestURL
+      ) {
         await showClusterAgentDialog(
           clusterAgentServer,
           clusterAgentToken,
@@ -597,9 +606,7 @@ export function ClusterManagement() {
       return (
         <div className="py-10 text-center text-muted-foreground">
           <IconServer className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>
-            {t('clusterManagement.empty.title', 'No clusters configured')}
-          </p>
+          <p>{t('clusterManagement.empty.title', 'No clusters configured')}</p>
           <p className="text-sm mt-1">
             {t(
               'clusterManagement.empty.description',
@@ -731,10 +738,7 @@ export function ClusterManagement() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">
-                {t(
-                  'clusterManagement.clusterAgent.command',
-                  'Command'
-                )}
+                {t('clusterManagement.clusterAgent.command', 'Command')}
               </Label>
               <div className="flex gap-2">
                 <Input

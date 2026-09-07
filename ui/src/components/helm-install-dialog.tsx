@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { isSameHelmVersion } from '@/pages/helmrelease-chart-selection'
 import * as yaml from 'js-yaml'
 import { Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -20,7 +21,7 @@ import {
   useHelmChartContent,
   useResources,
 } from '@/lib/api'
-import { isSameHelmVersion } from '@/pages/helmrelease-chart-selection'
+import { MonacoDiffEditor } from '@/lib/monaco-loader'
 import { formatDate, translateError } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -41,10 +42,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { MonacoDiffEditor } from '@/lib/monaco-loader'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { NamespaceSelector } from '@/components/selector/namespace-selector'
 import { SimpleYamlEditor } from '@/components/simple-yaml-editor'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { YamlFileTreeViewerNative as YamlFileTreeViewer } from '@/components/yaml-file-tree-viewer-native'
 
 function defaultReleaseName(name: string) {
@@ -89,7 +89,12 @@ export function HelmInstallDialog({
   const [selectedVersion, setSelectedVersion] = useState('')
 
   const versionOptions = useMemo<HelmChartVersion[]>(
-    () => chart.versions?.length ?? 0 ? chart.versions : chart.version ? [{ version: chart.version }] : [],
+    () =>
+      (chart.versions?.length ?? 0)
+        ? chart.versions
+        : chart.version
+          ? [{ version: chart.version }]
+          : [],
     [chart.versions, chart.version]
   )
   const visibleVersionOptions = useMemo<HelmChartVersion[]>(() => {
@@ -380,7 +385,10 @@ export function HelmInstallDialog({
                     setDryRunPreview(null)
                   }}
                   disabled={
-                    isInstalling || isDryRunning || !!dryRunPreview || valuesPreview
+                    isInstalling ||
+                    isDryRunning ||
+                    !!dryRunPreview ||
+                    valuesPreview
                   }
                   required
                 />
@@ -398,7 +406,10 @@ export function HelmInstallDialog({
                       setDryRunPreview(null)
                     }}
                     disabled={
-                      isInstalling || isDryRunning || !!dryRunPreview || valuesPreview
+                      isInstalling ||
+                      isDryRunning ||
+                      !!dryRunPreview ||
+                      valuesPreview
                     }
                     triggerClassName="w-full sm:w-48 sm:min-w-0"
                     modal
@@ -417,7 +428,10 @@ export function HelmInstallDialog({
                       setDryRunPreview(null)
                     }}
                     disabled={
-                      isInstalling || isDryRunning || !!dryRunPreview || valuesPreview
+                      isInstalling ||
+                      isDryRunning ||
+                      !!dryRunPreview ||
+                      valuesPreview
                     }
                   >
                     <SelectTrigger className="w-full">
@@ -436,10 +450,7 @@ export function HelmInstallDialog({
                           <span className="tabular-nums">
                             {version.version}
                           </span>
-                          {isSameHelmVersion(
-                            version.version,
-                            chart.version
-                          ) ? (
+                          {isSameHelmVersion(version.version, chart.version) ? (
                             <span className="text-xs text-muted-foreground">
                               {t('common.fields.current')}
                             </span>

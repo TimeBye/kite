@@ -162,7 +162,12 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
 
   const handleToggleSuspend = async () => {
     if (!cronjob || !cronjob.spec) {
-      toast.error(t('cronjobs.errors.suspendSpecMissing', 'CronJob spec is missing, unable to update suspend state'))
+      toast.error(
+        t(
+          'cronjobs.errors.suspendSpecMissing',
+          'CronJob spec is missing, unable to update suspend state'
+        )
+      )
       return
     }
     setIsTogglingSuspend(true)
@@ -171,7 +176,9 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
       updated.spec!.suspend = !(cronjob.spec?.suspend ?? false)
       await updateResource('cronjobs', name, namespace, updated)
       toast.success(
-        updated.spec?.suspend ? t('cronjobs.suspended', 'CronJob suspended') : t('cronjobs.resumed', 'CronJob resumed')
+        updated.spec?.suspend
+          ? t('cronjobs.suspended', 'CronJob suspended')
+          : t('cronjobs.resumed', 'CronJob resumed')
       )
       await Promise.all([refetchCronJob(), refetchJobs()])
     } catch (err) {
@@ -183,7 +190,12 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
 
   const handleRunNow = async () => {
     if (!cronjob?.spec?.jobTemplate?.spec || !namespace) {
-      toast.error(t('cronjobs.errors.templateIncomplete', 'CronJob template is incomplete, unable to run now'))
+      toast.error(
+        t(
+          'cronjobs.errors.templateIncomplete',
+          'CronJob template is incomplete, unable to run now'
+        )
+      )
       return
     }
     setIsRunningNow(true)

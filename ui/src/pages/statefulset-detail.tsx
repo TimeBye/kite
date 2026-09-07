@@ -107,7 +107,12 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
       }
       updated.spec.replicas = scaleReplicas
       await updateResource('statefulsets', name, namespace, updated)
-      toast.success(t('detail.status.scaledTo', { resource: t('common.fields.statefulSet', 'StatefulSet'), replicas: scaleReplicas }))
+      toast.success(
+        t('detail.status.scaledTo', {
+          resource: t('common.fields.statefulSet', 'StatefulSet'),
+          replicas: scaleReplicas,
+        })
+      )
       setIsScalePopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
@@ -139,7 +144,11 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
         'kite.kubernetes.io/restartedAt'
       ] = new Date().toISOString()
       await updateResource('statefulsets', name, namespace, updated)
-      toast.success(t('detail.status.restartInitiated', { resource: t('common.fields.statefulSet', 'StatefulSet') }))
+      toast.success(
+        t('detail.status.restartInitiated', {
+          resource: t('common.fields.statefulSet', 'StatefulSet'),
+        })
+      )
       setIsRestartPopoverOpen(false)
       setRefreshInterval(1000)
     } catch (err) {
@@ -395,13 +404,23 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
             <PopoverContent className="w-80" align="end">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <h4 className="font-medium">{t('detail.dialogs.scaleStatefulSet.title', 'Scale StatefulSet')}</h4>
+                  <h4 className="font-medium">
+                    {t(
+                      'detail.dialogs.scaleStatefulSet.title',
+                      'Scale StatefulSet'
+                    )}
+                  </h4>
                   <p className="text-sm text-muted-foreground">
-                    {t('detail.dialogs.scaleStatefulSet.description', 'Adjust the number of replicas for this StatefulSet.')}
+                    {t(
+                      'detail.dialogs.scaleStatefulSet.description',
+                      'Adjust the number of replicas for this StatefulSet.'
+                    )}
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="replicas">{t('common.fields.replicas')}</Label>
+                  <Label htmlFor="replicas">
+                    {t('common.fields.replicas')}
+                  </Label>
                   <div className="flex items-center gap-1">
                     <Button
                       variant="outline"
@@ -435,7 +454,10 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
                   </div>
                 </div>
                 <Button onClick={handleScale} className="w-full">
-                  {t('detail.dialogs.scaleStatefulSet.title', 'Scale StatefulSet')}
+                  {t(
+                    'detail.dialogs.scaleStatefulSet.title',
+                    'Scale StatefulSet'
+                  )}
                 </Button>
               </div>
             </PopoverContent>
@@ -453,7 +475,10 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
             <PopoverContent className="w-80">
               <div className="space-y-2">
                 <p className="text-sm">
-                  {t('detail.dialogs.restartStatefulSet.description', 'This will restart all pods managed by this StatefulSet.')}
+                  {t(
+                    'detail.dialogs.restartStatefulSet.description',
+                    'This will restart all pods managed by this StatefulSet.'
+                  )}
                 </p>
                 <Button
                   onClick={handleRestart}

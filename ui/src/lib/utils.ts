@@ -4,9 +4,9 @@ import { TFunction } from 'i18next'
 import { NodeCondition } from 'kubernetes-types/core/v1'
 import { twMerge } from 'tailwind-merge'
 
-import { ApiError } from '@/lib/api-error'
 import { PodMetrics } from '@/types/api'
 import { NodeConditionType } from '@/types/k8s'
+import { ApiError } from '@/lib/api-error'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

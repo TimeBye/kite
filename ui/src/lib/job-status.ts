@@ -1,7 +1,6 @@
+import i18n from '@/i18n'
 import type { Job } from 'kubernetes-types/batch/v1'
 import type { useTranslation } from 'react-i18next'
-
-import i18n from '@/i18n'
 
 type TranslationFn = ReturnType<typeof useTranslation>['t']
 
@@ -23,7 +22,11 @@ export function getJobStatusBadge(job: Job): JobStatusBadge {
   }
 
   if (completed?.status === 'True') {
-    return { key: 'complete', label: i18n.t('status.complete'), variant: 'default' }
+    return {
+      key: 'complete',
+      label: i18n.t('status.complete'),
+      variant: 'default',
+    }
   }
 
   if ((job.status?.active || 0) > 0) {

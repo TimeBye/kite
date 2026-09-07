@@ -13,7 +13,6 @@ import { useAuditLogs, useClusterList, useUserList } from '@/lib/api'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { UserDisplayName } from '@/components/user-display-name'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog,
@@ -30,6 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ResourceTableView } from '@/components/resource-table-view'
+import { UserDisplayName } from '@/components/user-display-name'
 import { YamlDiffViewer } from '@/components/yaml-diff-viewer'
 
 export function AuditLog() {
@@ -423,10 +423,7 @@ export function AuditLog() {
             >
               <SelectTrigger className="w-40">
                 <SelectValue
-                  placeholder={t(
-                    'common.values.allSources',
-                    'All sources'
-                  )}
+                  placeholder={t('common.values.allSources', 'All sources')}
                 />
               </SelectTrigger>
               <SelectContent>
@@ -436,9 +433,7 @@ export function AuditLog() {
                 <SelectItem value="manual">
                   {t('auditLog.manual', 'Manual')}
                 </SelectItem>
-                <SelectItem value="ai">
-                  {t('auditLog.ai', 'AI')}
-                </SelectItem>
+                <SelectItem value="ai">{t('auditLog.ai', 'AI')}</SelectItem>
                 <SelectItem value="kubeconfig">
                   {t('auditLog.kubeconfig', 'kubectl')}
                 </SelectItem>

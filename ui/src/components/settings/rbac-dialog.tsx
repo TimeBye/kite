@@ -291,7 +291,10 @@ export function RBACDialog({
                 onChange={(items) => setArrayField('clusters', items)}
                 input={drafts.clusters}
                 onInputChange={(value) => setDraft('clusters', value)}
-                placeholder={t('rbac.placeholders.cluster', '* or cluster-name')}
+                placeholder={t(
+                  'rbac.placeholders.cluster',
+                  '* or cluster-name'
+                )}
                 suggestions={
                   Array.isArray(clusterList)
                     ? ['*', ...(clusterList as Cluster[]).map((c) => c.name)]
@@ -315,7 +318,10 @@ export function RBACDialog({
                 onChange={(items) => setArrayField('resources', items)}
                 input={drafts.resources}
                 onInputChange={(value) => setDraft('resources', value)}
-                placeholder={t('rbac.placeholders.resources', '* or pods,deployments,namespaces')}
+                placeholder={t(
+                  'rbac.placeholders.resources',
+                  '* or pods,deployments,namespaces'
+                )}
                 hint={t(
                   'rbac.resourceHint',
                   'Use plural resource names. Type to filter suggestions. For CRDs and custom resources, enter the CRD name from the URL, for example widgets.example.com.'
@@ -329,7 +335,10 @@ export function RBACDialog({
                 onChange={(items) => setArrayField('verbs', items)}
                 input={drafts.verbs}
                 onInputChange={(value) => setDraft('verbs', value)}
-                placeholder={t('rbac.placeholders.verbs', '* or get,create,update,delete,log,exec')}
+                placeholder={t(
+                  'rbac.placeholders.verbs',
+                  '* or get,create,update,delete,log,exec'
+                )}
                 suggestions={VERB_SUGGESTIONS}
               />
             </div>

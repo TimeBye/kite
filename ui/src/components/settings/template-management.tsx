@@ -264,8 +264,7 @@ export function TemplateManagement() {
     state: { pagination },
     onPaginationChange: setPagination,
     manualPagination: true,
-    pageCount:
-      Math.ceil((templateData?.total ?? 0) / pagination.pageSize) || 0,
+    pageCount: Math.ceil((templateData?.total ?? 0) / pagination.pageSize) || 0,
   })
 
   const emptyState = (() => {

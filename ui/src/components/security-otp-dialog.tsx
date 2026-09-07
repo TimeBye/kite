@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { SecurityMethod } from '@/lib/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +14,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { SecurityMethod } from '@/lib/api'
 
 interface SecurityOTPDialogProps {
   open: boolean
@@ -47,7 +47,11 @@ export function SecurityOTPDialog({
     try {
       await onConfirm(value)
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('accountSettings.security.changeFailed', 'Security change failed'))
+      setError(
+        err instanceof Error
+          ? err.message
+          : t('accountSettings.security.changeFailed', 'Security change failed')
+      )
     }
   }
 
@@ -100,7 +104,9 @@ export function SecurityOTPDialog({
             </Label>
             <Input
               id="security-otp"
-              autoComplete={isPasswordMode ? 'current-password' : 'one-time-code'}
+              autoComplete={
+                isPasswordMode ? 'current-password' : 'one-time-code'
+              }
               inputMode={isPasswordMode ? undefined : 'numeric'}
               type={isPasswordMode ? 'password' : 'text'}
               required

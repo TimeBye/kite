@@ -34,7 +34,11 @@ import { ResourceTableView } from '@/components/resource-table-view'
 import { Action } from '../action-table'
 import { OAuthProviderDialog } from './oauth-provider-dialog'
 
-export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boolean }) {
+export function OAuthProviderManagement({
+  readOnly = false,
+}: {
+  readOnly?: boolean
+}) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [pagination, setPagination] = useState<PaginationState>({
@@ -111,37 +115,34 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
     [getStatusBadge, t]
   )
 
-  const actions = useMemo<Action<OAuthProvider>[]>(
-    () => {
-      if (readOnly) return []
-      return [
-        {
-          label: (
-            <>
-              <IconEdit className="h-4 w-4" />
-              {t('common.actions.edit', 'Edit')}
-            </>
-          ),
-          onClick: (provider) => {
-            setEditingProvider(provider)
-            setShowProviderDialog(true)
-          },
+  const actions = useMemo<Action<OAuthProvider>[]>(() => {
+    if (readOnly) return []
+    return [
+      {
+        label: (
+          <>
+            <IconEdit className="h-4 w-4" />
+            {t('common.actions.edit', 'Edit')}
+          </>
+        ),
+        onClick: (provider) => {
+          setEditingProvider(provider)
+          setShowProviderDialog(true)
         },
-        {
-          label: (
-            <div className="inline-flex items-center gap-2 text-destructive">
-              <IconTrash className="h-4 w-4" />
-              {t('common.actions.delete', 'Delete')}
-            </div>
-          ),
-          onClick: (provider) => {
-            setDeletingProvider(provider)
-          },
+      },
+      {
+        label: (
+          <div className="inline-flex items-center gap-2 text-destructive">
+            <IconTrash className="h-4 w-4" />
+            {t('common.actions.delete', 'Delete')}
+          </div>
+        ),
+        onClick: (provider) => {
+          setDeletingProvider(provider)
         },
-      ]
-    },
-    [readOnly, t]
-  )
+      },
+    ]
+  }, [readOnly, t])
 
   const tableColumns = useMemo<ColumnDef<OAuthProvider>[]>(() => {
     if (readOnly) return columns
@@ -324,10 +325,7 @@ export function OAuthProviderManagement({ readOnly = false }: { readOnly?: boole
           <IconKey className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>
             {t('common.messages.noItemsConfigured', {
-              resource: t(
-                'common.fields.oauthProviders',
-                'OAuth providers'
-              ),
+              resource: t('common.fields.oauthProviders', 'OAuth providers'),
               defaultValue: 'No OAuth providers configured',
             })}
           </p>
