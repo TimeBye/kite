@@ -168,6 +168,11 @@ func (cm *ClusterManager) CreateCluster(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cluster name is required"})
+		return
+	}
 	if req.ClusterAgent {
 		req.InCluster = false
 		req.Config = ""

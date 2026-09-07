@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/zxh326/kite/pkg/cluster"
 	"github.com/zxh326/kite/pkg/common"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 )
 
@@ -21,27 +20,31 @@ type downloadItem struct {
 	Namespace string `json:"namespace"`
 }
 
-// getKindFromObject extracts the Kind from a runtime object.
-func getKindFromObject(obj interface{}) string {
-	if robj, ok := obj.(runtime.Object); ok {
-		gvk := getGVKFromObject(robj)
-		return gvk.Kind
-	}
-	// Try from map
-	if m, ok := obj.(map[string]interface{}); ok {
-		if kind, ok := m["kind"].(string); ok {
-			return kind
+// sanitizeFileName replaces characters that are invalid in file names across
+// common operating systems and trims surrounding spaces and dots.
+func sanitizeFileName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		switch r {
+		case '/', '\\', ':', '*', '?', '"', '<', '>', '|':
+			return '_'
 		}
-	}
-	return ""
+		if r < 0x20 || r == 0x7f {
+			return '_'
+		}
+		return r
+	}, name)
+	return strings.Trim(name, " .")
 }
 
-// buildYAMLFileName generates a filename for a YAML download.
-func buildYAMLFileName(kind, namespace, name string) string {
-	if namespace != "" && namespace != common.AllNamespaces {
-		return fmt.Sprintf("%s-%s-%s.yaml", kind, namespace, name)
+// buildYAMLFileName generates a file name for a YAML download. When
+// includeNamespace is true (batch downloads), namespaced resources are grouped
+// under a "<namespace>/" folder inside the zip archive.
+func buildYAMLFileName(namespace, name string, includeNamespace bool) string {
+	name = sanitizeFileName(name)
+	if includeNamespace && namespace != "" && namespace != common.AllNamespaces {
+		return sanitizeFileName(namespace) + "/" + name + ".yaml"
 	}
-	return fmt.Sprintf("%s-%s.yaml", kind, name)
+	return name + ".yaml"
 }
 
 // DownloadSingle handles downloading a single resource as YAML.
@@ -77,24 +80,13 @@ func DownloadSingle(c *gin.Context) {
 		return
 	}
 
-	kind := getKindFromObject(obj)
-	if kind == "" {
-		// Try to get kind from resource registry
-		if meta := common.LookupResource(resource); meta != nil {
-			kind = meta.Kind
-		}
-	}
-	if kind == "" {
-		kind = resource
-	}
-
 	yamlContent, err := neatYAML(obj, cs, neat)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to generate YAML: %v", err)})
 		return
 	}
 
-	fileName := buildYAMLFileName(kind, namespace, name)
+	fileName := buildYAMLFileName(namespace, name, false)
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, fileName))
 	c.Header("Cache-Control", "no-store")
 	c.Header("Pragma", "no-cache")
@@ -126,12 +118,6 @@ func DownloadBatch(c *gin.Context) {
 
 	cs := c.MustGet("cluster").(*cluster.ClientSet)
 
-	// Get the kind from registry or first fetched object
-	kind := ""
-	if meta := common.LookupResource(resource); meta != nil {
-		kind = meta.Kind
-	}
-
 	// Create a buffer for the zip file
 	buf := new(bytes.Buffer)
 	zipWriter := zip.NewWriter(buf)
@@ -145,11 +131,6 @@ func DownloadBatch(c *gin.Context) {
 			continue
 		}
 
-		// Update kind from the actual object if we don't have it yet
-		if kind == "" {
-			kind = getKindFromObject(obj)
-		}
-
 		yamlContent, err := neatYAML(obj, cs, neat)
 		if err != nil {
 			klog.Warningf("Failed to generate YAML for %s/%s: %v", item.Namespace, item.Name, err)
@@ -157,7 +138,7 @@ func DownloadBatch(c *gin.Context) {
 			continue
 		}
 
-		fileName := buildYAMLFileName(kind, item.Namespace, item.Name)
+		fileName := buildYAMLFileName(item.Namespace, item.Name, true)
 		w, err := zipWriter.Create(fileName)
 		if err != nil {
 			klog.Warningf("Failed to create zip entry for %s: %v", fileName, err)

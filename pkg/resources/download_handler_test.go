@@ -110,7 +110,7 @@ func TestDownloadSingle_NamespaceScopedResource(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Equal(t, "application/yaml", rec.Header().Get("Content-Type"))
 		assert.Contains(t, rec.Header().Get("Content-Disposition"), "attachment")
-		assert.Contains(t, rec.Header().Get("Content-Disposition"), "Pod-default-nginx.yaml")
+		assert.Contains(t, rec.Header().Get("Content-Disposition"), "nginx.yaml")
 
 		body := rec.Body.String()
 		// Raw mode: managedFields and kubectl annotation removed
@@ -163,7 +163,7 @@ func TestDownloadSingle_ClusterScopedResource(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Header().Get("Content-Disposition"), "Node-node-1.yaml")
+	assert.Contains(t, rec.Header().Get("Content-Disposition"), "node-1.yaml")
 
 	body := rec.Body.String()
 	assert.NotContains(t, body, "status:")
@@ -301,8 +301,8 @@ func TestDownloadBatch_NamespaceScopedResources(t *testing.T) {
 	for _, f := range zipReader.File {
 		fileNames[f.Name] = true
 	}
-	assert.True(t, fileNames["Pod-default-pod-1.yaml"], "expected pod-1 yaml in zip")
-	assert.True(t, fileNames["Pod-default-pod-2.yaml"], "expected pod-2 yaml in zip")
+	assert.True(t, fileNames["default/pod-1.yaml"], "expected pod-1 yaml in zip")
+	assert.True(t, fileNames["default/pod-2.yaml"], "expected pod-2 yaml in zip")
 }
 
 func TestDownloadBatch_ClusterScopedResources(t *testing.T) {
@@ -345,8 +345,8 @@ func TestDownloadBatch_ClusterScopedResources(t *testing.T) {
 	for _, f := range zipReader.File {
 		fileNames[f.Name] = true
 	}
-	assert.True(t, fileNames["Node-node-1.yaml"])
-	assert.True(t, fileNames["Node-node-2.yaml"])
+	assert.True(t, fileNames["node-1.yaml"])
+	assert.True(t, fileNames["node-2.yaml"])
 }
 
 func TestDownloadBatch_WithFailures(t *testing.T) {
@@ -385,7 +385,7 @@ func TestDownloadBatch_WithFailures(t *testing.T) {
 		fileNames[f.Name] = true
 	}
 	// pod-1 should be in the zip
-	assert.True(t, fileNames["Pod-default-pod-1.yaml"])
+	assert.True(t, fileNames["default/pod-1.yaml"])
 	// Error summary should be present
 	assert.True(t, fileNames["_download_errors.txt"])
 
@@ -439,38 +439,52 @@ func TestDownloadSingle_EmptyName(t *testing.T) {
 
 func TestBuildYAMLFileName(t *testing.T) {
 	tests := []struct {
-		name      string
-		kind      string
-		namespace string
-		resName   string
-		want      string
+		name             string
+		namespace        string
+		resName          string
+		includeNamespace bool
+		want             string
 	}{
 		{
-			name:      "namespaced resource",
-			kind:      "Pod",
-			namespace: "default",
-			resName:   "nginx",
-			want:      "Pod-default-nginx.yaml",
+			name:             "single namespaced resource ignores namespace",
+			namespace:        "default",
+			resName:          "nginx",
+			includeNamespace: false,
+			want:             "nginx.yaml",
 		},
 		{
-			name:      "cluster-scoped resource",
-			kind:      "Node",
-			namespace: "",
-			resName:   "node-1",
-			want:      "Node-node-1.yaml",
+			name:             "batch namespaced resource uses namespace folder",
+			namespace:        "default",
+			resName:          "nginx",
+			includeNamespace: true,
+			want:             "default/nginx.yaml",
 		},
 		{
-			name:      "all namespaces value treated as cluster-scoped",
-			kind:      "Pod",
-			namespace: common.AllNamespaces,
-			resName:   "nginx",
-			want:      "Pod-nginx.yaml",
+			name:             "batch cluster-scoped resource has no namespace",
+			namespace:        "",
+			resName:          "node-1",
+			includeNamespace: true,
+			want:             "node-1.yaml",
+		},
+		{
+			name:             "all namespaces value treated as cluster-scoped",
+			namespace:        common.AllNamespaces,
+			resName:          "nginx",
+			includeNamespace: true,
+			want:             "nginx.yaml",
+		},
+		{
+			name:             "invalid characters are sanitized",
+			namespace:        "kube:system",
+			resName:          "a/b\\c*d?e\"f<g>h|i",
+			includeNamespace: true,
+			want:             "kube_system/a_b_c_d_e_f_g_h_i.yaml",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := buildYAMLFileName(tt.kind, tt.namespace, tt.resName)
+			got := buildYAMLFileName(tt.namespace, tt.resName, tt.includeNamespace)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -518,31 +532,11 @@ func TestSetResourceType(t *testing.T) {
 	})
 }
 
-func TestGetKindFromObject(t *testing.T) {
-	t.Run("from typed object", func(t *testing.T) {
-		pod := &corev1.Pod{
-			TypeMeta: metav1.TypeMeta{Kind: "Pod", APIVersion: "v1"},
-		}
-		// Pod implements runtime.Object
-		kind := getKindFromObject(pod)
-		assert.Equal(t, "Pod", kind)
-	})
-
-	t.Run("from map", func(t *testing.T) {
-		m := map[string]interface{}{"kind": "Deployment"}
-		kind := getKindFromObject(m)
-		assert.Equal(t, "Deployment", kind)
-	})
-
-	t.Run("from nil", func(t *testing.T) {
-		kind := getKindFromObject(nil)
-		assert.Equal(t, "", kind)
-	})
-
-	t.Run("from unstructured", func(t *testing.T) {
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})
-		kind := getKindFromObject(u)
-		assert.Equal(t, "Deployment", kind)
-	})
+func TestSanitizeFileName(t *testing.T) {
+	assert.Equal(t, "nginx", sanitizeFileName("nginx"))
+	assert.Equal(t, "a_b", sanitizeFileName("a/b"))
+	assert.Equal(t, "a_b", sanitizeFileName(`a\b`))
+	assert.Equal(t, "a__b_c", sanitizeFileName(`a:*b|c`))
+	assert.Equal(t, "", sanitizeFileName("  . "))
+	assert.Equal(t, "abc", sanitizeFileName(" abc. "))
 }

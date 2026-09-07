@@ -21,7 +21,14 @@ YAML download works with all resource types in Kite:
 | Custom Resource Definitions (CRDs) | Namespace / Cluster | Custom resources are downloaded as-is via unstructured retrieval |
 | Helm Releases | Namespace | Helm releases are serialized as pseudo-Kubernetes objects with `kind: HelmRelease` |
 
-For cluster-scoped resources (Nodes, Namespaces, ClusterRoles, etc.), the namespace is omitted from the download filename. For namespace-scoped resources, the filename includes the namespace (e.g., `Pod-default-nginx.yaml`).
+### File Naming Rules
+
+- **Single download**: the object's `name` is used as the file name (e.g., `nginx.yaml`).
+- **Batch download (inside the zip)**:
+  - Namespace-scoped resources: organized as `namespace/name.yaml` (e.g., `default/nginx.yaml`), grouped into a folder named after the namespace.
+  - Cluster-scoped resources (Nodes, Namespaces, ClusterRoles, etc.): named as `name.yaml` (e.g., `node-1.yaml`).
+
+Special characters (`/ \ : * ? " < > |`, etc.) in file names are replaced with underscores to comply with file naming rules across operating systems.
 
 ## Neat Mode
 

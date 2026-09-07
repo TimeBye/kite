@@ -21,7 +21,14 @@ YAML 下载功能支持 Kite 中的所有资源类型：
 | 自定义资源定义（CRD） | 命名空间 / 集群 | 通过 unstructured 方式获取并下载自定义资源 |
 | Helm Releases | 命名空间 | Helm 发布以伪 Kubernetes 对象形式序列化，`kind: HelmRelease` |
 
-集群级资源（Nodes、Namespaces、ClusterRoles 等）的文件名不包含命名空间。命名空间级资源的文件名包含命名空间（如 `Pod-default-nginx.yaml`）。
+### 文件命名规则
+
+- **单选下载**：以对象的 `name` 作为文件名（如 `nginx.yaml`）。
+- **多选下载（zip 内）**：
+  - 命名空间级资源：按 `命名空间/name.yaml` 组织（如 `default/nginx.yaml`），同名空间的对象会归档到以命名空间命名的文件夹中。
+  - 集群级资源（Nodes、Namespaces、ClusterRoles 等）：直接以 `name.yaml` 命名（如 `node-1.yaml`）。
+
+文件名中的特殊字符（`/ \ : * ? " < > |` 等）会被替换为下划线，确保符合各操作系统的文件命名规范。
 
 ## 精简模式
 
