@@ -186,9 +186,7 @@ function ResourceTableContent<T>({
             items[0].namespace,
             neat
           )
-          const filename = items[0].namespace
-            ? `${resolvedResourceType}-${items[0].namespace}-${items[0].name}.yaml`
-            : `${resolvedResourceType}-${items[0].name}.yaml`
+          const filename = `${items[0].name}.yaml`
           triggerBrowserDownload(blob, filename)
         } else {
           const blob = await downloadBatchYAML(

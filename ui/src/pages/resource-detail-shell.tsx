@@ -130,9 +130,7 @@ export function ResourceDetailShell<T>({
           namespace,
           neat
         )
-        const filename = namespace
-          ? `${resourceType}-${namespace}-${name}.yaml`
-          : `${resourceType}-${name}.yaml`
+        const filename = `${name}.yaml`
         triggerBrowserDownload(blob, filename)
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Download failed')
