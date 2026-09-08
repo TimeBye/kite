@@ -1084,7 +1084,7 @@ function UpgradeHelmReleaseDialog({
     chartName,
     activeVersion || undefined,
     activeChartSource,
-    !canUseCurrentChart,
+    open,
     open
   )
   const defaultValuesQuery = useHelmChartContent(
@@ -1116,12 +1116,9 @@ function UpgradeHelmReleaseDialog({
     }
     return [{ version: activeVersion }, ...versionOptions]
   }, [activeVersion, versionOptions])
-  const chartUrl = canUseCurrentChart
-    ? undefined
-    : selectedChartQuery.data?.chartUrl
+  const chartUrl = selectedChartQuery.data?.chartUrl
   const isVersionLoading = !!activeChart && latestChartQuery.isLoading
-  const isChartPackageLoading =
-    !!activeChart && !canUseCurrentChart && selectedChartQuery.isLoading
+  const isChartPackageLoading = !!activeChart && selectedChartQuery.isLoading
   const isDefaultValuesLoading = defaultValuesQuery.isLoading
   const readableError = error.replace(/\s&&\s/g, '\n')
   const defaultValues = isDefaultValuesLoading
