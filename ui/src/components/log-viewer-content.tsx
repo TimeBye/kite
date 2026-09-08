@@ -795,7 +795,7 @@ export function LogViewer({
               onClick={downloadLogs}
               disabled={logCount === 0}
             >
-              <IconDownload className="h-4 w-4" />
+              <IconFileDownload className="h-4 w-4" />
             </Button>
 
             {/* Download All Logs from server */}
@@ -806,7 +806,7 @@ export function LogViewer({
               disabled={!selectPodName || selectPodName === '_all'}
               title={t('common.actions.downloadAllLogs')}
             >
-              <IconFileDownload className="h-4 w-4" />
+              <IconDownload className="h-4 w-4" />
             </Button>
 
             {/* Fullscreen Toggle */}
