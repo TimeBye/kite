@@ -616,18 +616,16 @@ export function HelmInstallDialog({
                 />
                 {t('helm.fields.wait')}
               </Label>
-              {wait ? (
-                <Input
-                  id="helm-install-timeout"
-                  type="number"
-                  min={1}
-                  value={timeoutMinutes}
-                  onChange={(e) => setTimeoutMinutes(e.target.value)}
-                  disabled={isInstalling || isDryRunning}
-                  placeholder="5"
-                  className="h-8 w-20"
-                />
-              ) : null}
+              <Input
+                id="helm-install-timeout"
+                type="number"
+                min={1}
+                value={timeoutMinutes}
+                onChange={(e) => setTimeoutMinutes(e.target.value)}
+                disabled={!wait || isInstalling || isDryRunning}
+                placeholder="5"
+                className="h-8 w-20"
+              />
               <Label
                 htmlFor="helm-install-rollback-on-failure"
                 className="flex items-center gap-2 font-normal text-muted-foreground"

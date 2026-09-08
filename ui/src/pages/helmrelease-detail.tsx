@@ -1643,18 +1643,16 @@ function UpgradeHelmReleaseDialog({
                 />
                 {t('helm.fields.wait')}
               </Label>
-              {wait ? (
-                <Input
-                  id="helm-upgrade-timeout"
-                  type="number"
-                  min={1}
-                  value={timeoutMinutes}
-                  onChange={(e) => setTimeoutMinutes(e.target.value)}
-                  disabled={isUpgrading || isDryRunning}
-                  placeholder="5"
-                  className="h-8 w-20"
-                />
-              ) : null}
+              <Input
+                id="helm-upgrade-timeout"
+                type="number"
+                min={1}
+                value={timeoutMinutes}
+                onChange={(e) => setTimeoutMinutes(e.target.value)}
+                disabled={!wait || isUpgrading || isDryRunning}
+                placeholder="5"
+                className="h-8 w-20"
+              />
               <Label
                 htmlFor="helm-upgrade-rollback-on-failure"
                 className="flex items-center gap-2 font-normal text-muted-foreground"
