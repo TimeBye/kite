@@ -106,7 +106,7 @@ export function ResourceDetailShell<T>({
 
   useEffect(() => {
     if (data) {
-      setYamlContent(yaml.dump(data, { indent: 2 }))
+      setYamlContent(yaml.dump(data, { indent: 2, lineWidth: -1 }))
     }
   }, [data])
 

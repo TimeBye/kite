@@ -38,7 +38,7 @@ function getDecodedYamlContent(secret: Secret, showDecodedYaml: boolean) {
     showSecret.stringData = undefined
   }
 
-  return yaml.dump(showSecret, { indent: 2 })
+  return yaml.dump(showSecret, { indent: 2, lineWidth: -1 })
 }
 
 function SecretYamlToolbar({

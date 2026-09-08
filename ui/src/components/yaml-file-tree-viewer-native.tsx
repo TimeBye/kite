@@ -14,6 +14,7 @@ import {
   useMonacoBackgroundColor,
 } from '@/lib/monaco-theme'
 import { cn } from '@/lib/utils'
+import { useWordWrap } from '@/hooks/use-word-wrap'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -430,6 +431,7 @@ export function YamlDiffPanel({
     themeMode,
     colorTheme
   )
+  const { wordWrap } = useWordWrap()
   const darkThemeName = `yaml-diff-dark-${colorTheme}`
   const lightThemeName = `yaml-diff-light-${colorTheme}`
   const statusLabel = {
@@ -476,7 +478,7 @@ export function YamlDiffPanel({
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
               automaticLayout: true,
-              wordWrap: 'on',
+              wordWrap,
               lineNumbers: 'on',
               folding: true,
               fontSize: 14,

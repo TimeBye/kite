@@ -1,10 +1,20 @@
+import { IconTextWrap } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
+
 import { MonacoEditor } from '@/lib/monaco-loader'
 import {
   defineMonacoBackgroundThemes,
   useMonacoBackgroundColor,
 } from '@/lib/monaco-theme'
 import { cn } from '@/lib/utils'
+import { useWordWrap } from '@/hooks/use-word-wrap'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useAppearance } from '@/components/appearance-provider'
 
 interface TextViewerProps {
@@ -20,7 +30,9 @@ export function TextViewer({
   className,
   fillHeight = false,
 }: TextViewerProps) {
+  const { t } = useTranslation()
   const { actualTheme, colorTheme } = useAppearance()
+  const { wordWrap, toggleWordWrap } = useWordWrap()
   const themeMode = actualTheme === 'dark' ? 'dark' : 'light'
   const backgroundColor = useMonacoBackgroundColor(
     '--card',
@@ -36,6 +48,22 @@ export function TextViewer({
         <div className="space-y-1">
           <CardTitle>{title}</CardTitle>
         </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'h-7 w-7',
+                wordWrap === 'on' && 'bg-accent text-accent-foreground'
+              )}
+              onClick={toggleWordWrap}
+            >
+              <IconTextWrap className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('common.actions.toggleWordWrap')}</TooltipContent>
+        </Tooltip>
       </CardHeader>
       <CardContent className={cn(fillHeight && 'min-h-0 flex-1')}>
         <div
@@ -73,7 +101,7 @@ export function TextViewer({
                 minimap: { enabled: false },
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
-                wordWrap: 'on',
+                wordWrap,
                 lineNumbers: 'on',
                 folding: true,
                 tabSize: 2,

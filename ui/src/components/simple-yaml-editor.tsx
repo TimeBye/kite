@@ -1,10 +1,17 @@
+import { IconTextWrap } from '@tabler/icons-react'
+import { useTranslation } from 'react-i18next'
+
 import { MonacoEditor } from '@/lib/monaco-loader'
 import {
   defineMonacoBackgroundThemes,
   useMonacoBackgroundColor,
 } from '@/lib/monaco-theme'
+import { cn } from '@/lib/utils'
+import { useWordWrap } from '@/hooks/use-word-wrap'
+import { Button } from '@/components/ui/button'
 
 import { useAppearance } from './appearance-provider'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 interface SimpleYamlEditorProps {
   value: string
@@ -19,6 +26,7 @@ export function SimpleYamlEditor({
   disabled = false,
   height = '400px',
 }: SimpleYamlEditorProps) {
+  const { t } = useTranslation()
   const { actualTheme, colorTheme } = useAppearance()
   const themeMode = actualTheme === 'dark' ? 'dark' : 'light'
   const backgroundColor = useMonacoBackgroundColor(
@@ -26,8 +34,26 @@ export function SimpleYamlEditor({
     themeMode,
     colorTheme
   )
+  const { wordWrap, toggleWordWrap } = useWordWrap()
+
   return (
-    <div className="border rounded-md overflow-hidden">
+    <div className="relative border rounded-md overflow-hidden">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'absolute right-2 top-2 z-10 h-7 w-7 bg-background/80 backdrop-blur',
+              wordWrap === 'on' && 'bg-accent text-accent-foreground'
+            )}
+            onClick={toggleWordWrap}
+          >
+            <IconTextWrap className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t('common.actions.toggleWordWrap')}</TooltipContent>
+      </Tooltip>
       <MonacoEditor
         key={`simple-yaml-editor-${colorTheme}-${actualTheme}-${backgroundColor}`}
         height={height}
@@ -57,7 +83,7 @@ export function SimpleYamlEditor({
         options={{
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
-          wordWrap: 'on',
+          wordWrap,
           readOnly: disabled,
           fontSize: 14,
           lineNumbers: 'on',

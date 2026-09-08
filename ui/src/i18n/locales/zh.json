@@ -47,6 +47,7 @@
       "assigning": "分配中...",
       "removing": "移除中...",
       "taint": "污点",
+      "toggleWordWrap": "切换软换行",
       "uncordon": "恢复调度",
       "update": "更新",
       "viewDiff": "查看差异",

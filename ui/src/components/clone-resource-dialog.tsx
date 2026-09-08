@@ -327,7 +327,9 @@ function CloneResourceDialogContent({
             throw fetchError
           }
         }
-        await applyResource(yaml.dump(manifest, { indent: 2, noRefs: true }))
+        await applyResource(
+          yaml.dump(manifest, { indent: 2, lineWidth: -1, noRefs: true })
+        )
       }
 
       onOpenChange(false)

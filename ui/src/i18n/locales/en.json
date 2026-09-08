@@ -46,6 +46,7 @@
       "assigning": "Assigning...",
       "removing": "Removing...",
       "taint": "Taint",
+      "toggleWordWrap": "Toggle word wrap",
       "uncordon": "Uncordon",
       "update": "Update",
       "viewDiff": "View Diff",

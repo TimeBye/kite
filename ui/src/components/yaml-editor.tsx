@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { IconCheck, IconEdit, IconLoader, IconX } from '@tabler/icons-react'
+import {
+  IconCheck,
+  IconEdit,
+  IconLoader,
+  IconTextWrap,
+  IconX,
+} from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useTranslation } from 'react-i18next'
@@ -11,11 +17,13 @@ import {
   useMonacoBackgroundColor,
 } from '@/lib/monaco-theme'
 import { cn } from '@/lib/utils'
+import { useWordWrap } from '@/hooks/use-word-wrap'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { useAppearance } from './appearance-provider'
 import { ErrorBoundary } from './error-boundary'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 interface YamlEditorProps<T extends ResourceType> {
   /** The YAML content to edit */
@@ -58,6 +66,7 @@ export function YamlEditor<T extends ResourceType>({
   const [editorValue, setEditorValue] = useState(value)
   const [isValidYaml, setIsValidYaml] = useState(true)
   const [validationError, setValidationError] = useState<string>('')
+  const { wordWrap, toggleWordWrap } = useWordWrap()
   const { actualTheme, colorTheme } = useAppearance()
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null)
   const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -152,6 +161,24 @@ export function YamlEditor<T extends ResourceType>({
           <CardTitle>{editorTitle}</CardTitle>
         </div>
         <div className="flex items-center gap-4">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'h-7 w-7',
+                  wordWrap === 'on' && 'bg-accent text-accent-foreground'
+                )}
+                onClick={toggleWordWrap}
+              >
+                <IconTextWrap className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t('common.actions.toggleWordWrap')}
+            </TooltipContent>
+          </Tooltip>
           {showControls && (
             <div className="flex gap-2">
               {isEditing ? (
@@ -241,7 +268,7 @@ export function YamlEditor<T extends ResourceType>({
                   minimap: { enabled: false },
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
-                  wordWrap: 'on',
+                  wordWrap,
                   lineNumbers: 'on',
                   folding: true,
                   renderLineHighlight: effectiveReadOnly ? 'none' : 'line',

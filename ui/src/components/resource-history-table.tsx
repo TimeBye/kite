@@ -59,7 +59,11 @@ export function ResourceHistoryTable<T extends ResourceType>({
   const currentYaml = useMemo(() => {
     if (!currentResource) return ''
     try {
-      return yaml.dump(currentResource, { indent: 2, sortKeys: true })
+      return yaml.dump(currentResource, {
+        indent: 2,
+        sortKeys: true,
+        lineWidth: -1,
+      })
     } catch (error) {
       console.error('Failed to convert current resource to YAML:', error)
       return ''

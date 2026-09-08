@@ -23,6 +23,7 @@ import {
 } from '@/lib/api'
 import { MonacoDiffEditor } from '@/lib/monaco-loader'
 import { formatDate, translateError } from '@/lib/utils'
+import { useWordWrap } from '@/hooks/use-word-wrap'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -66,6 +67,7 @@ export function HelmInstallDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation()
+  const { wordWrap } = useWordWrap()
   const navigate = useNavigate()
   const [releaseName, setReleaseName] = useState(() =>
     defaultReleaseName(chart.name)
@@ -540,7 +542,7 @@ export function HelmInstallDialog({
                             minimap: { enabled: false },
                             scrollBeyondLastLine: false,
                             automaticLayout: true,
-                            wordWrap: 'on',
+                            wordWrap,
                             lineNumbers: 'on',
                             folding: true,
                             fontSize: 14,

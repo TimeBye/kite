@@ -228,5 +228,5 @@ export function generateDeploymentYaml(formData: DeploymentFormData): string {
     },
   }
 
-  return yaml.dump(deployment, { indent: 2, noRefs: true })
+  return yaml.dump(deployment, { indent: 2, lineWidth: -1, noRefs: true })
 }

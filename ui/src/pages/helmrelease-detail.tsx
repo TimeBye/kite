@@ -47,6 +47,7 @@ import {
   isVersionAtLeast,
   translateError,
 } from '@/lib/utils'
+import { useWordWrap } from '@/hooks/use-word-wrap'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -450,7 +451,7 @@ function HelmReleaseHistoryValuesDialog({
   item: HelmReleaseHistoryItem
 }) {
   const { t } = useTranslation()
-  const valuesYaml = yaml.dump(item.values || {}, { indent: 2 })
+  const valuesYaml = yaml.dump(item.values || {}, { indent: 2, lineWidth: -1 })
 
   return (
     <Dialog>
@@ -1005,12 +1006,13 @@ function UpgradeHelmReleaseDialog({
   onComplete: () => Promise<unknown>
 }) {
   const { t } = useTranslation()
+  const { wordWrap } = useWordWrap()
   const chartName = release.spec?.chartName || release.spec?.chart || ''
   const currentVersion = release.spec?.chartVersion || ''
   const [selectedRepository, setSelectedRepository] = useState('')
   const [selectedVersion, setSelectedVersion] = useState('')
   const [valuesYaml, setValuesYaml] = useState(() =>
-    yaml.dump(release.spec?.values || {}, { indent: 2 })
+    yaml.dump(release.spec?.values || {}, { indent: 2, lineWidth: -1 })
   )
   const [forceConflicts, setForceConflicts] = useState(false)
   const [wait, setWait] = useState(false)
@@ -1018,11 +1020,19 @@ function UpgradeHelmReleaseDialog({
   const [timeoutMinutes, setTimeoutMinutes] = useState('')
   const [ignoreMetadataChanges, setIgnoreMetadataChanges] = useState(false)
   const releaseDefaultValues = useMemo(
-    () => yaml.dump(release.spec?.defaultValues || {}, { indent: 2 }),
+    () =>
+      yaml.dump(release.spec?.defaultValues || {}, {
+        indent: 2,
+        lineWidth: -1,
+      }),
     [release.spec?.defaultValues]
   )
   const releaseCurrentValues = useMemo(
-    () => yaml.dump(release.spec?.values || {}, { indent: 2 }),
+    () =>
+      yaml.dump(release.spec?.values || {}, {
+        indent: 2,
+        lineWidth: -1,
+      }),
     [release.spec?.values]
   )
   const [error, setError] = useState('')
@@ -1524,7 +1534,7 @@ function UpgradeHelmReleaseDialog({
                             minimap: { enabled: false },
                             scrollBeyondLastLine: false,
                             automaticLayout: true,
-                            wordWrap: 'on',
+                            wordWrap,
                             lineNumbers: 'on',
                             folding: true,
                             fontSize: 14,
@@ -1552,7 +1562,7 @@ function UpgradeHelmReleaseDialog({
                             minimap: { enabled: false },
                             scrollBeyondLastLine: false,
                             automaticLayout: true,
-                            wordWrap: 'on',
+                            wordWrap,
                             lineNumbers: 'on',
                             folding: true,
                             fontSize: 14,
@@ -1841,7 +1851,10 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
         label: t('helm.tabs.values'),
         content: data ? (
           <YamlEditor
-            value={yaml.dump(data.spec?.values || {}, { indent: 2 })}
+            value={yaml.dump(data.spec?.values || {}, {
+              indent: 2,
+              lineWidth: -1,
+            })}
             title={t('helm.tabs.values')}
             readOnly
             showControls={false}

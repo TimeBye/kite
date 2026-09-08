@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { IconTextWrap } from '@tabler/icons-react'
 import * as yaml from 'js-yaml'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +9,8 @@ import {
   defineMonacoBackgroundThemes,
   useMonacoBackgroundColor,
 } from '@/lib/monaco-theme'
+import { cn } from '@/lib/utils'
+import { useWordWrap } from '@/hooks/use-word-wrap'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,6 +27,7 @@ import {
 } from '@/components/ui/select'
 
 import { useAppearance } from './appearance-provider'
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
 interface YamlDiffViewerProps {
   /** Original YAML content */
@@ -60,6 +64,7 @@ export function YamlDiffViewer({
   height = 600,
 }: YamlDiffViewerProps) {
   const { t } = useTranslation()
+  const { wordWrap, toggleWordWrap } = useWordWrap()
   const { actualTheme, colorTheme } = useAppearance()
   const themeMode = actualTheme === 'dark' ? 'dark' : 'light'
   const backgroundColor = useMonacoBackgroundColor(
@@ -100,7 +105,7 @@ export function YamlDiffViewer({
         }
 
         const cleaned = removeStatus(parsed)
-        return yaml.dump(cleaned, { indent: 2, sortKeys: true })
+        return yaml.dump(cleaned, { indent: 2, sortKeys: true, lineWidth: -1 })
       }
     } catch (error) {
       console.error('Failed to remove status field from YAML:', error)
@@ -197,6 +202,24 @@ export function YamlDiffViewer({
                   </Select>
                 </>
               )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'h-7 w-7',
+                      wordWrap === 'on' && 'bg-accent text-accent-foreground'
+                    )}
+                    onClick={toggleWordWrap}
+                  >
+                    <IconTextWrap className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {t('common.actions.toggleWordWrap')}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -229,7 +252,7 @@ export function YamlDiffViewer({
               readOnly: true,
               minimap: { enabled: true },
               scrollBeyondLastLine: false,
-              wordWrap: 'on',
+              wordWrap,
               folding: true,
               lineNumbers: 'relative',
               fontSize: 14,

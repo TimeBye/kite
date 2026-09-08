@@ -39,7 +39,7 @@ export function CRListPage() {
   const { data: crdData, isLoading: isLoadingCRD } = useResource('crds', crd!)
 
   const handleViewYaml = useCallback((crd: CustomResourceDefinition) => {
-    setYamlContent(yaml.dump(crd, { indent: 2 }))
+    setYamlContent(yaml.dump(crd, { indent: 2, lineWidth: -1 }))
     setIsYamlDialogOpen(true)
   }, [])
   const extraToolbars = useMemo(() => {
