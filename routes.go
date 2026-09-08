@@ -175,6 +175,7 @@ func registerClusterProtectedRoutes(api *gin.RouterGroup, helmChartsHandler *hel
 
 	logsHandler := resources.NewLogsHandler()
 	api.GET("/logs/:namespace/:podName/ws", logsHandler.HandleLogsWebSocket)
+	api.GET("/logs/:namespace/:podName/download", logsHandler.HandleLogsDownload)
 
 	terminalHandler := terminal.NewTerminalHandler()
 	api.GET("/terminal/:namespace/:podName/ws", terminalHandler.HandleTerminalWebSocket)

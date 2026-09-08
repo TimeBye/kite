@@ -6,8 +6,11 @@ import { OverviewData, PodMetrics, ResourceUsageHistory } from '@/types/api'
 import { useCluster } from '@/hooks/use-cluster'
 
 import { API_BASE_URL } from '../api-client'
-import { appendCurrentClusterParam } from '../current-cluster'
-import { getWebSocketUrl } from '../subpath'
+import {
+  appendCurrentClusterParam,
+  withCurrentClusterPath,
+} from '../current-cluster'
+import { getWebSocketUrl, withSubPath } from '../subpath'
 import useWebSocket, { WebSocketMessage } from '../useWebSocket'
 import { fetchAPI } from './shared'
 
@@ -148,6 +151,38 @@ export const fetchPodLogs = (
 
   const endpoint = `/logs/${namespace}/${podName}${params.toString() ? `?${params.toString()}` : ''}`
   return fetchAPI<LogsResponse>(endpoint)
+}
+
+// Download a pod's logs as a file, streamed directly from the API server
+// (not limited to what has been loaded in the log viewer)
+export const podDownloadLogs = (
+  namespace: string,
+  podName: string,
+  options?: {
+    container?: string
+    tailLines?: number
+    timestamps?: boolean
+    previous?: boolean
+  }
+) => {
+  const params = new URLSearchParams()
+  if (options?.container) {
+    params.append('container', options.container)
+  }
+  if (options?.tailLines !== undefined) {
+    params.append('tailLines', options.tailLines.toString())
+  }
+  if (options?.timestamps !== undefined) {
+    params.append('timestamps', options.timestamps.toString())
+  }
+  if (options?.previous !== undefined) {
+    params.append('previous', options.previous.toString())
+  }
+
+  const url = withSubPath(
+    `${API_BASE_URL}${withCurrentClusterPath(`/logs/${namespace}/${podName}/download`)}?${params.toString()}`
+  )
+  window.open(url, '_blank')
 }
 
 // Function to create SSE-based logs connection (follow=true)

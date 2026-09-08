@@ -2,6 +2,9 @@ package resources
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +15,7 @@ import (
 	"github.com/zxh326/kite/pkg/rbac"
 	"github.com/zxh326/kite/pkg/wsutil"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/watch"
@@ -121,6 +125,78 @@ func (h *LogsHandler) HandleLogsWebSocket(c *gin.Context) {
 
 		bl.StreamLogs(ctx)
 	})
+}
+
+// HandleLogsDownload streams a pod's logs to the client as a file download.
+// The log stream is proxied directly from the Kubernetes API server, so the
+// response is not limited by what has been loaded in the UI.
+func (h *LogsHandler) HandleLogsDownload(c *gin.Context) {
+	cs := c.MustGet("cluster").(*cluster.ClientSet)
+	user := c.MustGet("user").(model.User)
+	namespace := c.Param("namespace")
+	podName := c.Param("podName")
+	if namespace == "" || podName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace and podName are required"})
+		return
+	}
+
+	if !rbac.CanAccess(user, string(common.Pods), "log", cs.Name, namespace) {
+		c.JSON(http.StatusForbidden, gin.H{"error": rbac.NoAccess(user.Key(), string(common.VerbLog), string(common.Pods), namespace, cs.Name)})
+		return
+	}
+
+	container := c.Query("container")
+	logOptions := &corev1.PodLogOptions{
+		Container:  container,
+		Timestamps: c.DefaultQuery("timestamps", "false") == "true",
+		Previous:   c.DefaultQuery("previous", "false") == "true",
+	}
+
+	// Without tailLines the full log content is returned; tailLines=-1 also
+	// means all lines (same semantics as the WebSocket handler).
+	if tailLines := c.Query("tailLines"); tailLines != "" {
+		tail, err := strconv.ParseInt(tailLines, 10, 64)
+		if err != nil || (tail < 1 && tail != -1) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tailLines parameter"})
+			return
+		}
+		if tail != -1 {
+			logOptions.TailLines = &tail
+		}
+	}
+	if sinceSeconds := c.Query("sinceSeconds"); sinceSeconds != "" {
+		since, err := strconv.ParseInt(sinceSeconds, 10, 64)
+		if err != nil || since < 1 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sinceSeconds parameter"})
+			return
+		}
+		logOptions.SinceSeconds = &since
+	}
+
+	stream, err := cs.K8sClient.ClientSet.CoreV1().Pods(namespace).GetLogs(podName, logOptions).Stream(c.Request.Context())
+	if err != nil {
+		status := http.StatusInternalServerError
+		if apiStatus, ok := err.(apierrors.APIStatus); ok {
+			status = int(apiStatus.Status().Code)
+		}
+		c.JSON(status, gin.H{"error": fmt.Sprintf("failed to get logs: %v", err)})
+		return
+	}
+	defer func() {
+		if err := stream.Close(); err != nil {
+			klog.Warningf("Failed to close pod log stream for %s/%s: %v", namespace, podName, err)
+		}
+	}()
+
+	if container == "" {
+		container = "pod"
+	}
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s-%s-logs.txt\"", podName, container))
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+
+	if _, err := io.Copy(c.Writer, stream); err != nil {
+		klog.Errorf("Failed to stream logs for pod %s/%s: %v", namespace, podName, err)
+	}
 }
 
 func (h *LogsHandler) watchPods(ctx context.Context, cs *cluster.ClientSet, namespace string, labelSelector labels.Selector, bl *kube.BatchLogHandler) {

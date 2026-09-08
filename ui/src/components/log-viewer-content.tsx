@@ -3,6 +3,7 @@ import type { OnMount } from '@monaco-editor/react'
 import {
   IconClearAll,
   IconDownload,
+  IconFileDownload,
   IconMaximize,
   IconMinimize,
   IconPalette,
@@ -21,7 +22,7 @@ import {
   getAnsiClassNames,
   parseAnsi,
 } from '@/lib/ansi-parser'
-import { useLogsWebSocket } from '@/lib/api'
+import { useLogsWebSocket, podDownloadLogs } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
 import { MonacoEditor } from '@/lib/monaco-loader'
 import { defineMonacoLogThemes } from '@/lib/monaco-theme'
@@ -455,6 +456,17 @@ export function LogViewer({
     }
   }
 
+  // Download the full log from the API server, independent of what has been
+  // loaded into the viewer so far.
+  const downloadAllLogs = () => {
+    if (!selectPodName || selectPodName === '_all') return
+    podDownloadLogs(namespace, selectPodName, {
+      container: selectedContainer,
+      timestamps,
+      previous: previous && !selectedContainerIsEphemeral,
+    })
+  }
+
   const scrollToBottom = useCallback(() => {
     if (editorRef.current) {
       const model = editorRef.current.getModel()
@@ -784,6 +796,17 @@ export function LogViewer({
               disabled={logCount === 0}
             >
               <IconDownload className="h-4 w-4" />
+            </Button>
+
+            {/* Download All Logs from server */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadAllLogs}
+              disabled={!selectPodName || selectPodName === '_all'}
+              title={t('common.actions.downloadAllLogs')}
+            >
+              <IconFileDownload className="h-4 w-4" />
             </Button>
 
             {/* Fullscreen Toggle */}
