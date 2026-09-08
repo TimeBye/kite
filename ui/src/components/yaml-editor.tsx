@@ -164,6 +164,7 @@ export function YamlEditor<T extends ResourceType>({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className={cn(
@@ -207,6 +208,7 @@ export function YamlEditor<T extends ResourceType>({
                 </>
               ) : (
                 <Button
+                  type="button"
                   size="sm"
                   variant="outline"
                   onClick={handleEdit}
