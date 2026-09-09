@@ -74,7 +74,7 @@ func TestGetChartVersion(t *testing.T) {
 			indexFile.Entries["myapp"] = tt.entries
 			indexFile.SortEntries()
 
-			got, err := getChartVersion(indexFile, "myapp", tt.version)
+			got, err := getChartEntry(indexFile, "myapp", tt.version)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")

@@ -297,6 +297,7 @@ export const fetchHelmRepositories = (): Promise<HelmRepository[]> => {
 
 export const createHelmRepository = (
   body: Pick<HelmRepository, 'name' | 'url'> & {
+    plainHTTP?: boolean
     username?: string
     password?: string
   }
