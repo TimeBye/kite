@@ -15,6 +15,7 @@ import type {
   HelmRelease,
   HelmReleaseDryRunResponse,
   HelmReleaseHistoryItem,
+  HelmReleaseHook,
   HelmReleaseResource,
   HelmReleaseUpgradeRequest,
   RelatedResources,
@@ -38,6 +39,7 @@ import { getCRDResourcePath } from '@/lib/k8s'
 import { MonacoDiffEditor } from '@/lib/monaco-loader'
 import {
   getResourceDetailPath,
+  isClusterScopedResource,
   resourceMetadataList,
   type ResourceMetadata,
 } from '@/lib/resource-metadata'
@@ -394,6 +396,49 @@ function toManifestFiles(
       }
     } catch {
       path = `manifest-${index + 1}.yaml`
+    }
+
+    return [{ path, content }]
+  })
+}
+
+function toHookFiles(
+  hooks: HelmReleaseHook[] = [],
+  defaultNamespace: string
+): YamlFileTreeItem[] {
+  return hooks.flatMap((hook, index) => {
+    const doc = (hook.manifest || '').trim()
+    if (!doc) {
+      return []
+    }
+
+    const content = trimHelmSourceComment(doc)
+    let path = `hook/${hook.path || `hook-${index + 1}.yaml`}`
+
+    try {
+      const parsed = yaml.load(doc) as
+        | {
+            kind?: string
+            metadata?: {
+              name?: string
+              namespace?: string
+            }
+          }
+        | undefined
+
+      const kind = parsed?.kind || hook.kind || 'Resource'
+      const name = parsed?.metadata?.name || hook.name || `hook-${index + 1}`
+      const namespace =
+        parsed?.metadata?.namespace ||
+        (isClusterScopedResource(kind.toLowerCase())
+          ? 'cluster'
+          : defaultNamespace)
+      path = `hooks/${manifestResourcePath(
+        { apiVersion: '', kind, name, namespace },
+        index
+      )}`
+    } catch {
+      // keep fallback path
     }
 
     return [{ path, content }]
@@ -1825,13 +1870,19 @@ export function HelmReleaseDetail(props: { namespace: string; name: string }) {
     return items
   }, [releasePods])
   const manifestFiles = useMemo(
-    () =>
-      toManifestFiles(
+    () => [
+      ...toManifestFiles(
         data?.spec?.manifest || '',
         data?.spec?.namespace || namespace,
         data?.status?.resources
       ),
+      ...toHookFiles(
+        data?.spec?.hooks || [],
+        data?.spec?.namespace || namespace
+      ),
+    ],
     [
+      data?.spec?.hooks,
       data?.spec?.manifest,
       data?.spec?.namespace,
       data?.status?.resources,

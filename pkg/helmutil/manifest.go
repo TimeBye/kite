@@ -31,20 +31,23 @@ var manifestClusterScopedKinds = map[string]struct{}{
 }
 
 func ToHelmReleaseDryRunResponse(rel *release.Release) HelmReleaseDryRunResponse {
-	return HelmReleaseDryRunResponse{
-		Resources: resolveManifestPreviewResources(rel.Manifest, rel.Namespace),
-	}
+	resources := resolveManifestPreviewResources(rel.Manifest, rel.Namespace)
+	resources = append(resources, hookPreviewResources(rel.Hooks, rel.Namespace)...)
+	return HelmReleaseDryRunResponse{Resources: resources}
 }
 
 func ToHelmReleaseDryRunDiffResponse(current, next *release.Release) HelmReleaseDryRunResponse {
-	return HelmReleaseDryRunResponse{
-		Resources: diffManifestPreviewResources(
-			current.Manifest,
-			current.Namespace,
-			next.Manifest,
-			next.Namespace,
-		),
-	}
+	resources := diffManifestPreviewResources(
+		current.Manifest,
+		current.Namespace,
+		next.Manifest,
+		next.Namespace,
+	)
+	resources = append(resources, diffResourceLists(
+		hookPreviewResources(current.Hooks, current.Namespace),
+		hookPreviewResources(next.Hooks, next.Namespace),
+	)...)
+	return HelmReleaseDryRunResponse{Resources: resources}
 }
 
 func resolveManifestResources(manifest, defaultNamespace string) []HelmReleaseResource {
@@ -107,9 +110,54 @@ func resolveManifestPreviewResources(manifest, defaultNamespace string) []HelmRe
 	return out
 }
 
+func hookPreviewResources(hooks []*release.Hook, defaultNamespace string) []HelmReleaseDryRunResource {
+	out := []HelmReleaseDryRunResource{}
+	for i, hook := range hooks {
+		doc := strings.TrimSpace(hook.Manifest)
+		if doc == "" {
+			continue
+		}
+		content := trimHelmSourceComment(doc)
+		var u unstructured.Unstructured
+		if err := yaml.Unmarshal([]byte(doc), &u.Object); err != nil || u.GetKind() == "" || u.GetName() == "" {
+			path := hook.Path
+			if path == "" {
+				path = fmt.Sprintf("hook-%d.yaml", i+1)
+			}
+			out = append(out, HelmReleaseDryRunResource{
+				Path:    "hooks/" + path,
+				Content: content,
+			})
+			continue
+		}
+		ns := u.GetNamespace()
+		_, clusterScoped := manifestClusterScopedKinds[strings.ToLower(u.GetKind())]
+		if ns == "" && !clusterScoped {
+			ns = defaultNamespace
+		}
+		resource := HelmReleaseResource{
+			APIVersion: u.GetAPIVersion(),
+			Kind:       u.GetKind(),
+			Name:       u.GetName(),
+			Namespace:  ns,
+		}
+		out = append(out, HelmReleaseDryRunResource{
+			HelmReleaseResource: resource,
+			Path:                "hooks/" + manifestPreviewPath(resource, i),
+			Content:             content,
+		})
+	}
+	return out
+}
+
 func diffManifestPreviewResources(currentManifest, currentNamespace, nextManifest, nextNamespace string) []HelmReleaseDryRunResource {
-	currentResources := resolveManifestPreviewResources(currentManifest, currentNamespace)
-	nextResources := resolveManifestPreviewResources(nextManifest, nextNamespace)
+	return diffResourceLists(
+		resolveManifestPreviewResources(currentManifest, currentNamespace),
+		resolveManifestPreviewResources(nextManifest, nextNamespace),
+	)
+}
+
+func diffResourceLists(currentResources, nextResources []HelmReleaseDryRunResource) []HelmReleaseDryRunResource {
 	currentByPath := make(map[string]HelmReleaseDryRunResource, len(currentResources))
 	nextByPath := make(map[string]HelmReleaseDryRunResource, len(nextResources))
 	for _, resource := range currentResources {

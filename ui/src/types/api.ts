@@ -153,6 +153,7 @@ export interface HelmRelease {
     manifest?: string
     notes?: string
     description?: string
+    hooks?: HelmReleaseHook[]
   }
   status: {
     status: string
@@ -161,6 +162,16 @@ export interface HelmRelease {
     deleted?: string
     resources?: HelmReleaseResource[]
   }
+}
+
+export interface HelmReleaseHook {
+  name: string
+  kind: string
+  path?: string
+  manifest?: string
+  events?: string[]
+  last_run?: Record<string, unknown>
+  weight?: number
 }
 
 export interface HelmReleaseList {
