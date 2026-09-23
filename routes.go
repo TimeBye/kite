@@ -155,6 +155,7 @@ func registerAdminRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *
 func registerProtectedRoutes(r *gin.RouterGroup, authHandler *auth.AuthHandler, cm *cluster.ClusterManager, helmChartsHandler *helm.HelmChartHandler) {
 	api := r.Group("/api/v1")
 	api.POST("/kubeconfig", authHandler.RequireAuth(), cm.DownloadKubeconfig)
+	api.Any("/clusters/:clusterUUID/k8s-proxy", cm.HandleK8sProxy)
 	api.Any("/clusters/:clusterUUID/k8s-proxy/*path", cm.HandleK8sProxy)
 	api.GET("/clusters", authHandler.RequireAuth(), cm.GetClusters)
 	defaultAPI := api.Group("")
