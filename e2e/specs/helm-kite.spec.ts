@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 const chartName = 'kite'
-const repositoryURL = 'https://kite-org.github.io/kite/'
+const repositoryURL = 'https://charts.kitehq.dev'
 const installVersion = '0.10.0'
 const specifiedUpgradeVersion = '0.11.0'
 const namespace = 'default'
@@ -562,9 +562,7 @@ test.describe('helm kite lifecycle', () => {
         total?: number
       }
       expect(searchBody.items?.length).toBeGreaterThan(0)
-      expect(searchBody.total).toBeGreaterThanOrEqual(
-        searchBody.items!.length
-      )
+      expect(searchBody.total).toBeGreaterThanOrEqual(searchBody.items!.length)
 
       // Verify the search result is filtered server-side
       await expect(
@@ -587,7 +585,9 @@ test.describe('helm kite lifecycle', () => {
     }
   })
 
-  test('custom values are applied during install and upgrade', async ({ page }) => {
+  test('custom values are applied during install and upgrade', async ({
+    page,
+  }) => {
     test.setTimeout(8 * 60 * 1000)
     const suffix = Date.now().toString(36)
     const repositoryName = `e2e-set-${suffix}`
@@ -684,7 +684,9 @@ podLabels:
             if (!labels.length || labels.some((l) => !l)) {
               return ''
             }
-            return labels.every((l) => l === 'install') ? 'install' : labels.join(',')
+            return labels.every((l) => l === 'install')
+              ? 'install'
+              : labels.join(',')
           },
           { timeout: 120_000 }
         )
@@ -761,7 +763,9 @@ podLabels:
     }
   })
 
-  test('merged values preview is displayed during install', async ({ page }) => {
+  test('merged values preview is displayed during install', async ({
+    page,
+  }) => {
     const suffix = Date.now().toString(36)
     const repositoryName = `e2e-merged-${suffix}`
 
@@ -829,7 +833,9 @@ podLabels:
     }
   })
 
-  test('merged values preview is displayed during upgrade', async ({ page }) => {
+  test('merged values preview is displayed during upgrade', async ({
+    page,
+  }) => {
     const suffix = Date.now().toString(36)
     const repositoryName = `e2e-merged-upgrade-${suffix}`
     const releaseName = `e2e-merge-up-${suffix}`
@@ -971,9 +977,9 @@ podLabels:
       await installDialog.getByRole('tab', { name: 'Values diff' }).click()
 
       // Verify the diff editor is visible
-      await expect(
-        installDialog.locator('.monaco-diff-editor')
-      ).toBeVisible({ timeout: 60_000 })
+      await expect(installDialog.locator('.monaco-diff-editor')).toBeVisible({
+        timeout: 60_000,
+      })
 
       await installDialog.getByRole('button', { name: 'Back' }).click()
       await installDialog.getByRole('button', { name: 'Cancel' }).click()
@@ -1057,15 +1063,15 @@ podLabels:
 
       // Click Diff vs current tab and verify diff editor
       await upgradeDialog.getByRole('tab', { name: 'Diff vs current' }).click()
-      await expect(
-        upgradeDialog.locator('.monaco-diff-editor')
-      ).toBeVisible({ timeout: 60_000 })
+      await expect(upgradeDialog.locator('.monaco-diff-editor')).toBeVisible({
+        timeout: 60_000,
+      })
 
       // Click Diff vs defaults tab and verify diff editor
       await upgradeDialog.getByRole('tab', { name: 'Diff vs defaults' }).click()
-      await expect(
-        upgradeDialog.locator('.monaco-diff-editor')
-      ).toBeVisible({ timeout: 60_000 })
+      await expect(upgradeDialog.locator('.monaco-diff-editor')).toBeVisible({
+        timeout: 60_000,
+      })
 
       await upgradeDialog.getByRole('button', { name: 'Back' }).click()
       await upgradeDialog.getByRole('button', { name: 'Cancel' }).click()
@@ -1116,15 +1122,11 @@ podLabels:
       await installDialog.locator('#helm-install-wait').check()
 
       // Verify the timeout input appears
-      await expect(
-        installDialog.locator('#helm-install-timeout')
-      ).toBeVisible()
+      await expect(installDialog.locator('#helm-install-timeout')).toBeVisible()
 
       // Uncheck Wait and verify timeout disappears
       await installDialog.locator('#helm-install-wait').uncheck()
-      await expect(
-        installDialog.locator('#helm-install-timeout')
-      ).toBeHidden()
+      await expect(installDialog.locator('#helm-install-timeout')).toBeHidden()
 
       await installDialog.getByRole('button', { name: 'Cancel' }).click()
     } finally {
@@ -1182,7 +1184,9 @@ podLabels:
       const chartVersionPromise = page.waitForResponse(
         (response) =>
           response.url().includes('/api/v1/charts/') &&
-          response.url().includes(`version=${encodeURIComponent(installVersion)}`),
+          response
+            .url()
+            .includes(`version=${encodeURIComponent(installVersion)}`),
         { timeout: 60_000 }
       )
       await versionSelect.click()
@@ -1248,7 +1252,9 @@ podLabels:
       await expect(installDialog).toBeVisible()
 
       // Type a non-existent namespace in the selector search
-      const nsSelector = installDialog.locator('[data-slot="select-trigger"]').nth(1)
+      const nsSelector = installDialog
+        .locator('[data-slot="select-trigger"]')
+        .nth(1)
       await nsSelector.click()
 
       // Search for a namespace that doesn't exist
@@ -1261,18 +1267,18 @@ podLabels:
       await createOption.click()
 
       // The "Create namespace" checkbox should now be visible inline
-      await expect(
-        installDialog.locator('#helm-create-namespace')
-      ).toBeVisible({ timeout: 10_000 })
+      await expect(installDialog.locator('#helm-create-namespace')).toBeVisible(
+        { timeout: 10_000 }
+      )
 
       // Now select an existing namespace ("default")
       await nsSelector.click()
       await page.getByRole('option', { name: 'default', exact: true }).click()
 
       // The "Create namespace" checkbox should disappear
-      await expect(
-        installDialog.locator('#helm-create-namespace')
-      ).toBeHidden({ timeout: 10_000 })
+      await expect(installDialog.locator('#helm-create-namespace')).toBeHidden({
+        timeout: 10_000,
+      })
 
       await installDialog.getByRole('button', { name: 'Cancel' }).click()
     } finally {
@@ -1286,7 +1292,9 @@ podLabels:
     await page.goto('/charts')
 
     // Ensure we're in Artifact Hub mode (default)
-    await expect(page.getByText('Artifact Hub', { exact: true }).first()).toBeVisible()
+    await expect(
+      page.getByText('Artifact Hub', { exact: true }).first()
+    ).toBeVisible()
 
     // Count API requests triggered by typing
     let requestCount = 0
@@ -1447,9 +1455,7 @@ podLabels:
 
       // Delete the repository via API
       // First find the repository ID
-      const listResponse = await page.request.get(
-        '/api/v1/charts/repositories'
-      )
+      const listResponse = await page.request.get('/api/v1/charts/repositories')
       expect(listResponse.ok()).toBe(true)
       const repos = (await listResponse.json()) as Array<{
         id: number

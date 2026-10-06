@@ -15,10 +15,10 @@ interface ClusterContextType {
   clusters: Cluster[]
   currentCluster: string | null
   setCurrentCluster: (clusterName: string) => void
+  refreshClusters: (clusterNames?: string[]) => Promise<void>
   isLoading: boolean
   isSwitching?: boolean
   error: Error | null
-  refreshClusters: () => Promise<void>
 }
 
 export const ClusterContext = createContext<ClusterContextType | undefined>(
@@ -35,10 +35,63 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [isSwitching, setIsSwitching] = useState(false)
+  const [pendingClusterNames, setPendingClusterNames] = useState<string[]>([])
+  const isRefreshingClusters = pendingClusterNames.length > 0
   const queryClient = useQueryClient()
   const { refetch: refetchClusters } = useCurrentClusterList({
     enabled: false,
   })
+
+  const refreshClusters = useCallback(
+    async (clusterNames?: string[]) => {
+      setPendingClusterNames((pending) => [
+        ...new Set([...pending, ...(clusterNames ?? [])]),
+      ])
+      const result = await refetchClusters()
+      setIsLoading(false)
+      if (result.isSuccess) {
+        const selectedCluster = getCurrentCluster()
+        if (
+          selectedCluster &&
+          !result.data.some((cluster) => cluster.name === selectedCluster)
+        ) {
+          return
+        }
+        setClusters(result.data)
+        setError(null)
+        setPendingClusterNames((pending) =>
+          pending.filter(
+            (name) => !result.data.some((cluster) => cluster.name === name)
+          )
+        )
+      } else if (clusterNames === undefined) {
+        setClusters([])
+        setError(result.error instanceof Error ? result.error : null)
+      }
+    },
+    [refetchClusters]
+  )
+
+  useEffect(() => {
+    if (pendingClusterNames.length === 0) {
+      return
+    }
+    const interval = window.setInterval(() => {
+      void refreshClusters(pendingClusterNames)
+    }, 5000)
+    return () => window.clearInterval(interval)
+  }, [pendingClusterNames, refreshClusters])
+
+  useEffect(() => {
+    if (!isRefreshingClusters) {
+      return
+    }
+    const timeout = window.setTimeout(
+      () => setPendingClusterNames([]),
+      5 * 60 * 1000
+    )
+    return () => window.clearTimeout(timeout)
+  }, [isRefreshingClusters])
 
   useEffect(() => {
     if (currentCluster) {
@@ -47,18 +100,6 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
     }
     clearCurrentCluster()
   }, [currentCluster])
-
-  const refreshClusters = useCallback(async () => {
-    const result = await refetchClusters()
-    if (result.data) {
-      setClusters(result.data)
-      setError(null)
-    } else {
-      setClusters([])
-      setError(result.error instanceof Error ? result.error : null)
-    }
-    setIsLoading(false)
-  }, [refetchClusters])
 
   useEffect(() => {
     void refreshClusters()
@@ -117,10 +158,10 @@ export const ClusterProvider: React.FC<{ children: React.ReactNode }> = ({
     clusters,
     currentCluster,
     setCurrentCluster,
+    refreshClusters,
     isLoading,
     isSwitching,
     error,
-    refreshClusters,
   }
 
   return (

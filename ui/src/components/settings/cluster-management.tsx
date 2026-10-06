@@ -30,6 +30,7 @@ import {
   useClusterListPaginated,
   useVersionInfo,
 } from '@/lib/api'
+import { useCluster } from '@/hooks/use-cluster'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -66,6 +67,7 @@ import { ClusterImportDialog } from './cluster-import-dialog'
 export function ClusterManagement() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const { refreshClusters } = useCluster()
 
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
@@ -392,19 +394,23 @@ export function ClusterManagement() {
 
   const createMutation = useMutation({
     mutationFn: createCluster,
-    onSuccess: async ({
-      clusterAgentServer,
-      clusterAgentToken,
-      clusterAgentPublicKey,
-      clusterAgentManifestURL,
-    }: {
-      clusterAgentServer?: string
-      clusterAgentToken?: string
-      clusterAgentPublicKey?: string
-      clusterAgentManifestURL?: string
-    }) => {
+    onSuccess: async (
+      {
+        clusterAgentServer,
+        clusterAgentToken,
+        clusterAgentPublicKey,
+        clusterAgentManifestURL,
+      }: {
+        clusterAgentServer?: string
+        clusterAgentToken?: string
+        clusterAgentPublicKey?: string
+        clusterAgentManifestURL?: string
+      },
+      cluster
+    ) => {
       queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
       queryClient.invalidateQueries({ queryKey: ['cluster-list-paginated'] })
+      void refreshClusters([cluster.name])
       toast.success(
         t('clusterManagement.messages.created', 'Cluster created successfully')
       )
@@ -508,10 +514,19 @@ export function ClusterManagement() {
 
   const importMutation = useMutation({
     mutationFn: (config: string) => importClusters({ config }),
-    onSuccess: ({ importedCount }) => {
-      queryClient.invalidateQueries({ queryKey: ['cluster-list'] })
+    onSuccess: async ({ importedCount }) => {
+      await queryClient.invalidateQueries({
+        queryKey: ['cluster-list'],
+        refetchType: 'all',
+      })
       queryClient.invalidateQueries({ queryKey: ['cluster-list-paginated'] })
       queryClient.invalidateQueries({ queryKey: ['clusters'] })
+      const clusters = queryClient.getQueryData<Cluster[]>(['cluster-list'])!
+      void refreshClusters(
+        clusters
+          .filter((cluster) => cluster.enabled)
+          .map((cluster) => cluster.name)
+      )
       toast.success(
         t(
           'clusterManagement.messages.imported',

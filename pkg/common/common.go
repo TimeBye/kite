@@ -16,6 +16,9 @@ const (
 	NodeTerminalPodName    = "kite-node-terminal-agent"
 	KubectlTerminalPodName = "kite-kubectl-agent"
 
+	// DefaultPluginCatalogURL is used when no catalog URL is configured in settings.
+	DefaultPluginCatalogURL = "https://plugins.kitehq.dev/catalog.json"
+
 	KubectlAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
 
 	// db connection max idle time
@@ -38,6 +41,8 @@ var (
 	ClusterAgentImage    = "ghcr.io/kite-org/kite:latest"
 	DBType               = "sqlite"
 	DBDSN                = "dev.db"
+	PluginDir            = "data/plugins"
+	PluginDevURL         = ""
 
 	KiteEncryptKey = "kite-default-encryption-key-change-in-production"
 
@@ -137,6 +142,10 @@ func LoadEnvs() {
 	if dbDSN := os.Getenv("DB_DSN"); dbDSN != "" {
 		DBDSN = dbDSN
 	}
+	if v := os.Getenv("PLUGIN_DIR"); v != "" {
+		PluginDir = v
+	}
+	PluginDevURL = strings.TrimSpace(os.Getenv("PLUGIN_DEV_URL"))
 
 	if dbType := os.Getenv("DB_TYPE"); dbType != "" {
 		if dbType != "sqlite" && dbType != "mysql" && dbType != "postgres" {
@@ -189,17 +198,24 @@ func LoadEnvs() {
 		klog.Warningf("CORS enabled for origins: %v — disable in production", CORSAllowedOrigins)
 	}
 
-	if v := os.Getenv("TRUSTED_PROXIES"); v != "" {
-		TrustedProxies = nil
-		if !strings.EqualFold(strings.TrimSpace(v), "none") {
-			proxies := strings.Split(v, ",")
-			for _, proxy := range proxies {
-				proxy = strings.TrimSpace(proxy)
-				if proxy != "" {
-					TrustedProxies = append(TrustedProxies, proxy)
-				}
-			}
+	loadTrustedProxies()
+	klog.Infof("Trusted proxies configured: %v", TrustedProxies)
+}
+
+func loadTrustedProxies() {
+	v := os.Getenv("TRUSTED_PROXIES")
+	if v == "" {
+		return
+	}
+	TrustedProxies = nil
+	if strings.EqualFold(strings.TrimSpace(v), "none") {
+		return
+	}
+	proxies := strings.Split(v, ",")
+	for _, proxy := range proxies {
+		proxy = strings.TrimSpace(proxy)
+		if proxy != "" {
+			TrustedProxies = append(TrustedProxies, proxy)
 		}
 	}
-	klog.Infof("Trusted proxies configured: %v", TrustedProxies)
 }

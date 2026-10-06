@@ -1,3 +1,4 @@
+import type { YamlEditorProps } from '@kite-dev/plugin-sdk/ui'
 import { IconTextWrap } from '@tabler/icons-react'
 import { useTranslation } from 'react-i18next'
 
@@ -13,19 +14,12 @@ import { Button } from '@/components/ui/button'
 import { useAppearance } from './appearance-provider'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-interface SimpleYamlEditorProps {
-  value: string
-  onChange: (value: string | undefined) => void
-  disabled?: boolean
-  height?: string
-}
-
 export function SimpleYamlEditor({
   value,
   onChange,
   disabled = false,
   height = '400px',
-}: SimpleYamlEditorProps) {
+}: YamlEditorProps) {
   const { t } = useTranslation()
   const { actualTheme, colorTheme } = useAppearance()
   const themeMode = actualTheme === 'dark' ? 'dark' : 'light'

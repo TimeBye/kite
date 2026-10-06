@@ -22,7 +22,7 @@ import {
   getAnsiClassNames,
   parseAnsi,
 } from '@/lib/ansi-parser'
-import { useLogsWebSocket, podDownloadLogs } from '@/lib/api'
+import { podDownloadLogs, useLogsWebSocket } from '@/lib/api'
 import { toSimpleContainer } from '@/lib/k8s'
 import { MonacoEditor } from '@/lib/monaco-loader'
 import { defineMonacoLogThemes } from '@/lib/monaco-theme'

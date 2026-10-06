@@ -15,14 +15,16 @@ import useWebSocket, { WebSocketMessage } from '../useWebSocket'
 import { fetchAPI } from './shared'
 
 // Overview API
-const fetchOverview = (): Promise<OverviewData> => {
-  return fetchAPI<OverviewData>('/overview')
+const fetchOverview = (cluster?: string | null): Promise<OverviewData> => {
+  return fetchAPI<OverviewData>(withCurrentClusterPath('/overview', cluster))
 }
 
 export const useOverview = (options?: { staleTime?: number }) => {
+  const { currentCluster } = useCluster()
   return useQuery({
-    queryKey: ['overview'],
-    queryFn: fetchOverview,
+    queryKey: ['overview', currentCluster],
+    queryFn: () => fetchOverview(currentCluster),
+    enabled: !!currentCluster,
     staleTime: options?.staleTime || 30000, // 30 seconds cache
     refetchInterval: 30000, // Auto refresh every 30 seconds
   })
@@ -31,29 +33,43 @@ export const useOverview = (options?: { staleTime?: number }) => {
 // Resource Usage History API
 export const fetchResourceUsageHistory = (
   duration: string,
-  instance?: string
+  instance?: string,
+  cluster?: string | null
 ): Promise<ResourceUsageHistory> => {
   const endpoint = `/prometheus/resource-usage-history?duration=${duration}`
   if (instance) {
     return fetchAPI<ResourceUsageHistory>(
-      `${endpoint}&instance=${encodeURIComponent(instance)}`
+      withCurrentClusterPath(
+        `${endpoint}&instance=${encodeURIComponent(instance)}`,
+        cluster
+      )
     )
   }
-  return fetchAPI<ResourceUsageHistory>(endpoint)
+  return fetchAPI<ResourceUsageHistory>(
+    withCurrentClusterPath(endpoint, cluster)
+  )
 }
 
 export const useResourceUsageHistory = (
   duration: string,
   options?: { staleTime?: number; instance?: string; enabled?: boolean }
 ) => {
+  const { currentCluster } = useCluster()
   return useQuery({
-    queryKey: ['resource-usage-history', duration, options?.instance],
-    queryFn: () => fetchResourceUsageHistory(duration, options?.instance),
-    enabled: options?.enabled,
+    queryKey: [
+      'resource-usage-history',
+      currentCluster,
+      duration,
+      options?.instance,
+    ],
+    queryFn: () =>
+      fetchResourceUsageHistory(duration, options?.instance, currentCluster),
+    enabled: !!currentCluster && options?.enabled !== false,
     staleTime: options?.staleTime || 10000, // 10 seconds cache
     refetchInterval: 30000, // Auto refresh every 30 seconds for historical data
     retry: 0,
-    placeholderData: (prevData) => prevData, // Keep previous data while loading new data
+    placeholderData: (prevData, previousQuery) =>
+      previousQuery?.queryKey[1] === currentCluster ? prevData : undefined,
   })
 }
 
@@ -63,7 +79,8 @@ export const fetchPodMetrics = (
   podName: string,
   duration: string,
   container?: string,
-  labelSelector?: string
+  labelSelector?: string,
+  cluster?: string | null
 ): Promise<PodMetrics> => {
   let endpoint = `/prometheus/pods/${namespace}/${podName}/metrics?duration=${duration}`
   if (container) {
@@ -72,7 +89,7 @@ export const fetchPodMetrics = (
   if (labelSelector) {
     endpoint += `&labelSelector=${encodeURIComponent(labelSelector)}`
   }
-  return fetchAPI<PodMetrics>(endpoint)
+  return fetchAPI<PodMetrics>(withCurrentClusterPath(endpoint, cluster))
 }
 
 export const usePodMetrics = (
@@ -86,9 +103,11 @@ export const usePodMetrics = (
     labelSelector?: string
   }
 ) => {
+  const { currentCluster } = useCluster()
   return useQuery({
     queryKey: [
       'pod-metrics',
+      currentCluster,
       namespace,
       podName,
       duration,
@@ -101,13 +120,15 @@ export const usePodMetrics = (
         podName,
         duration,
         options?.container,
-        options?.labelSelector
+        options?.labelSelector,
+        currentCluster
       ),
-    enabled: !!namespace && !!podName,
+    enabled: !!currentCluster && !!namespace && !!podName,
     staleTime: options?.staleTime || 10000, // 10 seconds cache
     refetchInterval: options?.refreshInterval || 30 * 1000, // 1 second
     retry: 0,
-    placeholderData: (prevData) => prevData,
+    placeholderData: (prevData, previousQuery) =>
+      previousQuery?.queryKey[1] === currentCluster ? prevData : undefined,
   })
 }
 // Logs API functions
@@ -497,31 +518,41 @@ export const useLogsWebSocket = (
   }
 ) => {
   const { currentCluster } = useCluster()
-  const onClear = options?.onClear
+  const {
+    enabled = true,
+    container,
+    tailLines,
+    timestamps,
+    previous,
+    sinceSeconds,
+    labelSelector,
+    onNewLog,
+    onClear,
+  } = options ?? {}
 
   // Build WebSocket URL
   const buildWebSocketUrl = useCallback(() => {
-    if (!options?.enabled || !namespace || !podName) return ''
+    if (!enabled || !namespace || !podName) return ''
 
     const params = new URLSearchParams()
 
-    if (options.container) {
-      params.append('container', options.container)
+    if (container) {
+      params.append('container', container)
     }
-    if (options.tailLines !== undefined) {
-      params.append('tailLines', options.tailLines.toString())
+    if (tailLines !== undefined) {
+      params.append('tailLines', tailLines.toString())
     }
-    if (options.timestamps !== undefined) {
-      params.append('timestamps', options.timestamps.toString())
+    if (timestamps !== undefined) {
+      params.append('timestamps', timestamps.toString())
     }
-    if (options.previous !== undefined) {
-      params.append('previous', options.previous.toString())
+    if (previous !== undefined) {
+      params.append('previous', previous.toString())
     }
-    if (options.sinceSeconds !== undefined) {
-      params.append('sinceSeconds', options.sinceSeconds.toString())
+    if (sinceSeconds !== undefined) {
+      params.append('sinceSeconds', sinceSeconds.toString())
     }
-    if (options.labelSelector) {
-      params.append('labelSelector', options.labelSelector)
+    if (labelSelector) {
+      params.append('labelSelector', labelSelector)
     }
 
     appendCurrentClusterParam(params, currentCluster)
@@ -531,13 +562,13 @@ export const useLogsWebSocket = (
   }, [
     namespace,
     podName,
-    options?.container,
-    options?.tailLines,
-    options?.timestamps,
-    options?.previous,
-    options?.sinceSeconds,
-    options?.enabled,
-    options?.labelSelector,
+    container,
+    tailLines,
+    timestamps,
+    previous,
+    sinceSeconds,
+    enabled,
+    labelSelector,
     currentCluster,
   ])
 
@@ -546,8 +577,8 @@ export const useLogsWebSocket = (
     (message: WebSocketMessage) => {
       switch (message.type) {
         case 'log':
-          if (message.data && options?.onNewLog) {
-            options.onNewLog(message.data)
+          if (message.data && onNewLog) {
+            onNewLog(message.data)
           }
           break
         case 'error':
@@ -558,7 +589,7 @@ export const useLogsWebSocket = (
           break
       }
     },
-    [options]
+    [onNewLog]
   )
 
   const handleOpen = useCallback(() => {
@@ -589,7 +620,7 @@ export const useLogsWebSocket = (
       onError: handleError,
     },
     {
-      enabled: options?.enabled !== false,
+      enabled,
       reconnectOnClose: true,
       maxReconnectAttempts: 3,
       reconnectInterval: 5000,
@@ -602,20 +633,16 @@ export const useLogsWebSocket = (
 
   const refetch = useCallback(() => {
     wsActions.reconnect()
-    if (options?.onClear) {
-      options.onClear()
-    }
-  }, [wsActions, options])
+    onClear?.()
+  }, [wsActions, onClear])
 
   const stopStreaming = useCallback(() => {
     wsActions.disconnect()
   }, [wsActions])
 
   const clearLogs = useCallback(() => {
-    if (options?.onClear) {
-      options.onClear()
-    }
-  }, [options])
+    onClear?.()
+  }, [onClear])
 
   return useMemo(
     () => ({

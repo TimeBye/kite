@@ -107,6 +107,8 @@ func InitDB() {
 		ScheduledTask{},
 		HelmTask{},
 		KubeconfigToken{},
+		Plugin{},
+		PluginSetting{},
 	}
 	for _, model := range models {
 		err = DB.AutoMigrate(model)

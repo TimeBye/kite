@@ -1,3 +1,4 @@
+import { PluginResourceView } from '@/plugins/resource-view'
 import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router-dom'
 
@@ -41,10 +42,16 @@ export function ResourceDetail() {
   }
 
   return (
-    <SimpleResourceDetail
-      resourceType={resource as ResourceType}
-      namespace={namespace}
-      name={name}
+    <PluginResourceView
+      view="detail"
+      target={resource}
+      fallback={
+        <SimpleResourceDetail
+          resourceType={resource as ResourceType}
+          namespace={namespace}
+          name={name}
+        />
+      }
     />
   )
 }

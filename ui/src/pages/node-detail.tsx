@@ -55,6 +55,7 @@ import {
   MetadataListCard,
 } from '@/components/pod-overview-sidebar'
 import { PodTable } from '@/components/pod-table'
+import { ResourceYaml } from '@/components/resource-yaml'
 import { Terminal } from '@/components/terminal'
 import {
   WorkloadInfoBlock,
@@ -62,10 +63,7 @@ import {
   WorkloadSummaryCard,
 } from '@/components/workload-overview-parts'
 
-import {
-  ResourceDetailShell,
-  type ResourceDetailShellTab,
-} from './resource-detail-shell'
+import { ResourceDetailShell } from './resource-detail-shell'
 
 export function NodeDetail(props: { name: string }) {
   const { name } = props
@@ -185,46 +183,6 @@ export function NodeDetail(props: { name: string }) {
     }
   }
 
-  const extraTabs: ResourceDetailShellTab<Node>[] = [
-    ...(relatedPods && relatedPods.length > 0
-      ? [
-          {
-            value: 'pods',
-            label: (
-              <>
-                {t('common.tabs.pods')}{' '}
-                <Badge variant="secondary">{relatedPods.length}</Badge>
-              </>
-            ),
-            content: (
-              <PodTable
-                pods={relatedPods}
-                isLoading={isLoadingRelated}
-                hiddenNode
-              />
-            ),
-          },
-        ]
-      : []),
-    {
-      value: 'monitor',
-      label: t('common.tabs.monitor'),
-      content: <NodeMonitoring name={name} />,
-    },
-    {
-      value: 'terminal',
-      label: t('common.tabs.terminal'),
-      content: <Terminal type="node" nodeName={name} />,
-    },
-    {
-      value: 'events',
-      label: t('common.tabs.events'),
-      content: (
-        <EventTable resource="nodes" namespace={undefined} name={name} />
-      ),
-    },
-  ]
-
   return (
     <ResourceDetailShell
       resourceType="nodes"
@@ -234,17 +192,69 @@ export function NodeDetail(props: { name: string }) {
       isLoading={isLoading}
       error={isError ? error : null}
       onRefresh={handleRefresh}
-      onSaveYaml={handleSaveYaml}
       showDelete={false}
-      overview={
-        data ? (
-          <NodeOverview
-            node={data}
-            podCount={relatedPods?.length || 0}
-            onUntaint={handleUntaint}
-          />
-        ) : null
-      }
+      tabs={[
+        {
+          value: 'overview',
+          label: t('common.tabs.overview'),
+          content: data ? (
+            <NodeOverview
+              node={data}
+              podCount={relatedPods?.length || 0}
+              onUntaint={handleUntaint}
+            />
+          ) : null,
+        },
+        {
+          value: 'yaml',
+          label: t('common.tabs.yaml'),
+          content: ({ resource, refreshKey }) => (
+            <ResourceYaml
+              key={refreshKey}
+              value={resource}
+              onSave={handleSaveYaml}
+              fillHeight
+            />
+          ),
+        },
+        ...(relatedPods && relatedPods.length > 0
+          ? [
+              {
+                value: 'pods',
+                label: (
+                  <>
+                    {t('common.tabs.pods')}{' '}
+                    <Badge variant="secondary">{relatedPods.length}</Badge>
+                  </>
+                ),
+                content: (
+                  <PodTable
+                    pods={relatedPods}
+                    isLoading={isLoadingRelated}
+                    hiddenNode
+                  />
+                ),
+              },
+            ]
+          : []),
+        {
+          value: 'monitor',
+          label: t('common.tabs.monitor'),
+          content: <NodeMonitoring name={name} />,
+        },
+        {
+          value: 'terminal',
+          label: t('common.tabs.terminal'),
+          content: <Terminal type="node" nodeName={name} />,
+        },
+        {
+          value: 'events',
+          label: t('common.tabs.events'),
+          content: (
+            <EventTable resource="nodes" namespace={undefined} name={name} />
+          ),
+        },
+      ]}
       headerActions={
         <>
           <Popover
@@ -486,7 +496,6 @@ export function NodeDetail(props: { name: string }) {
           </Popover>
         </>
       }
-      extraTabs={extraTabs}
     />
   )
 }

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ResourceYamlProps } from '@kite-dev/plugin-sdk/ui'
 import {
   IconCheck,
   IconEdit,
@@ -9,14 +10,14 @@ import {
 import * as yaml from 'js-yaml'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
-import { ResourceType, ResourceTypeMap } from '@/types/api'
 import { MonacoEditor } from '@/lib/monaco-loader'
 import {
   defineMonacoBackgroundThemes,
   useMonacoBackgroundColor,
 } from '@/lib/monaco-theme'
-import { cn } from '@/lib/utils'
+import { cn, translateError } from '@/lib/utils'
 import { useWordWrap } from '@/hooks/use-word-wrap'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -25,45 +26,22 @@ import { useAppearance } from './appearance-provider'
 import { ErrorBoundary } from './error-boundary'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 
-interface YamlEditorProps<T extends ResourceType> {
-  /** The YAML content to edit */
-  value: string
-  /** Whether the editor is in read-only mode by default */
-  readOnly?: boolean
-  /** Whether to show the edit controls */
-  showControls?: boolean
-  /** Card title */
-  title?: string
-  /** Minimum height of the editor */
-  minHeight?: number
-  /** Callback when YAML content changes */
-  onChange?: (value: string) => void
-  /** Callback when save is clicked */
-  onSave?: (value: ResourceTypeMap[T]) => void
-  /** Callback when cancel is clicked */
-  onCancel?: () => void
-  /** Whether save operation is in progress */
-  isSaving?: boolean
-  /** Custom class name for the card */
-  className?: string
-  fillHeight?: boolean
-}
-
-export function YamlEditor<T extends ResourceType>({
+export function ResourceYaml<T>({
   value,
-  readOnly = false,
-  showControls = true,
   title,
-  onChange,
+  actions,
   onSave,
-  onCancel,
-  isSaving = false,
   className,
   fillHeight = false,
-}: YamlEditorProps<T>) {
+}: ResourceYamlProps<T>) {
   const { t } = useTranslation()
   const [isEditing, setIsEditing] = useState(false)
-  const [editorValue, setEditorValue] = useState(value)
+  const yamlValue = useMemo(
+    () => yaml.dump(value, { indent: 2, lineWidth: -1 }),
+    [value]
+  )
+  const [editorValue, setEditorValue] = useState(yamlValue)
+  const [isSaving, setIsSaving] = useState(false)
   const [isValidYaml, setIsValidYaml] = useState(true)
   const [validationError, setValidationError] = useState<string>('')
   const { wordWrap, toggleWordWrap } = useWordWrap()
@@ -79,37 +57,31 @@ export function YamlEditor<T extends ResourceType>({
     colorTheme
   )
 
-  // Update editor value when value prop changes
   useEffect(() => {
-    setEditorValue(value)
-  }, [value])
+    setEditorValue(yamlValue)
+  }, [yamlValue])
 
-  // Validate YAML on content change with debounce for error display
   useEffect(() => {
-    // Immediate validation for isValidYaml state
     try {
       yaml.load(editorValue)
       setIsValidYaml(true)
-      setValidationError('') // Clear error immediately when valid
+      setValidationError('')
     } catch (error) {
-      setIsValidYaml(false) // Set invalid state immediately
+      setIsValidYaml(false)
 
-      // Clear previous timeout
       if (validationTimeoutRef.current) {
         clearTimeout(validationTimeoutRef.current)
       }
 
-      // Delay showing the error message
       validationTimeoutRef.current = setTimeout(() => {
         setValidationError(
           error instanceof Error
             ? error.message.split('\n')[0]
             : t('common.messages.invalidYaml', 'Invalid YAML')
         )
-      }, 1000) // 1 second delay only for error message display
+      }, 1000)
     }
 
-    // Cleanup timeout on unmount
     return () => {
       if (validationTimeoutRef.current) {
         clearTimeout(validationTimeoutRef.current)
@@ -120,12 +92,10 @@ export function YamlEditor<T extends ResourceType>({
   const handleEditorChange = (value: string | undefined) => {
     const newValue = value || ''
     setEditorValue(newValue)
-    onChange?.(newValue)
   }
 
   const handleEdit = () => {
     setIsEditing(true)
-    // Focus the editor after setting editing mode
     setTimeout(() => {
       if (editorRef.current) {
         editorRef.current.focus()
@@ -133,29 +103,33 @@ export function YamlEditor<T extends ResourceType>({
     }, 100)
   }
 
-  const handleSave = () => {
-    if (isValidYaml) {
-      onSave?.(yaml.load(editorValue) as ResourceTypeMap[T])
-      if (!readOnly) {
-        setIsEditing(false)
-      }
+  const handleSave = async () => {
+    if (!isValidYaml || !onSave) return
+    setIsSaving(true)
+    try {
+      await onSave(yaml.load(editorValue) as T)
+      setIsEditing(false)
+    } catch (error) {
+      toast.error(translateError(error, t))
+    } finally {
+      setIsSaving(false)
     }
   }
 
   const handleCancel = () => {
+    setEditorValue(yamlValue)
     setIsEditing(false)
-    onCancel?.()
   }
 
   const handleEditorDidMount = (editor: monacoEditor.IStandaloneCodeEditor) => {
     editorRef.current = editor
   }
 
-  const effectiveReadOnly = readOnly || !isEditing
+  const effectiveReadOnly = !onSave || !isEditing || isSaving
   const editorTitle = title ?? t('common.fields.yamlConfiguration')
 
   return (
-    <Card className={cn(fillHeight && 'min-h-0 flex-1', className)}>
+    <Card className={cn(fillHeight && 'h-full min-h-0 flex-1', className)}>
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="space-y-1">
           <CardTitle>{editorTitle}</CardTitle>
@@ -180,7 +154,8 @@ export function YamlEditor<T extends ResourceType>({
               {t('common.actions.toggleWordWrap')}
             </TooltipContent>
           </Tooltip>
-          {showControls && (
+          {actions}
+          {onSave && (
             <div className="flex gap-2">
               {isEditing ? (
                 <>
@@ -212,7 +187,6 @@ export function YamlEditor<T extends ResourceType>({
                   size="sm"
                   variant="outline"
                   onClick={handleEdit}
-                  disabled={readOnly}
                 >
                   <IconEdit className="w-4 h-4 mr-2" />
                   {t('common.actions.edit')}
