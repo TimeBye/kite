@@ -11,24 +11,28 @@ const { useClusterListPaginated, useVersionInfo } = vi.hoisted(() => ({
   useVersionInfo: vi.fn(),
 }))
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (
-      key: string,
-      defaultValueOrOptions?: string | Record<string, unknown>
-    ) => {
-      if (typeof defaultValueOrOptions === 'string')
-        return defaultValueOrOptions
-      if (
-        typeof defaultValueOrOptions === 'object' &&
-        defaultValueOrOptions?.defaultValue
-      ) {
-        return defaultValueOrOptions.defaultValue as string
-      }
-      return key
-    },
-  }),
-}))
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (
+        key: string,
+        defaultValueOrOptions?: string | Record<string, unknown>
+      ) => {
+        if (typeof defaultValueOrOptions === 'string')
+          return defaultValueOrOptions
+        if (
+          typeof defaultValueOrOptions === 'object' &&
+          defaultValueOrOptions?.defaultValue
+        ) {
+          return defaultValueOrOptions.defaultValue as string
+        }
+        return key
+      },
+    }),
+  }
+})
 
 vi.mock('@/lib/api', () => ({
   useClusterListPaginated,
@@ -38,6 +42,10 @@ vi.mock('@/lib/api', () => ({
   importClusters: vi.fn(),
   regenerateClusterAgentRegistration: vi.fn(),
   updateCluster: vi.fn(),
+}))
+
+vi.mock('@/hooks/use-cluster', () => ({
+  useCluster: () => ({ refreshClusters: vi.fn() }),
 }))
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
