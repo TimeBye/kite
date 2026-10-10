@@ -1,0 +1,47 @@
+services:
+  kite:
+    image: swr.cn-east-3.myhuaweicloud.com/c7n/kite:dev
+    ports:
+      - "8080:8080"
+    restart: always
+    environment:
+      # 加密密钥
+      # 手动执行生成 openssl rand -hex 32
+      JWT_SECRET: 
+      # 手动执行生成 openssl rand -hex 32
+      KITE_ENCRYPT_KEY: 
+      # 手动执行生成 openssl rand -hex 32
+      KUBECONFIG_JWT_SECRET: 
+      KUBECONFIG_JWT_KID: primary
+
+      # 管理员账号密码
+      KITE_USERNAME: admin
+      # 手动执行生成 openssl rand -hex 12
+      KITE_PASSWORD: 
+
+      # 镜像配置
+      NODE_TERMINAL_IMAGE: swr.cn-east-3.myhuaweicloud.com/c7n/busybox:latest
+      KUBECTL_TERMINAL_IMAGE: swr.cn-east-3.myhuaweicloud.com/c7n/kubectl:latest
+      CLUSTER_AGENT_IMAGE: swr.cn-east-3.myhuaweicloud.com/c7n/kite:dev
+
+      # 对应 chart 的 db.type=sqlite（默认）
+      DB_TYPE: sqlite
+      DB_DSN: /data/kite.db
+      # SQLite 附加参数对应 db.sqlite.options，例如：
+      # DB_DSN: /data/kite.db?_journal_mode=WAL&_busy_timeout=5000
+      # --- 使用外部数据库（对应 db.type=postgres/mysql + db.dsn）---
+      # DB_TYPE: postgres
+      # DB_DSN: postgres://user:password@postgres:5432/kite?sslmode=disable
+      # DB_TYPE: mysql
+      # DB_DSN: mysql://user:password@tcp(mysql:3306)/kite
+
+      # 插件目录，默认与 SQLite 共享 /data 卷（对应 plugins.directory）
+      PLUGIN_DIR: /data/plugins
+
+      # 外部访问地址，用于生成 OAuth 回调 URL（对应 host）
+      # HOST: https://kite.example.com
+      # 子路径部署（对应 basePath），Ingress 路径也需同步调整
+      # KITE_BASE: /kite
+
+    volumes:
+      - ./data:/data
