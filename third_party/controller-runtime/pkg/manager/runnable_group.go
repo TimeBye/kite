@@ -167,7 +167,10 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 	var retErr error
 
 	r.startOnce.Do(func() {
-		defer close(r.startReadyCh)
+		// PATCH(kite): upstream closes startReadyCh via defer here; combined with
+		// the early return on cancellation below (see #3629), a late readiness
+		// signal could panic on send to a closed channel, so we keep it open and
+		// make the send cancellation-aware in reconcile() instead.
 
 		// Start the internal reconciler.
 		go r.reconcile()
@@ -196,8 +199,8 @@ func (r *runnableGroup) Start(ctx context.Context) error {
 				}
 				// PATCH(kite): exit the wait loop on ctx cancellation, otherwise this
 				// select spins forever on the closed Done channel (100% CPU per
-				// manager whose cache sync failed). Remove once upstream fixes
-				// sigs.k8s.io/controller-runtime runnable_group.Start.
+				// manager whose cache sync failed), see #3629. Remove once upstream
+				// fixes sigs.k8s.io/controller-runtime runnableGroup.Start.
 				return
 			case rn := <-r.startReadyCh:
 				for i, existing := range r.startQueue {
@@ -250,7 +253,13 @@ func (r *runnableGroup) reconcile() {
 			go func() {
 				if rn.Check(r.ctx) {
 					if rn.signalReady {
-						r.startReadyCh <- rn
+						// PATCH(kite): don't block forever (or panic on a closed
+						// channel) if Start already returned on cancellation,
+						// see #3629.
+						select {
+						case r.startReadyCh <- rn:
+						case <-r.ctx.Done():
+						}
 					}
 				}
 			}()
