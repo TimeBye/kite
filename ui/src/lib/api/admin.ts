@@ -479,6 +479,7 @@ export interface APIKeyCreateRequest {
 }
 
 export interface GeneralSetting {
+  aiManaged: boolean
   aiAgentEnabled: boolean
   aiProvider: 'openai' | 'anthropic'
   aiModel: string

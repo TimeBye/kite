@@ -22,6 +22,7 @@ type KiteConfig struct {
 	OAuth     []OAuthConfig    `yaml:"oauth"`
 	LDAP      *LDAPConfig      `yaml:"ldap"`
 	SMTP      *SMTPConfig      `yaml:"smtp"`
+	AI        *AIConfig        `yaml:"ai"`
 	RBAC      *RBACConfig      `yaml:"rbac"`
 }
 
@@ -87,6 +88,15 @@ type SMTPConfig struct {
 	Encryption     string `yaml:"encryption"`
 	SkipTLSVerify  bool   `yaml:"skipTLSVerify"`
 	TimeoutSeconds int    `yaml:"timeoutSeconds"`
+}
+
+type AIConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Provider  string `yaml:"provider"`
+	Model     string `yaml:"model"`
+	APIKey    string `yaml:"apiKey"`
+	BaseURL   string `yaml:"baseUrl"`
+	MaxTokens int    `yaml:"maxTokens"`
 }
 
 type RBACConfig struct {
@@ -181,6 +191,15 @@ func applyConfig(path string, cfg *KiteConfig) AppliedSections {
 		} else {
 			sections["smtp"] = true
 			klog.Info("Applied SMTP settings from config file")
+		}
+	}
+
+	if cfg.AI != nil {
+		if err := applyAI(cfg.AI); err != nil {
+			klog.Errorf("Failed to apply AI config: %v", err)
+		} else {
+			sections["ai"] = true
+			klog.Info("Applied AI settings from config file")
 		}
 	}
 
@@ -360,6 +379,38 @@ func applySMTP(cfg *SMTPConfig) error {
 		"smtp_encryption":      cfg.Encryption,
 		"smtp_skip_tls_verify": cfg.SkipTLSVerify,
 		"smtp_timeout_seconds": cfg.TimeoutSeconds,
+	})
+	return err
+}
+
+func applyAI(cfg *AIConfig) error {
+	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
+	if provider == "" {
+		provider = model.DefaultGeneralAIProvider
+	}
+	if !model.IsGeneralAIProviderSupported(provider) {
+		return fmt.Errorf("unsupported AI provider")
+	}
+	aiModel := strings.TrimSpace(cfg.Model)
+	if aiModel == "" {
+		aiModel = model.DefaultGeneralAIModelByProvider(provider)
+	}
+	apiKey := strings.TrimSpace(cfg.APIKey)
+	if cfg.Enabled && apiKey == "" {
+		return fmt.Errorf("AI apiKey is required when enabled is true")
+	}
+	maxTokens := cfg.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 16384
+	}
+
+	_, err := model.UpdateGeneralSetting(map[string]interface{}{
+		"ai_agent_enabled": cfg.Enabled,
+		"ai_provider":      provider,
+		"ai_model":         aiModel,
+		"ai_api_key":       model.SecretString(apiKey),
+		"ai_base_url":      strings.TrimSpace(cfg.BaseURL),
+		"ai_max_tokens":    maxTokens,
 	})
 	return err
 }

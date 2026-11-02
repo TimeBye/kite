@@ -136,22 +136,22 @@ export const scaleDeployment = async (
 export const upgradeHelmRelease = async (
   namespace: string,
   name: string,
-  body?: HelmReleaseUpgradeRequest
+  body: HelmReleaseUpgradeRequest
 ): Promise<HelmTaskResponse> => {
   return apiClient.put<HelmTaskResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/upgrade`,
-    body || {}
+    body
   )
 }
 
 export const dryRunUpgradeHelmRelease = async (
   namespace: string,
   name: string,
-  body?: HelmReleaseUpgradeRequest
+  body: HelmReleaseUpgradeRequest
 ): Promise<HelmReleaseDryRunResponse> => {
   return apiClient.put<HelmReleaseDryRunResponse>(
     `/helmrelease/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/upgrade/dry-run`,
-    body || {}
+    body
   )
 }
 

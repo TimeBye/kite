@@ -24,6 +24,7 @@ func writeGeneralSettingResponse(c *gin.Context, setting *model.GeneralSetting) 
 	hasAIAPIKey := strings.TrimSpace(string(setting.AIAPIKey)) != ""
 	hasSMTPPassword := strings.TrimSpace(string(setting.SMTPPassword)) != ""
 	c.JSON(http.StatusOK, gin.H{
+		"aiManaged":              common.IsSectionManaged("ai"),
 		"aiAgentEnabled":         setting.AIAgentEnabled,
 		"aiProvider":             setting.AIProvider,
 		"aiModel":                setting.AIModel,
@@ -93,6 +94,11 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 		return
 	}
 	if common.IsSectionManaged("smtp") && (req.SMTPEnabled != nil || req.SMTPHost != nil || req.SMTPPort != nil || req.SMTPUsername != nil || req.SMTPPassword != nil || req.SMTPClearPassword != nil || req.SMTPFromEmail != nil || req.SMTPFromName != nil || req.SMTPEncryption != nil || req.SMTPSkipTLSVerify != nil || req.SMTPTimeoutSeconds != nil) {
+		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
+		return
+	}
+	if common.IsSectionManaged("ai") && (req.AIAgentEnabled != nil || req.AIProvider != nil ||
+		req.AIModel != nil || req.AIAPIKey != nil || req.AIBaseURL != nil || req.AIMaxTokens != nil) {
 		c.JSON(http.StatusForbidden, gin.H{"error": common.ManagedSectionError})
 		return
 	}

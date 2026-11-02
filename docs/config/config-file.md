@@ -1,6 +1,6 @@
 # Configuration File
 
-Kite supports loading cluster, OAuth/LDAP, SMTP, and RBAC configuration from a YAML file. When a section is configured this way, it becomes **read-only** in the UI — users can view the settings but cannot modify them through the dashboard.
+Kite supports loading cluster, OAuth/LDAP, SMTP, AI, and RBAC configuration from a YAML file. When a section is configured this way, it becomes **read-only** in the UI — users can view the settings but cannot modify them through the dashboard.
 
 This is useful for GitOps workflows where configuration is version-controlled and applied via Helm.
 
@@ -82,6 +82,14 @@ smtp:
   skipTLSVerify: false
   timeoutSeconds: 30
 
+ai:
+  enabled: true
+  provider: openai
+  model: gpt-4o-mini
+  apiKey: "${AI_API_KEY}"
+  baseUrl: "https://api.openai.com/v1"
+  maxTokens: 16384
+
 rbac:
   roles:
     - name: admin
@@ -112,7 +120,7 @@ rbac:
       oidcGroups: ["developers"]
 ```
 
-You only need to include the sections you want to manage. For example, if you only want to manage clusters via config file, just include the `clusters` section — OAuth, LDAP, SMTP, and RBAC will remain editable through the UI.
+You only need to include the sections you want to manage. For example, if you only want to manage clusters via config file, just include the `clusters` section — OAuth, LDAP, SMTP, AI, and RBAC will remain editable through the UI.
 
 ## Using with Helm
 
@@ -299,6 +307,21 @@ The super user is created on first startup if it doesn't exist. On subsequent st
 | `timeoutSeconds` | integer | Connection and mail-operation timeout in seconds      | No           |
 
 SMTP testing is shown and available only when SMTP is enabled. When SMTP is not managed by the configuration file, a test email uses the current SMTP form values without saving them; after a successful test, click **Save** at the bottom of **Settings → General Settings** to persist them. When SMTP is managed by the configuration file, the form is read-only and tests use the displayed managed configuration.
+
+### AI Configuration
+
+| Field       | Type    | Description                                      | Default                         |
+| ----------- | ------- | ------------------------------------------------ | ------------------------------- |
+| `enabled`   | boolean | Enable the AI assistant                          | `false`                         |
+| `provider`  | string  | `openai` or `anthropic`                           | `openai`                        |
+| `model`     | string  | Model name                                       | `gpt-4o-mini` / `claude-sonnet-5-5` |
+| `apiKey`    | string  | API key; required when enabled; supports `${ENV_VAR}` |                              |
+| `baseUrl`   | string  | Custom API endpoint                              | Provider's default endpoint     |
+| `maxTokens` | integer | Maximum output tokens                            | `16384`                         |
+
+The default model follows the selected provider. The `ai` section manages all AI fields; omitted fields use their defaults or empty values. API keys are stored encrypted in the database.
+
+AI settings follow the existing config file reload mechanism and become read-only in the UI. Other general settings remain editable. In inline Helm values, configure these fields under `config.ai`.
 
 ### RBAC Configuration
 
