@@ -219,3 +219,8 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 )
+
+// PATCH(kite): local copy with busy-loop fix in runnableGroup.Start, see
+// third_party/controller-runtime/pkg/manager/runnable_group.go. Drop this
+// replace once upstream fixes the issue.
+replace sigs.k8s.io/controller-runtime => ./third_party/controller-runtime
