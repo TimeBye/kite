@@ -52,6 +52,10 @@ anonymousUserEnabled: false
 # Optional explicit secrets. Leave empty to have Helm generate a cryptographically random value during installation.
 # Ignored when secret.existingSecret is set.
 jwtSecret: ""
+
+# This is the key used for encrypting sensitive data.
+# Leave empty to have Helm generate a cryptographically random value during installation (recommended).
+# WARNING: If set to a static value, use a unique strong key or use secret.existingSecret in production.
 encryptKey: ""
 kubeconfigJwtSecret: ""
 # This is an identifier, not secret material. Keep it stable while downloaded kubeconfigs are valid.
