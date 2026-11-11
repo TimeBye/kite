@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  IconHistory,
   IconLink,
   IconMail,
   IconMessage,
@@ -71,6 +72,7 @@ interface GeneralSettingsFormData {
   enableAnalytics: boolean
   enableVersionCheck: boolean
   loginPrompt: string
+  auditLogRetentionDays: number
 }
 
 export function GeneralManagement() {
@@ -110,6 +112,7 @@ export function GeneralManagement() {
     enableAnalytics: true,
     enableVersionCheck: true,
     loginPrompt: '',
+    auditLogRetentionDays: 30,
   })
 
   useEffect(() => {
@@ -144,6 +147,7 @@ export function GeneralManagement() {
       enableAnalytics: data.enableAnalytics ?? false,
       enableVersionCheck: data.enableVersionCheck ?? true,
       loginPrompt: data.loginPrompt || '',
+      auditLogRetentionDays: data.auditLogRetentionDays ?? 30,
     })
   }, [data])
 
@@ -291,6 +295,7 @@ export function GeneralManagement() {
       enableAnalytics: formData.enableAnalytics,
       enableVersionCheck: formData.enableVersionCheck,
       loginPrompt: formData.loginPrompt.trim(),
+      auditLogRetentionDays: formData.auditLogRetentionDays >= 0 ? formData.auditLogRetentionDays : 0,
     }
     if (!isAIManaged) {
       payload.aiAgentEnabled = formData.aiAgentEnabled
@@ -961,6 +966,40 @@ export function GeneralManagement() {
                   enableVersionCheck: checked,
                 }))
               }
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border p-3">
+          <div className="space-y-1">
+            <Label className="flex items-center gap-2 text-sm font-medium">
+              <IconHistory className="h-4 w-4" />
+              {t('generalManagement.auditLog.title', 'Audit Log Retention')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'generalManagement.auditLog.description',
+                'Automatically delete audit logs older than the specified number of days. Set to 0 to disable cleanup.'
+              )}
+            </p>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <Label htmlFor="audit-log-retention-days">
+              {t('generalManagement.auditLog.form.retentionDays', 'Retention days')}
+            </Label>
+            <Input
+              id="audit-log-retention-days"
+              type="number"
+              min="0"
+              value={formData.auditLogRetentionDays}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  auditLogRetentionDays: parseInt(e.target.value) || 0,
+                }))
+              }
+              placeholder="30"
             />
           </div>
         </div>

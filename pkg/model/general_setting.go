@@ -17,6 +17,7 @@ const DefaultGeneralAnthropicModel = "claude-sonnet-5-5"
 const DefaultGeneralKubectlImage = "zzde/kubectl:latest"
 const DefaultGeneralNodeTerminalImage = "busybox:latest"
 const DefaultGeneralClusterAgentImage = "ghcr.io/kite-org/kite:latest"
+const DefaultAuditLogRetentionDays = 30
 
 const GeneralAIProviderOpenAI = "openai"
 const GeneralAIProviderAnthropic = "anthropic"
@@ -79,6 +80,7 @@ type GeneralSetting struct {
 	SMTPEncryption          string       `json:"smtpEncryption" gorm:"column:smtp_encryption;type:varchar(20)"`
 	SMTPSkipTLSVerify       bool         `json:"smtpSkipTlsVerify" gorm:"column:smtp_skip_tls_verify;type:boolean;not null;default:false"`
 	SMTPTimeoutSeconds      int          `json:"smtpTimeoutSeconds" gorm:"column:smtp_timeout_seconds;type:integer"`
+	AuditLogRetentionDays   int          `json:"auditLogRetentionDays" gorm:"column:audit_log_retention_days;type:integer;not null;default:30"`
 }
 
 func NormalizeGeneralAIProvider(provider string) string {
@@ -164,6 +166,7 @@ func GetGeneralSetting() (*GeneralSetting, error) {
 		EnableVersionCheck: common.EnableVersionCheck,
 		EnableMFA:          true,
 		EnablePasskeyLogin: true,
+		AuditLogRetentionDays: DefaultAuditLogRetentionDays,
 	}
 	if err := ensureJWTSecret(&setting, nil); err != nil {
 		return nil, err

@@ -1008,6 +1008,13 @@
         "enableVersionCheck": "启用版本检查"
       }
     },
+    "auditLog": {
+      "title": "审计日志保留",
+      "description": "自动删除超过指定天数的审计日志。设为 0 则禁用清理。",
+      "form": {
+        "retentionDays": "保留天数"
+      }
+    },
     "loginPrompt": {
       "title": "登录提示",
       "description": "在登录页展示自定义提示。",

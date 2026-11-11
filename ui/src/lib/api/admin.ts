@@ -508,6 +508,7 @@ export interface GeneralSetting {
   enableMFA: boolean
   enablePasskeyLogin: boolean
   loginPrompt: string
+  auditLogRetentionDays: number
 }
 
 export interface GeneralSettingUpdateRequest {
@@ -539,6 +540,7 @@ export interface GeneralSettingUpdateRequest {
   enableMFA?: boolean
   enablePasskeyLogin?: boolean
   loginPrompt?: string
+  auditLogRetentionDays?: number
 }
 
 export interface LDAPSetting {

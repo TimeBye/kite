@@ -43,6 +43,7 @@ func writeGeneralSettingResponse(c *gin.Context, setting *model.GeneralSetting) 
 		"enableMFA":              setting.EnableMFA,
 		"enablePasskeyLogin":     setting.EnablePasskeyLogin,
 		"loginPrompt":            setting.LoginPrompt,
+		"auditLogRetentionDays": setting.AuditLogRetentionDays,
 		"smtpEnabled":            setting.SMTPEnabled,
 		"smtpHost":               setting.SMTPHost,
 		"smtpPort":               setting.SMTPPort,
@@ -74,6 +75,7 @@ type UpdateGeneralSettingRequest struct {
 	EnableMFA             *bool   `json:"enableMFA"`
 	EnablePasskeyLogin    *bool   `json:"enablePasskeyLogin"`
 	LoginPrompt           *string `json:"loginPrompt"`
+	AuditLogRetentionDays *int    `json:"auditLogRetentionDays"`
 	SMTPEnabled           *bool   `json:"smtpEnabled"`
 	SMTPHost              *string `json:"smtpHost"`
 	SMTPPort              *int    `json:"smtpPort"`
@@ -260,6 +262,13 @@ func HandleUpdateGeneralSetting(c *gin.Context) { //nolint:gocyclo
 	}
 	if req.LoginPrompt != nil {
 		updates["login_prompt"] = strings.TrimSpace(*req.LoginPrompt)
+	}
+	if req.AuditLogRetentionDays != nil {
+		days := *req.AuditLogRetentionDays
+		if days < 0 {
+			days = 0
+		}
+		updates["audit_log_retention_days"] = days
 	}
 	if req.PasswordLoginDisabled != nil {
 		updates["password_login_disabled"] = *req.PasswordLoginDisabled

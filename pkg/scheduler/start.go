@@ -11,4 +11,5 @@ func Start(ctx context.Context, cm *cluster.ClusterManager) {
 
 	registerHelmReleaseAutoUpgradeExecutor(manager, cm)
 	manager.Start(ctx)
+	StartAuditLogCleanup(ctx)
 }

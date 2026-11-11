@@ -1024,6 +1024,13 @@
         "enableVersionCheck": "Enable version check"
       }
     },
+    "auditLog": {
+      "title": "Audit Log Retention",
+      "description": "Automatically delete audit logs older than the specified number of days. Set to 0 to disable cleanup.",
+      "form": {
+        "retentionDays": "Retention days"
+      }
+    },
     "loginPrompt": {
       "title": "Login Prompt",
       "description": "Show a custom message on the login page.",

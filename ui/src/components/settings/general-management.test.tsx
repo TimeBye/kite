@@ -63,6 +63,7 @@ const generalSetting = {
   enableMFA: false,
   enablePasskeyLogin: false,
   loginPrompt: '',
+  auditLogRetentionDays: 30,
 }
 
 function renderManagement(
@@ -228,6 +229,7 @@ describe('GeneralManagement SMTP', () => {
       enableAnalytics: true,
       enableVersionCheck: true,
       loginPrompt: '',
+      auditLogRetentionDays: 30,
       smtpEnabled: true,
       smtpHost: 'smtp.example.com',
       smtpPort: 587,
