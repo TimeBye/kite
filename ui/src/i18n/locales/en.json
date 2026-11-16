@@ -789,6 +789,8 @@
     "batchActionPartialResult": "Completed {{succeeded}} of {{total}} resources.",
     "failedResources": "{{count}} failed resources",
     "batchActions": {
+      "scaleResourcesTitle": "Scale {{count}} selected {{resource}}",
+      "scaleResourcesDescription": "Set all selected resources to the same replica count. Enter a non-negative integer; 0 stops all replicas.",
       "cordonNodesTitle": "Cordon {{count}} selected nodes?",
       "cordonNodesDescription": "Selected nodes will stop accepting new Pods. Existing Pods will keep running.",
       "uncordonNodesTitle": "Uncordon {{count}} selected nodes?",

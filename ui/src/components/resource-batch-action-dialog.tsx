@@ -31,6 +31,7 @@ interface ResourceBatchActionDialogProps<T extends BatchResource> {
   onComplete?: () => void | Promise<void>
   sequential?: boolean
   destructive?: boolean
+  confirmDisabled?: boolean
   options?: (disabled: boolean) => React.ReactNode
 }
 
@@ -50,6 +51,7 @@ export function ResourceBatchActionDialog<T extends BatchResource>({
   onComplete,
   sequential = false,
   destructive = false,
+  confirmDisabled = false,
   options,
 }: ResourceBatchActionDialogProps<T>) {
   const { t } = useTranslation()
@@ -188,7 +190,7 @@ export function ResourceBatchActionDialog<T extends BatchResource>({
               <Button
                 variant={destructive ? 'destructive' : 'default'}
                 onClick={handleExecute}
-                disabled={isRunning}
+                disabled={isRunning || confirmDisabled}
                 className="tabular-nums"
               >
                 {isRunning

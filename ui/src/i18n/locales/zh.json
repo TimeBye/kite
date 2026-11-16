@@ -789,6 +789,8 @@
     "batchActionPartialResult": "已完成 {{succeeded}}/{{total}} 个资源。",
     "failedResources": "{{count}} 个失败资源",
     "batchActions": {
+      "scaleResourcesTitle": "调整已选择的 {{count}} 个 {{resource}} 副本数",
+      "scaleResourcesDescription": "将所选资源统一设置为相同的副本数。请输入非负整数，设置为 0 将停止所有副本。",
       "cordonNodesTitle": "停止所选 {{count}} 个节点的调度？",
       "cordonNodesDescription": "所选节点将停止接受新的 Pod，现有 Pod 会继续运行。",
       "uncordonNodesTitle": "恢复已选择的 {{count}} 个节点的调度？",

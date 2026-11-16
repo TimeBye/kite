@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react'
-import { IconReload } from '@tabler/icons-react'
+import { IconArrowsMaximize, IconReload } from '@tabler/icons-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createColumnHelper } from '@tanstack/react-table'
 import { Deployment } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { restartWorkload } from '@/lib/api'
+import { patchResource, restartWorkload } from '@/lib/api'
 import { createSearchFilter, getDeploymentStatus } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { DeploymentStatusIcon } from '@/components/deployment-status-icon'
 import { DeploymentCreateDialog } from '@/components/editors/deployment-create-dialog'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
@@ -31,10 +33,26 @@ export function DeploymentListPage() {
   const queryClient = useQueryClient()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
+  const [isScaleDialogOpen, setIsScaleDialogOpen] = useState(false)
+  const [replicas, setReplicas] = useState('1')
+  const validReplicas =
+    replicas.trim() !== '' &&
+    Number.isInteger(Number(replicas)) &&
+    Number(replicas) >= 0
   const [batchDeployments, setBatchDeployments] = useState<Deployment[]>([])
 
   const batchActions = useMemo<ResourceTableBatchAction<Deployment>[]>(
     () => [
+      {
+        id: 'scale',
+        label: t('common.actions.scale'),
+        icon: <IconArrowsMaximize className="size-4" />,
+        onSelect: (deployments) => {
+          setBatchDeployments(deployments)
+          setReplicas('1')
+          setIsScaleDialogOpen(true)
+        },
+      },
       {
         id: 'restart',
         label: t('common.actions.restart'),
@@ -130,6 +148,48 @@ export function DeploymentListPage() {
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         onSuccess={handleCreateSuccess}
+      />
+
+      <ResourceBatchActionDialog
+        open={isScaleDialogOpen}
+        onOpenChange={setIsScaleDialogOpen}
+        resources={batchDeployments}
+        title={t('resourceTable.batchActions.scaleResourcesTitle', {
+          count: batchDeployments.length,
+          resource: t('nav.deployments'),
+        })}
+        description={t('resourceTable.batchActions.scaleResourcesDescription')}
+        actionLabel={t('common.actions.scale')}
+        confirmDisabled={!validReplicas}
+        options={(disabled) => (
+          <div className="space-y-2">
+            <Label htmlFor="deployment-batch-replicas">
+              {t('common.fields.replicas')}
+            </Label>
+            <Input
+              id="deployment-batch-replicas"
+              type="number"
+              min={0}
+              step={1}
+              value={replicas}
+              onChange={(event) => setReplicas(event.target.value)}
+              disabled={disabled}
+            />
+          </div>
+        )}
+        onExecute={(deployment) =>
+          patchResource(
+            'deployments',
+            deployment.metadata!.name!,
+            deployment.metadata!.namespace!,
+            {
+              spec: { replicas: Number(replicas) },
+            }
+          )
+        }
+        onComplete={() =>
+          queryClient.invalidateQueries({ queryKey: ['deployments'] })
+        }
       />
 
       <ResourceBatchActionDialog

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  IconArrowsMaximize,
   IconCircleCheckFilled,
   IconLoader,
   IconReload,
@@ -10,10 +11,12 @@ import { StatefulSet } from 'kubernetes-types/apps/v1'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
-import { restartWorkload } from '@/lib/api'
+import { patchResource, restartWorkload } from '@/lib/api'
 import { createSearchFilter } from '@/lib/k8s'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { ResourceBatchActionDialog } from '@/components/resource-batch-action-dialog'
 import {
   ResourceTable,
@@ -32,10 +35,26 @@ export function StatefulSetListPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [isRestartDialogOpen, setIsRestartDialogOpen] = useState(false)
+  const [isScaleDialogOpen, setIsScaleDialogOpen] = useState(false)
+  const [replicas, setReplicas] = useState('1')
+  const validReplicas =
+    replicas.trim() !== '' &&
+    Number.isInteger(Number(replicas)) &&
+    Number(replicas) >= 0
   const [batchStatefulSets, setBatchStatefulSets] = useState<StatefulSet[]>([])
 
   const batchActions = useMemo<ResourceTableBatchAction<StatefulSet>[]>(
     () => [
+      {
+        id: 'scale',
+        label: t('common.actions.scale'),
+        icon: <IconArrowsMaximize className="size-4" />,
+        onSelect: (statefulSets) => {
+          setBatchStatefulSets(statefulSets)
+          setReplicas('1')
+          setIsScaleDialogOpen(true)
+        },
+      },
       {
         id: 'restart',
         label: t('common.actions.restart'),
@@ -147,6 +166,48 @@ export function StatefulSetListPage() {
         columns={columns}
         searchQueryFilter={statefulSetSearchFilter}
         batchActions={batchActions}
+      />
+
+      <ResourceBatchActionDialog
+        open={isScaleDialogOpen}
+        onOpenChange={setIsScaleDialogOpen}
+        resources={batchStatefulSets}
+        title={t('resourceTable.batchActions.scaleResourcesTitle', {
+          count: batchStatefulSets.length,
+          resource: t('nav.statefulsets'),
+        })}
+        description={t('resourceTable.batchActions.scaleResourcesDescription')}
+        actionLabel={t('common.actions.scale')}
+        confirmDisabled={!validReplicas}
+        options={(disabled) => (
+          <div className="space-y-2">
+            <Label htmlFor="statefulset-batch-replicas">
+              {t('common.fields.replicas')}
+            </Label>
+            <Input
+              id="statefulset-batch-replicas"
+              type="number"
+              min={0}
+              step={1}
+              value={replicas}
+              onChange={(event) => setReplicas(event.target.value)}
+              disabled={disabled}
+            />
+          </div>
+        )}
+        onExecute={(statefulSet) =>
+          patchResource(
+            'statefulsets',
+            statefulSet.metadata!.name!,
+            statefulSet.metadata!.namespace!,
+            {
+              spec: { replicas: Number(replicas) },
+            }
+          )
+        }
+        onComplete={() =>
+          queryClient.invalidateQueries({ queryKey: ['statefulsets'] })
+        }
       />
 
       <ResourceBatchActionDialog
