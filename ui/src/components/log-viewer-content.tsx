@@ -276,17 +276,19 @@ export function LogViewer({
               onPodChange={(value) => setSelectPodName(value || '_all')}
             />
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={downloadAllLogs}
-            disabled={!selectPodName || selectPodName === '_all'}
-            title={t('common.actions.downloadAllLogs')}
-            aria-label={t('common.actions.downloadAllLogs')}
-          >
-            <IconDownload className="h-4 w-4" />
-          </Button>
         </>
+      }
+      downloadAction={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={downloadAllLogs}
+          disabled={!selectPodName || selectPodName === '_all'}
+          title={t('common.actions.downloadAllLogs')}
+          aria-label={t('common.actions.downloadAllLogs')}
+        >
+          <IconDownload className="h-4 w-4" />
+        </Button>
       }
       settings={
         <>

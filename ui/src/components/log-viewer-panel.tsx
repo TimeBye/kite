@@ -59,6 +59,7 @@ export interface LogViewerPanelProps {
   entries: readonly LogViewerEntry[]
   header?: ReactNode
   toolbar?: ReactNode
+  downloadAction?: ReactNode
   settings?: ReactNode
   status?: ReactNode
   defaultTheme?: TerminalTheme
@@ -88,6 +89,7 @@ export function LogViewerPanel({
   entries,
   header,
   toolbar,
+  downloadAction,
   settings,
   status,
   defaultTheme = 'classic',
@@ -729,6 +731,7 @@ export function LogViewerPanel({
             >
               <IconFileDownload className="h-4 w-4" />
             </Button>
+            {downloadAction}
 
             {/* Fullscreen Toggle */}
             <Button
