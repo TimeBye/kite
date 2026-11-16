@@ -21,7 +21,9 @@ function getSecretYamlValue(secret: Secret, showDecodedYaml: boolean) {
     if (showSecret.data) {
       const decodedData: Record<string, string> = {}
       Object.entries(showSecret.data).forEach(([key, value]) => {
-        decodedData[key] = atob(value)
+        decodedData[key] = new TextDecoder().decode(
+          Uint8Array.from(atob(value), (char) => char.charCodeAt(0))
+        )
       })
       showSecret.stringData = decodedData
       showSecret.data = undefined
@@ -29,7 +31,11 @@ function getSecretYamlValue(secret: Secret, showDecodedYaml: boolean) {
   } else if (showSecret.stringData) {
     const data: Record<string, string> = {}
     Object.entries(showSecret.stringData).forEach(([key, value]) => {
-      data[key] = btoa(value)
+      data[key] = btoa(
+        Array.from(new TextEncoder().encode(value), (byte) =>
+          String.fromCharCode(byte)
+        ).join('')
+      )
     })
     showSecret.data = data
     showSecret.stringData = undefined

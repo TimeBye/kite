@@ -16,7 +16,9 @@ interface Props {
 
 function decode(value: string) {
   try {
-    return atob(value)
+    return new TextDecoder().decode(
+      Uint8Array.from(atob(value), (char) => char.charCodeAt(0))
+    )
   } catch {
     return value
   }
