@@ -107,8 +107,9 @@ func (om *OAuthManager) generateJWT(user *model.User, refreshToken string, mfaPe
 	}
 	if len(tokenString) > maxAuthTokenCookieValueLength {
 		claims.RefreshToken = "" // Drop refresh token from JWT if it exceeds size limits
+		return om.signJWT(claims)
 	}
-	return om.signJWT(claims)
+	return tokenString, nil
 }
 
 func (om *OAuthManager) signJWT(claims Claims) (string, error) {

@@ -18,16 +18,8 @@ type Client struct {
 }
 
 type promAPI interface {
-	Config(ctx context.Context) (v1.ConfigResult, error)
 	Query(ctx context.Context, query string, ts time.Time, opts ...v1.Option) (model.Value, v1.Warnings, error)
 	QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error)
-}
-
-type ResourceMetrics struct {
-	CPURequest    float64
-	CPUTotal      float64
-	MemoryRequest float64
-	MemoryTotal   float64
 }
 
 // UsageDataPoint represents a single time point in usage metrics
@@ -55,13 +47,6 @@ type PodMetrics struct {
 	DiskRead   []UsageDataPoint `json:"diskRead"`
 	DiskWrite  []UsageDataPoint `json:"diskWrite"`
 	Fallback   bool             `json:"fallback"`
-}
-
-type PodCurrentMetrics struct {
-	PodName   string  `json:"podName"`
-	Namespace string  `json:"namespace"`
-	CPU       float64 `json:"cpu"`    // CPU cores
-	Memory    float64 `json:"memory"` // Memory in MB
 }
 
 func NewClientWithRoundTripper(prometheusURL string, rt http.RoundTripper) (*Client, error) {
@@ -115,9 +100,9 @@ func (c *Client) GetResourceUsageHistory(ctx context.Context, instance string, d
 		`resource="memory"`,
 	}
 	if instance != "" {
-		conditions = append(conditions, fmt.Sprintf(`%s="%s"`, nodeLabel, instance))
-		cpuConditions = append(cpuConditions, fmt.Sprintf(`node="%s"`, instance))
-		memoryConditions = append(memoryConditions, fmt.Sprintf(`node="%s"`, instance))
+		conditions = append(conditions, fmt.Sprintf(`%s=%q`, nodeLabel, instance))
+		cpuConditions = append(cpuConditions, fmt.Sprintf(`node=%q`, instance))
+		memoryConditions = append(memoryConditions, fmt.Sprintf(`node=%q`, instance))
 	}
 
 	// Query CPU usage percentage - using container CPU usage
@@ -136,7 +121,7 @@ func (c *Client) GetResourceUsageHistory(ctx context.Context, instance string, d
 
 	conditions = []string{}
 	if instance != "" {
-		conditions = append(conditions, fmt.Sprintf(`%s="%s"`, nodeLabel, instance))
+		conditions = append(conditions, fmt.Sprintf(`%s=%q`, nodeLabel, instance))
 	}
 
 	// Query Network incoming bytes rate (bytes per second)
@@ -210,12 +195,6 @@ func (c *Client) queryRange(ctx context.Context, query string, start, end time.T
 	return dataPoints, nil
 }
 
-// HealthCheck verifies if Prometheus is accessible
-func (c *Client) HealthCheck(ctx context.Context) error {
-	_, err := c.client.Config(ctx)
-	return err
-}
-
 // Query executes an instant query against Prometheus
 func (c *Client) Query(ctx context.Context, query string, ts time.Time, opts ...v1.Option) (model.Value, v1.Warnings, error) {
 	return c.client.Query(ctx, query, ts, opts...)
@@ -233,13 +212,13 @@ func (c *Client) GetCPUUsage(ctx context.Context, namespace, podNamePrefix, cont
 		`container!=""`,    // Exclude empty containers
 	}
 	if podNamePrefix != "" {
-		conditions = append(conditions, fmt.Sprintf(`pod=~"%s.*"`, podNamePrefix))
+		conditions = append(conditions, fmt.Sprintf(`pod=~%q`, podNamePrefix+".*"))
 	}
 	if container != "" {
-		conditions = append(conditions, fmt.Sprintf(`container="%s"`, container))
+		conditions = append(conditions, fmt.Sprintf(`container=%q`, container))
 	}
 	if namespace != "" {
-		conditions = append(conditions, fmt.Sprintf(`namespace="%s"`, namespace))
+		conditions = append(conditions, fmt.Sprintf(`namespace=%q`, namespace))
 	}
 	query := fmt.Sprintf(`sum(rate(container_cpu_usage_seconds_total{%s}[1m]))`, strings.Join(conditions, ","))
 	return c.queryRange(ctx, query, start, end, step)
@@ -252,13 +231,13 @@ func (c *Client) GetMemoryUsage(ctx context.Context, namespace, podNamePrefix, c
 		`container!=""`,    // Exclude empty containers
 	}
 	if podNamePrefix != "" {
-		conditions = append(conditions, fmt.Sprintf(`pod=~"%s.*"`, podNamePrefix))
+		conditions = append(conditions, fmt.Sprintf(`pod=~%q`, podNamePrefix+".*"))
 	}
 	if container != "" {
-		conditions = append(conditions, fmt.Sprintf(`container="%s"`, container))
+		conditions = append(conditions, fmt.Sprintf(`container=%q`, container))
 	}
 	if namespace != "" {
-		conditions = append(conditions, fmt.Sprintf(`namespace="%s"`, namespace))
+		conditions = append(conditions, fmt.Sprintf(`namespace=%q`, namespace))
 	}
 	query := fmt.Sprintf(`sum(container_memory_working_set_bytes{%s}) / 1024 / 1024`, strings.Join(conditions, ","))
 	return c.queryRange(ctx, query, start, end, step)
@@ -267,13 +246,13 @@ func (c *Client) GetMemoryUsage(ctx context.Context, namespace, podNamePrefix, c
 func (c *Client) GetNetworkInUsage(ctx context.Context, namespace, podNamePrefix, container string, start, end time.Time, step time.Duration) ([]UsageDataPoint, error) {
 	conditions := []string{}
 	if podNamePrefix != "" {
-		conditions = append(conditions, fmt.Sprintf(`pod=~"%s.*"`, podNamePrefix))
+		conditions = append(conditions, fmt.Sprintf(`pod=~%q`, podNamePrefix+".*"))
 	}
 	if container != "" {
-		conditions = append(conditions, fmt.Sprintf(`container="%s"`, container))
+		conditions = append(conditions, fmt.Sprintf(`container=%q`, container))
 	}
 	if namespace != "" {
-		conditions = append(conditions, fmt.Sprintf(`namespace="%s"`, namespace))
+		conditions = append(conditions, fmt.Sprintf(`namespace=%q`, namespace))
 	}
 	query := fmt.Sprintf(`sum(rate(container_network_receive_bytes_total{%s}[1m]))`, strings.Join(conditions, ","))
 	return c.queryRange(ctx, query, start, end, step)
@@ -282,13 +261,13 @@ func (c *Client) GetNetworkInUsage(ctx context.Context, namespace, podNamePrefix
 func (c *Client) GetNetworkOutUsage(ctx context.Context, namespace, podNamePrefix, container string, start, end time.Time, step time.Duration) ([]UsageDataPoint, error) {
 	conditions := []string{}
 	if podNamePrefix != "" {
-		conditions = append(conditions, fmt.Sprintf(`pod=~"%s.*"`, podNamePrefix))
+		conditions = append(conditions, fmt.Sprintf(`pod=~%q`, podNamePrefix+".*"))
 	}
 	if container != "" {
-		conditions = append(conditions, fmt.Sprintf(`container="%s"`, container))
+		conditions = append(conditions, fmt.Sprintf(`container=%q`, container))
 	}
 	if namespace != "" {
-		conditions = append(conditions, fmt.Sprintf(`namespace="%s"`, namespace))
+		conditions = append(conditions, fmt.Sprintf(`namespace=%q`, namespace))
 	}
 	query := fmt.Sprintf(`sum(rate(container_network_transmit_bytes_total{%s}[1m]))`, strings.Join(conditions, ","))
 	return c.queryRange(ctx, query, start, end, step)
@@ -300,13 +279,13 @@ func (c *Client) GetDiskReadUsage(ctx context.Context, namespace, podNamePrefix,
 		`container!=""`,    // Exclude empty containers
 	}
 	if podNamePrefix != "" {
-		conditions = append(conditions, fmt.Sprintf(`pod=~"%s.*"`, podNamePrefix))
+		conditions = append(conditions, fmt.Sprintf(`pod=~%q`, podNamePrefix+".*"))
 	}
 	if container != "" {
-		conditions = append(conditions, fmt.Sprintf(`container="%s"`, container))
+		conditions = append(conditions, fmt.Sprintf(`container=%q`, container))
 	}
 	if namespace != "" {
-		conditions = append(conditions, fmt.Sprintf(`namespace="%s"`, namespace))
+		conditions = append(conditions, fmt.Sprintf(`namespace=%q`, namespace))
 	}
 	query := fmt.Sprintf(`sum(rate(container_fs_reads_bytes_total{%s}[1m]))`, strings.Join(conditions, ","))
 	return c.queryRange(ctx, query, start, end, step)
@@ -318,13 +297,13 @@ func (c *Client) GetDiskWriteUsage(ctx context.Context, namespace, podNamePrefix
 		`container!=""`,    // Exclude empty containers
 	}
 	if podNamePrefix != "" {
-		conditions = append(conditions, fmt.Sprintf(`pod=~"%s.*"`, podNamePrefix))
+		conditions = append(conditions, fmt.Sprintf(`pod=~%q`, podNamePrefix+".*"))
 	}
 	if container != "" {
-		conditions = append(conditions, fmt.Sprintf(`container="%s"`, container))
+		conditions = append(conditions, fmt.Sprintf(`container=%q`, container))
 	}
 	if namespace != "" {
-		conditions = append(conditions, fmt.Sprintf(`namespace="%s"`, namespace))
+		conditions = append(conditions, fmt.Sprintf(`namespace=%q`, namespace))
 	}
 	query := fmt.Sprintf(`sum(rate(container_fs_writes_bytes_total{%s}[1m]))`, strings.Join(conditions, ","))
 	return c.queryRange(ctx, query, start, end, step)

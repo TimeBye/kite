@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/auth-context'
 import { useTerminal } from '@/contexts/terminal-context'
+import { IconPuzzle } from '@tabler/icons-react'
 import { Download, Plus, Settings, TerminalSquare } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { useCluster } from '@/hooks/use-cluster'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -19,6 +21,7 @@ import { Search } from './search'
 import { UserMenu } from './user-menu'
 
 export function SiteHeader() {
+  const { t } = useTranslation()
   const isMobile = useIsMobile()
   const navigate = useNavigate()
   const { user, capabilities } = useAuth()
@@ -88,6 +91,21 @@ export function SiteHeader() {
                     <span className="sr-only">Settings</span>
                   </Button>
                 )}
+              </>
+            )}
+            {isAdmin && (
+              <Button variant="ghost" size="icon" asChild>
+                <Link
+                  to="/plugins"
+                  aria-label={t('plugins.title')}
+                  title={t('plugins.title')}
+                >
+                  <IconPuzzle className="size-4" aria-hidden="true" />
+                </Link>
+              </Button>
+            )}
+            {!isMobile && (
+              <>
                 <LanguageToggle />
                 <ModeToggle />
               </>
