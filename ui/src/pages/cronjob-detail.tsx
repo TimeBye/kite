@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   IconPlayerPause,
   IconPlayerPlay,
   IconPlayerPlayFilled,
 } from '@tabler/icons-react'
 import { CronJob, Job } from 'kubernetes-types/batch/v1'
+import type { Container } from 'kubernetes-types/core/v1'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -242,6 +243,43 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
     }
   }
 
+  const handleContainerUpdate = useCallback(
+    async (updatedContainer: Container, init: boolean) => {
+      if (!cronjob) return
+      try {
+        const updated = JSON.parse(JSON.stringify(cronjob)) as CronJob
+        const podSpec = updated.spec?.jobTemplate?.spec?.template?.spec
+        if (!podSpec) return
+
+        if (init) {
+          podSpec.initContainers = (podSpec.initContainers || []).map(
+            (container) =>
+              container.name === updatedContainer.name
+                ? updatedContainer
+                : container
+          )
+        } else {
+          podSpec.containers = podSpec.containers.map((container) =>
+            container.name === updatedContainer.name
+              ? updatedContainer
+              : container
+          )
+        }
+
+        await updateResource('cronjobs', name, namespace, updated)
+        toast.success(
+          t('common.messages.containerUpdated', {
+            defaultValue: 'Container updated successfully',
+          })
+        )
+        await refetchCronJob()
+      } catch (err) {
+        toast.error(translateError(err, t))
+      }
+    },
+    [cronjob, name, namespace, refetchCronJob, t]
+  )
+
   const templateSpec =
     cronjob?.spec?.jobTemplate?.spec?.template?.spec || undefined
   const initContainers = useMemo(
@@ -284,6 +322,7 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
               isJobsLoading={isLoadingJobs}
               events={cronJobEvents}
               isEventsLoading={isEventsLoading}
+              onContainerUpdate={handleContainerUpdate}
             />
           ) : null,
         },
@@ -334,6 +373,9 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
                       key={container.name}
                       container={container}
                       init
+                      onContainerUpdate={(updatedContainer) =>
+                        handleContainerUpdate(updatedContainer, true)
+                      }
                     />
                   ))}
                 </div>
@@ -343,6 +385,9 @@ export function CronJobDetail(props: { namespace: string; name: string }) {
                   <ContainerInfoCard
                     key={container.name}
                     container={container}
+                    onContainerUpdate={(updatedContainer) =>
+                      handleContainerUpdate(updatedContainer, false)
+                    }
                   />
                 ))}
               </div>

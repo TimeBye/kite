@@ -219,6 +219,7 @@ export function StatefulSetDetail(props: { namespace: string; name: string }) {
               isPodsLoading={isLoadingPods}
               events={statefulSetEvents}
               isEventsLoading={isEventsLoading}
+              onContainerUpdate={handleContainerUpdate}
             />
           ) : null,
         },

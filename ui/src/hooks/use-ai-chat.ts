@@ -448,7 +448,29 @@ export function useAIChat() {
         }
         case 'error': {
           const { message } = data as { message: string }
-          appendAssistantError(message)
+          commitMessages((prev) => [
+            ...prev.map((item) =>
+              item.role === 'tool' &&
+              item.toolResult === undefined &&
+              !item.pendingAction &&
+              !item.inputRequest &&
+              item.actionStatus === undefined
+                ? {
+                    ...item,
+                    actionStatus: 'error' as const,
+                    toolResult: message,
+                    content: t('aiChat.toolStatus.failed', {
+                      name: item.toolName || 'tool',
+                    }),
+                  }
+                : item
+            ),
+            {
+              id: generateId(),
+              role: 'assistant' as const,
+              content: t('aiChat.toolStatus.error', { message }),
+            },
+          ])
           break
         }
       }
@@ -716,28 +738,36 @@ export function useAIChat() {
 
         const streamError = await readSSEStream(response)
         if (streamError) {
-          updateMessageById(opts.messageId, (m) => ({
-            ...m,
-            actionStatus: 'error' as const,
-            ...opts.errorFields,
-            toolResult: streamError,
-            content: t('aiChat.toolStatus.failed', {
-              name: opts.toolName || m.toolName,
-            }),
-          }))
+          updateMessageById(opts.messageId, (m) =>
+            m.toolResult !== undefined || m.actionStatus !== 'pending'
+              ? m
+              : {
+                  ...m,
+                  actionStatus: 'error' as const,
+                  ...opts.errorFields,
+                  toolResult: streamError,
+                  content: t('aiChat.toolStatus.failed', {
+                    name: opts.toolName || m.toolName,
+                  }),
+                }
+          )
         }
       } catch (error) {
         if ((error as Error).name !== 'AbortError') {
           appendAssistantError((error as Error).message)
-          updateMessageById(opts.messageId, (m) => ({
-            ...m,
-            actionStatus: 'error' as const,
-            ...opts.errorFields,
-            toolResult: (error as Error).message,
-            content: t('aiChat.toolStatus.failed', {
-              name: opts.toolName || m.toolName,
-            }),
-          }))
+          updateMessageById(opts.messageId, (m) =>
+            m.toolResult !== undefined || m.actionStatus !== 'pending'
+              ? m
+              : {
+                  ...m,
+                  actionStatus: 'error' as const,
+                  ...opts.errorFields,
+                  toolResult: (error as Error).message,
+                  content: t('aiChat.toolStatus.failed', {
+                    name: opts.toolName || m.toolName,
+                  }),
+                }
+          )
         }
       } finally {
         commitLoading(false)
