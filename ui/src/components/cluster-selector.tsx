@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { IconCheck, IconChevronDown, IconServer } from '@tabler/icons-react'
+import { pinyin } from 'pinyin-pro'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
@@ -13,6 +14,23 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 
+function matchesPinyin(tokens: string[], query: string) {
+  let offsets = new Set<number>()
+  for (const token of tokens) {
+    offsets.add(0)
+    const next = new Set<number>()
+    for (const offset of offsets) {
+      for (let i = 0; i < token.length && token[i] === query[offset + i]; i++) {
+        const end = offset + i + 1
+        if (end === query.length) return true
+        next.add(end)
+      }
+    }
+    offsets = next
+  }
+  return false
+}
+
 export function ClusterSelector() {
   const {
     clusters,
@@ -25,13 +43,27 @@ export function ClusterSelector() {
   const [open, setOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
+  const searchIndex = useMemo(
+    () =>
+      clusters.map((cluster) => {
+        const name = cluster.name.toLowerCase()
+        const tokens = pinyin(name, { type: 'array', toneType: 'none' }).filter(
+          (token) => token.trim() !== ''
+        )
+        return { cluster, name, tokens }
+      }),
+    [clusters]
+  )
   const filteredClusters = useMemo(() => {
     const query = searchTerm.trim().toLowerCase()
-    if (!query) return clusters
-    return clusters.filter((cluster) =>
-      cluster.name.toLowerCase().includes(query)
-    )
-  }, [clusters, searchTerm])
+    const compactQuery = query.replace(/\s+/g, '')
+    return searchIndex
+      .filter(
+        ({ name, tokens }) =>
+          name.includes(query) || matchesPinyin(tokens, compactQuery)
+      )
+      .map(({ cluster }) => cluster)
+  }, [searchIndex, searchTerm])
 
   if (isLoading || isSwitching) {
     return (
